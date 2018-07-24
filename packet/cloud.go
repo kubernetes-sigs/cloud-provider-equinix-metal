@@ -37,9 +37,9 @@ func newCloud(config io.Reader) (cloudprovider.Interface, error) {
 
 	client := packngo.NewClient("", token, nil)
 
-	facility, err := deviceFacility()
+	facility, err := getFacilityID(client)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get facility from device metadata")
+		return nil, err
 	}
 
 	return &cloud{
