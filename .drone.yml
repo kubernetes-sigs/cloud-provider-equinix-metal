@@ -1,0 +1,25 @@
+workspace:
+  base: /go
+  path: src/github.com/packethost/packet-ccm
+
+pipeline:
+  ci:
+    image: golang:1.10.1-alpine3.7
+    commands:
+      - apk --update add make curl git gcc mercurial musl-dev
+      - cat Makefile
+      - make ci
+
+  cd:
+    image: docker:17.05.0-ce-dind
+    secrets: [ docker_username, docker_password ]
+    commands:
+      - sleep 5 # to enable it to start up
+      - apk --update add make
+      - make cd CONFIRM=true BRANCH_NAME=${DRONE_COMMIT_BRANCH}
+    when:
+      branch: master
+      event: push
+
+
+
