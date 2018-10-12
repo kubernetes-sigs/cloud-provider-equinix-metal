@@ -1,6 +1,6 @@
 SHELL=/bin/sh
 BINARY ?= packet-cloud-controller-manager
-BUILD_IMAGE?=packethost/packet-cloud-controller-manager
+BUILD_IMAGE?=packethost/packet-ccm
 BUILDER_IMAGE?=packethost/go-build
 PACKAGE_NAME?=github.com/packethost/packet-ccm
 GIT_VERSION?=$(shell git describe --tags --dirty --always --long) 
