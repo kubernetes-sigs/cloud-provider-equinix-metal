@@ -23,9 +23,9 @@ jobs:
       script: make ci
     - stage: dockerlogin
       deploy:
-        - provider: script
-          script: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        provider: script
+        script: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
     - stage: cd
       deploy:
-        - provider: script
-          script: make cd CONFIRM=true TRAVIS_BRANCH=${TRAVIS_BRANCH}
+        provider: script
+        script: make cd CONFIRM=true TRAVIS_BRANCH=${TRAVIS_BRANCH}
