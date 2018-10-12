@@ -21,8 +21,8 @@ jobs:
   include:
     - stage: ci-cd
       script: make ci
+      before_deploy: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       deploy:
         provider: script
-        script: 
-          - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-          - make cd CONFIRM=true BRANCH_NAME=${TRAVIS_BRANCH}
+        skip_cleanup: true
+        script: make cd CONFIRM=true BRANCH_NAME=${TRAVIS_BRANCH}
