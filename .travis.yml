@@ -28,4 +28,4 @@ jobs:
     - stage: cd
       deploy:
         - provider: script
-          script: make cd
+          script: make cd CONFIRM=true TRAVIS_BRANCH=${TRAVIS_BRANCH}
