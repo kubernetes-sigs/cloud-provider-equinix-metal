@@ -1,0 +1,31 @@
+sudo: required
+language: go
+
+go: "1.10"
+
+env:
+  global:
+  - secure: VPXGFv8zAYuErVVvw1AuGsCibGdv+65HD8ol3q6r4747cSlJGM2azQTQ4xN3eGAKSEYku5495rk00MPz2nPakUsC3H6/9Mad4e8MAifBi9zHBHoUTMM/KTGF/11NAaQQ08heGD9wyQilAQIbsfRCkGcZOwFXW4PHs+/to8I6b8mn6JmWiH9Z57JHrpvussyD/VwCRhZG6HUpYld5la5/4IEMyGh2hVt7N8+M5N28XIX61ZZAWPSqasE61vp/1voFbi06J1WPqqAgb+PgIRCQOtibirQS7ANzGGWRrYEX7qjwGvCtYoY7foK2dSoqGy1OTnQqdn9Ji/EEWGBZ4/kjcAJqH92RHZR4s/pqMXShl9m/W3R/Xt8L1brZswk9kK/xvs1rbRR2F0PthWJz6mtjrbbpYmvUpLoL/rhRVEhvLQxWNptclrIJAxf1wTJgow42/mS4m+U30Elx/IKNIMRvUdr9DuXA8RZNvedKaCwU1A7LhAAj6HFdZt1nMUUNsfBmvrrU8YUISt06+gDWTWik2FlrcsW6VCCb4Gorb3SlZJuHeYp8xce9OlKa2kEZH4fuo3cYWupdxQBZp6VbwfZQWBeBVnT2/3zKWIwQJcaq3/+NL1uAdd6jKuqWhgT3sxd33laemZa5HJyzy/WmW0glE5BCLbKucJNjZ6nT/72yCvU=
+  - secure: yHc3b83JyZnT0m2kPNoUiZbs/M6JW0H7pybJKZ317GzbruyfT58oLpx8Mjr069mk3LK8azvAGD95giQUfDLZ5IcwiQmFugITmkneRdkla1VMOt0yaAP9eLRKuXx1t3sPJjKOTMg5W9RP+eXsim424D2H1umkh9wdgF3gKF5NACfiCGfs0xKPKGsoId/zRAKP6pdi+hqY16x4HcVxFd0Q4/PU2cZVcrsnEyUZikuiPwA+Q+hPlZUGiMK1jJzQdW1/dpogxmqu6TtfdQ1H2gN4G7NPK42tKRTd8KEzLlZYq7Bz3E1k0wQA3wu/KqG3y4NEKYcu2qT+RKsX66VB2SAx6HZOTk9u6Hi35dS87WdyJSuW8ZIXVIq6shL7FCbkcOteoHHw5UAA3OOogdA+bfdaWP272v9pAVVfCBSMEyUNPsrrnPQAMEvRmQL1CZoZn9iyik6Ex3CX4q9zJYHGiJb1CaeMkL1tM+PmWP90pKs83vimmIEdiw6+lwbqUv8JD2VSW/F88ytu3/W1UjUqpvkibWWgoopB7NZXSvzZni84VTisFuK/NoA+V9hSPRiV8FVzhHdW9QDlofSUMJdVd/ExEITX7izFbFJkR7UIpE946JbLkRQROjEDawoQR++N5tvKgXKVLf9JCkY4I/RGoIgklLdcVU/n/qv4cmZvvClAMDI=
+
+before_install:
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - sudo apt-get update
+  - sudo apt-get -y install docker-ce
+
+services:
+  - docker
+
+jobs:
+  include:
+    - stage: ci
+      script: make ci
+    - stage: dockerlogin
+      deploy:
+        - provider: script
+          script: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - stage: cd
+      deploy:
+        - provider: script
+          script: make cd

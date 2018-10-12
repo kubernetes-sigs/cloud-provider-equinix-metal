@@ -1,10 +1,9 @@
-SHELL=/bin/bash
+SHELL=/bin/sh
 BINARY ?= packet-cloud-controller-manager
 BUILD_IMAGE?=packethost/packet-cloud-controller-manager
 BUILDER_IMAGE?=packethost/go-build
 PACKAGE_NAME?=github.com/packethost/packet-ccm
 GIT_VERSION?=$(shell git describe --tags --dirty --always --long) 
-PKG_LIST := $(shell go list ./... | grep -v vendor)
 GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
 
 # BUILDARCH is the host architecture
@@ -34,6 +33,8 @@ endif
 
 DIST_DIR=./dist/bin
 DIST_BINARY = $(DIST_DIR)/$(BINARY)-$(ARCH)
+BUILD_CMD =
+ifdef DOCKERBUILD
 BUILD_CMD = docker run --rm \
                 -e GOARCH=$(ARCH) \
                 -e GOOS=linux \
@@ -41,33 +42,54 @@ BUILD_CMD = docker run --rm \
                 -v $(CURDIR):/go/src/$(PACKAGE_NAME) \
                 -w /go/src/$(PACKAGE_NAME) \
 		$(BUILDER_IMAGE)
+endif
 
-.PHONY: fmt-check lint test vet
+pkgs:
+ifndef PKG_LIST
+	$(eval PKG_LIST := $(shell $(BUILD_CMD) go list ./... | grep -v vendor))
+endif
+
+.PHONY: fmt-check lint test vet golint
 
 $(DIST_DIR):
 	mkdir -p $@
 
-fmt-check: ## Check the file format
-	@gofmt -s -e -d ${GO_FILES}
+## Check the file format
+fmt-check: 
+	@if [ -n "$(shell $(BUILD_CMD) gofmt -l ${GO_FILES})" ]; then \
+	  $(BUILD_CMD) gofmt -s -e -d ${GO_FILES}; \
+	  exit 1; \
+	fi
 
-lint: ## Lint the files
-	@golint -set_exit_status ${PKG_LIST}
+golint:
+ifeq (, $(shell which golint))
+	go get -u golang.org/x/lint/golint
+endif
 
-test: ## Run unittests
-	@go test -short ${PKG_LIST}
+## Lint the files
+lint: pkgs golint
+	@$(BUILD_CMD) golint -set_exit_status ${PKG_LIST}
 
-vet: ## Vet the files
-	@go vet ${VET_LIST}
+## Run unittests
+test: pkgs
+	@$(BUILD_CMD) go test -short ${PKG_LIST}
+
+## Vet the files
+vet: 
+	@$(BUILD_CMD) go vet ${VET_LIST}
 
 ## Read about data race https://golang.org/doc/articles/race_detector.html
 ## to not test file for race use `// +build !race` at top
-race: ## Run data race detector
-	@go test -race -short ${PKG_LIST}
+## Run data race detector
+race: pkgs
+	@$(BUILD_CMD) go test -race -short ${PKG_LIST}
 
-help: ## Display this help screen
+## Display this help screen
+help: 
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-undeploy: ## Delete the ccm
+## Delete the ccm
+undeploy: 
 	kubectl delete --now -f releases/v0.0.0.yaml
 
 ## Deploy the controller to kubernetes
@@ -76,14 +98,23 @@ deploy:
 
 
 
+.PHONY: build builder image vendor push deploy ci cd dep
 
 ## Build the binary in docker
 build: $(DIST_BINARY)
-$(DIST_BINARY): $(DIST_BIN) builder vendor
+$(DIST_BINARY): $(DIST_DIR) builder vendor
 	$(BUILD_CMD) go build -v -o $@ $(LDFLAGS) ./
 
+## ensure we have dep installed
+dep: 
+ifeq (, $(shell which dep))
+	mkdir -p $$GOPATH/bin
+	curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+endif
+
+
 ## ensure vendor dependencies are installed
-vendor: builder
+vendor: builder dep
 	$(BUILD_CMD) dep ensure -vendor-only
 
 builder:
@@ -105,12 +136,19 @@ endif
 tag-images: imagetag 
 	docker tag $(BUILD_IMAGE):latest $(BUILD_IMAGE):$(IMAGETAG)
 
+## clean up all artifacts
+	#rm -rf $(DIST_DIR)
+clean:
+	$(eval IMAGE_TAGS := $(shell docker image ls | awk "/^$(subst /,\/,$(BUILD_IMAGE))\s/"' {print $$2}' ))
+	docker image rm $(addprefix $(BUILD_IMAGE):,$(IMAGE_TAGS))
+
 ###############################################################################
 # CI/CD
 ###############################################################################
 .PHONY: ci cd build deploy push
 ## Run what CI runs
-ci: build fmt-check lint test vet race
+# race has an issue with alpine, see https://github.com/golang/go/issues/14481
+ci: build fmt-check lint test vet image # race
 
 cd:
 ifndef CONFIRM
