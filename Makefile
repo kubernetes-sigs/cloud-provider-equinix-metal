@@ -4,7 +4,9 @@ BUILD_IMAGE?=packethost/packet-ccm
 BUILDER_IMAGE?=packethost/go-build
 PACKAGE_NAME?=github.com/packethost/packet-ccm
 GIT_VERSION?=$(shell git describe --tags --dirty --always --long) 
+RELEASE_TAG ?= $(shell git tag --points-at HEAD)
 GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
+FROMTAG ?= latest
 
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
@@ -134,7 +136,13 @@ ifndef IMAGETAG
 endif
 
 tag-images: imagetag 
-	docker tag $(BUILD_IMAGE):latest $(BUILD_IMAGE):$(IMAGETAG)
+	docker tag $(BUILD_IMAGE):$(FROMTAG) $(BUILD_IMAGE):$(IMAGETAG)
+
+## ensure that a particular tagged image exists locally; if not, pull it
+pull-images: imagetag
+ifeq (,$(shell docker image ls -q $(BUILD_IMAGE):$(IMAGETAG)))
+	docker pull $(BUILD_IMAGE):$(IMAGETAG)
+endif
 
 ## clean up all artifacts
 	#rm -rf $(DIST_DIR)
@@ -145,19 +153,31 @@ clean:
 ###############################################################################
 # CI/CD
 ###############################################################################
-.PHONY: ci cd build deploy push
+.PHONY: ci cd build deploy push release confirm pull-images
 ## Run what CI runs
 # race has an issue with alpine, see https://github.com/golang/go/issues/14481
 ci: build fmt-check lint test vet image # race
 
-cd:
+confirm:
 ifndef CONFIRM
 	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
 endif
+
+cd: confirm
 ifndef BRANCH_NAME
 	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
 endif
 	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
 	$(MAKE) tag-images push IMAGETAG=${GIT_VERSION}
+
+## cut a release by using the latest git tag should only be run for an image that already exists and was pushed out
+release: confirm
+ifeq (,$(RELEASE_TAG))
+	$(error RELEASE_TAG is undefined - this means we are trying to do a release at a commit which does not have a release tag)
+endif
+	$(MAKE) pull-images IMAGETAG=${GIT_VERSION} # ensure we have the image with the tag ${GIT_VERSION} or pull it
+	$(MAKE) tag-images FROMTAG=${GIT_VERSION} IMAGETAG=${RELEASE_TAG}  # tag the pulled image
+	$(MAKE) push IMAGETAG=${RELEASE_TAG}        # push it
+
 
 ccm: build deploy ## Build and deploy the ccm
