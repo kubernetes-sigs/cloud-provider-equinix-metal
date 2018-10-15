@@ -3,7 +3,7 @@ BINARY ?= packet-cloud-controller-manager
 BUILD_IMAGE?=packethost/packet-ccm
 BUILDER_IMAGE?=packethost/go-build
 PACKAGE_NAME?=github.com/packethost/packet-ccm
-GIT_VERSION?=$(shell git describe --tags --dirty --always --long) 
+GIT_VERSION?=$(shell git log -1 --format="%h")
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
 GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
 FROMTAG ?= latest
