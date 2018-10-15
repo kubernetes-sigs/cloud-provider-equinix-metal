@@ -30,8 +30,11 @@ jobs:
     - stage: release
       before_deploy: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       if: tag IS NOT blank # only do release if there is no tag here
+      script: echo true
       deploy:
         - provider: script
           skip_cleanup: true
           script: make release CONFIRM=true
+          on: 
+            tags: true 
 
