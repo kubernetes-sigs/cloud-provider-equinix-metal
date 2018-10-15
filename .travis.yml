@@ -22,7 +22,16 @@ jobs:
     - stage: ci-cd
       script: make ci
       before_deploy: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      if: tag IS blank # only do push if there is no tag; if there is one, then we already should have pushed with a PR
       deploy:
-        provider: script
-        skip_cleanup: true
-        script: make cd CONFIRM=true BRANCH_NAME=${TRAVIS_BRANCH}
+        - provider: script
+          skip_cleanup: true
+          script: make cd CONFIRM=true BRANCH_NAME=${TRAVIS_BRANCH}
+    - stage: release
+      before_deploy: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      if: tag IS NOT blank # only do release if there is no tag here
+      deploy:
+        - provider: script
+          skip_cleanup: true
+          script: make release CONFIRM=true
+
