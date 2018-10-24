@@ -7,6 +7,7 @@ GIT_VERSION?=$(shell git log -1 --format="%h")
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
 GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
 FROMTAG ?= latest
+LDFLAGS ?= -ldflags '-extldflags "-static"'
 
 # which arches can we support
 ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
