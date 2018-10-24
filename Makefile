@@ -50,7 +50,7 @@ join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
 DIST_DIR=./dist/bin
 DIST_BINARY = $(DIST_DIR)/$(BINARY)-$(ARCH)
-BUILD_CMD = GOOS=linux GOARCH=$(ARCH)
+BUILD_CMD = CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH)
 ifdef DOCKERBUILD
 BUILD_CMD = docker run --rm \
                 -e GOARCH=$(ARCH) \
@@ -125,6 +125,7 @@ sub-build-%:
 build: $(DIST_BINARY)
 $(DIST_BINARY): $(DIST_DIR) builder vendor
 	$(BUILD_CMD) go build -v -o $@ $(LDFLAGS) ./
+	file $@
 
 ## ensure we have dep installed
 dep: 
