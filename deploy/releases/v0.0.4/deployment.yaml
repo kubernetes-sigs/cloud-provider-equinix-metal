@@ -33,7 +33,7 @@ spec:
         - key: "node-role.kubernetes.io/master"
           effect: NoSchedule
       containers:
-      - image: packethost/packet-cloud-controller-manager:latest
+      - image: packethost/packet-ccm:v0.0.4
         name: packet-cloud-controller-manager
         command:
           - "./packet-cloud-controller-manager"
@@ -48,12 +48,12 @@ spec:
           - name: PACKET_AUTH_TOKEN
             valueFrom:
               secretKeyRef:
-                name: packet
+                name: packet-cloud-config
                 key: apiKey
           - name: PACKET_PROJECT_ID
             valueFrom:
               secretKeyRef:
-                name: packet
+                name: packet-cloud-config
                 key: projectID
 ---
 apiVersion: v1
