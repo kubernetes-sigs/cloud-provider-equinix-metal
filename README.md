@@ -1,5 +1,5 @@
-# packet-ccm
-Cloud Controller Manager (CCM) for Packet
+# Kubernetes Cloud Controller Manager for Packet
+packet-ccm is the Kubernetes cloud controller manager implementation for Packet.
 
 ## Deploy
 Read how to deploy the Packet CCM [here](deploy/releases/)!
