@@ -9,13 +9,12 @@ import (
 )
 
 type zones struct {
-	client   *packngo.Client
-	project  string
-	facility string
+	client  *packngo.Client
+	project string
 }
 
-func newZones(client *packngo.Client, projectID, facility string) cloudprovider.Zones {
-	return zones{client, projectID, facility}
+func newZones(client *packngo.Client, projectID string) cloudprovider.Zones {
+	return zones{client, projectID}
 }
 
 // GetZone returns the Zone containing the current failure zone and locality region that the program is running in
@@ -23,7 +22,7 @@ func newZones(client *packngo.Client, projectID, facility string) cloudprovider.
 // For the case of external cloud providers, use GetZoneByProviderID or GetZoneByNodeName since GetZone
 // can no longer be called from the kubelets.
 func (z zones) GetZone(_ context.Context) (cloudprovider.Zone, error) {
-	return cloudprovider.Zone{Region: z.facility}, nil
+	return cloudprovider.Zone{}, cloudprovider.NotImplemented
 }
 
 // GetZoneByProviderID returns the Zone containing the current zone and locality region of the node specified by providerId
