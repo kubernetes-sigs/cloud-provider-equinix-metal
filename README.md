@@ -13,10 +13,10 @@ make build
 
 It will deposit the binary for your local architecture as `dist/bin/packet-cloud-controller-manager-$(ARCH)`
 
-By default `make build` builds the binary using your locally installed go toolchain. If you want to build it using docker, do:
+By default `make build` builds the binary using a docker container. To install using your locally installed go toolchain, do:
 
 ```
-make build DOCKERBUILD=true
+make build LOCALBUILD=true
 ```
 
 ## Docker Image

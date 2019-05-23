@@ -51,7 +51,7 @@ join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 DIST_DIR=./dist/bin
 DIST_BINARY = $(DIST_DIR)/$(BINARY)-$(ARCH)
 BUILD_CMD = CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH)
-ifdef DOCKERBUILD
+ifndef LOCALBUILD
 BUILD_CMD = docker run --rm \
                 -e GOARCH=$(ARCH) \
                 -e GOOS=linux \
@@ -78,9 +78,12 @@ fmt-check:
 	  exit 1; \
 	fi
 
+# only need to worry about golint when running locally
 golint:
+ifdef LOCALBUILD
 ifeq (, $(shell which golint))
 	go get -u golang.org/x/lint/golint
+endif
 endif
 
 ## Lint the files
@@ -147,7 +150,9 @@ vendor: builder dep
 	$(BUILD_CMD) dep ensure -vendor-only
 
 builder:
+ifndef LOCALBUILD
 	docker build -t $(BUILDER_IMAGE) -f Dockerfile_builder .
+endif
 
 ## make the images for all supported ARCH
 image-all: $(addprefix sub-image-, $(ARCHES))

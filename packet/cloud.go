@@ -37,15 +37,10 @@ func newCloud(config io.Reader) (cloudprovider.Interface, error) {
 
 	client := packngo.NewClient("", token, nil)
 
-	facility, err := getFacilityID(client)
-	if err != nil {
-		return nil, err
-	}
-
 	return &cloud{
 		client:    client,
 		instances: newInstances(client, project),
-		zones:     newZones(client, project, facility),
+		zones:     newZones(client, project),
 	}, nil
 }
 
