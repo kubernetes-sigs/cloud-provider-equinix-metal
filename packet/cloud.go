@@ -7,8 +7,7 @@ import (
 	"github.com/packethost/packngo"
 	"github.com/pkg/errors"
 
-	"k8s.io/kubernetes/pkg/cloudprovider"
-	"k8s.io/kubernetes/pkg/controller"
+	cloudprovider "k8s.io/cloud-provider"
 )
 
 const (
@@ -52,7 +51,7 @@ func init() {
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn goroutines
 // to perform housekeeping activities within the cloud provider.
-func (c *cloud) Initialize(_ controller.ControllerClientBuilder) {
+func (c *cloud) Initialize(_ cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
 }
 
 // LoadBalancer returns a balancer interface. Also returns true if the interface is supported, false otherwise.
