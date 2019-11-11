@@ -14,6 +14,8 @@ const (
 	packetAuthTokenEnvVar string = "PACKET_AUTH_TOKEN"
 	packetProjectIDEnvVar string = "PACKET_PROJECT_ID"
 	providerName          string = "packet"
+	// ConsumerToken token for packet consumer
+	ConsumerToken string = "packet-ccm"
 )
 
 type cloud struct {
@@ -22,20 +24,20 @@ type cloud struct {
 	zones     cloudprovider.Zones
 }
 
-func newCloud(config io.Reader) (cloudprovider.Interface, error) {
+func readEnvVars() (string, string, error) {
 	token := os.Getenv(packetAuthTokenEnvVar)
 	project := os.Getenv(packetProjectIDEnvVar)
 
 	if token == "" {
-		return nil, errors.Errorf("environment variable %q is required", packetAuthTokenEnvVar)
+		return "", "", errors.Errorf("environment variable %q is required", packetAuthTokenEnvVar)
 	}
 
 	if project == "" {
-		return nil, errors.Errorf("environment variable %q is required", packetProjectIDEnvVar)
+		return "", "", errors.Errorf("environment variable %q is required", packetProjectIDEnvVar)
 	}
-
-	client := packngo.NewClient("", token, nil)
-
+	return token, project, nil
+}
+func newCloud(config io.Reader, token, project string, client *packngo.Client) (cloudprovider.Interface, error) {
 	return &cloud{
 		client:    client,
 		instances: newInstances(client, project),
@@ -45,7 +47,13 @@ func newCloud(config io.Reader) (cloudprovider.Interface, error) {
 
 func init() {
 	cloudprovider.RegisterCloudProvider(providerName, func(config io.Reader) (cloudprovider.Interface, error) {
-		return newCloud(config)
+		token, project, err := readEnvVars()
+		if err != nil {
+			return nil, err
+		}
+		client := packngo.NewClientWithAuth("", token, nil)
+
+		return newCloud(config, token, project, client)
 	})
 }
 

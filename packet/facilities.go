@@ -39,7 +39,7 @@ func (z zones) GetZoneByProviderID(_ context.Context, providerID string) (cloudp
 		return cloudprovider.Zone{}, err
 	}
 
-	return cloudprovider.Zone{Region: device.Facility.ID}, nil
+	return cloudprovider.Zone{Region: device.Facility.Code}, nil
 }
 
 // GetZoneByNodeName returns the Zone containing the current zone and locality region of the node specified by node name
@@ -51,5 +51,5 @@ func (z zones) GetZoneByNodeName(_ context.Context, nodeName types.NodeName) (cl
 		return cloudprovider.Zone{}, err
 	}
 
-	return cloudprovider.Zone{Region: device.Facility.ID}, nil
+	return cloudprovider.Zone{Region: device.Facility.Code}, nil
 }
