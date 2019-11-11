@@ -31,7 +31,9 @@ BUILDARCH=amd64
 endif
 
 # unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
+# and for my OS
 ARCH ?= $(BUILDARCH)
+OS ?= $(BUILDOS)
 
 # canonicalized names for target architecture
 ifeq ($(ARCH),aarch64)
@@ -56,8 +58,8 @@ join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
 export GO111MODULE=on
 DIST_DIR=./dist/bin
-DIST_BINARY = $(DIST_DIR)/$(BINARY)-$(ARCH)
-BUILD_CMD = CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH)
+DIST_BINARY = $(DIST_DIR)/$(BINARY)-$(OS)-$(ARCH)
+BUILD_CMD = CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH)
 ifdef DOCKERBUILD
 BUILD_CMD = docker run --rm \
                 -e GOARCH=$(ARCH) \

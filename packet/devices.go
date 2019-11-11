@@ -121,7 +121,10 @@ func (i *instances) CurrentNodeName(_ context.Context, nodeName string) (types.N
 // If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
 func (i *instances) InstanceExistsByProviderID(_ context.Context, providerID string) (bool, error) {
 	_, err := i.deviceFromProviderID(providerID)
-	if err != nil {
+	switch {
+	case err != nil && err == cloudprovider.InstanceNotFound:
+		return false, nil
+	case err != nil:
 		return false, err
 	}
 
@@ -139,13 +142,19 @@ func (i *instances) InstanceShutdownByProviderID(_ context.Context, providerID s
 }
 
 func deviceByID(client *packngo.Client, id string) (*packngo.Device, error) {
-	device, _, err := client.Devices.Get(id)
+	device, _, err := client.Devices.Get(id, nil)
+	if isNotFound(err) {
+		return nil, cloudprovider.InstanceNotFound
+	}
 	return device, err
 }
 
 // deviceByName returns an instance thats hostname matches the kubernetes node.Name
 func deviceByName(client *packngo.Client, projectID string, nodeName types.NodeName) (*packngo.Device, error) {
-	devices, _, err := client.Devices.List(projectID)
+	if string(nodeName) == "" {
+		return nil, errors.New("node name cannot be empty string")
+	}
+	devices, _, err := client.Devices.List(projectID, nil)
 	if err != nil {
 		return nil, err
 	}
