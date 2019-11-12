@@ -20,6 +20,11 @@ import (
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
+	// Bogus parameter needed until https://github.com/kubernetes/kubernetes/issues/76205
+	// gets resolved.
+	// once we move to kubernetes-1.15.0 clients, this should be fixed
+	goflag.CommandLine.String("cloud-provider-gce-lb-src-cidrs", "", "NOT USED (workaround for https://github.com/kubernetes/kubernetes/issues/76205)")
+
 	command := app.NewCloudControllerManagerCommand()
 
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
