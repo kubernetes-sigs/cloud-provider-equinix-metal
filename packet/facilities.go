@@ -6,6 +6,7 @@ import (
 	"github.com/packethost/packngo"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/klog"
 )
 
 type zones struct {
@@ -22,6 +23,7 @@ func newZones(client *packngo.Client, projectID string) cloudprovider.Zones {
 // For the case of external cloud providers, use GetZoneByProviderID or GetZoneByNodeName since GetZone
 // can no longer be called from the kubelets.
 func (z zones) GetZone(_ context.Context) (cloudprovider.Zone, error) {
+	klog.V(2).Info("called GetZones")
 	return cloudprovider.Zone{}, cloudprovider.NotImplemented
 }
 
@@ -29,6 +31,7 @@ func (z zones) GetZone(_ context.Context) (cloudprovider.Zone, error) {
 // This method is particularly used in the context of external cloud providers where node initialization must be down
 // outside the kubelets.
 func (z zones) GetZoneByProviderID(_ context.Context, providerID string) (cloudprovider.Zone, error) {
+	klog.V(2).Infof("called GetZoneByProviderID with providerID %s", providerID)
 	id, err := deviceIDFromProviderID(providerID)
 	if err != nil {
 		return cloudprovider.Zone{}, err
@@ -46,6 +49,7 @@ func (z zones) GetZoneByProviderID(_ context.Context, providerID string) (cloudp
 // This method is particularly used in the context of external cloud providers where node initialization must be down
 // outside the kubelets.
 func (z zones) GetZoneByNodeName(_ context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
+	klog.V(2).Infof("called GetZoneByNodeName with nodeName %s", nodeName)
 	device, err := deviceByName(z.client, z.project, nodeName)
 	if err != nil {
 		return cloudprovider.Zone{}, err
