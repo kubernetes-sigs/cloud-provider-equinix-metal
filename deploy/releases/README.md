@@ -72,3 +72,13 @@ You can apply the rest of the CCM by running:
 ```bash
 kubectl apply -f v0.0.4/deployment.yaml
 ```
+
+### Logging
+
+By default, ccm does minimal logging, relying on the supporting infrastructure from kubernetes. However, it does support
+optional additional logging levels via the `--v=<level>` flag. In general:
+
+* `--v=2`: log most function calls for devices and facilities, when relevant logging the returned values
+* `--v=3`: log additional data when logging returned values, usually entire go structs
+* `--v=5`: log every function call, including those called very frequently
+
