@@ -1,53 +1,98 @@
 # Kubernetes Cloud Controller Manager for Packet
-packet-ccm is the Kubernetes cloud controller manager implementation for Packet.
 
-## Deploy
-Read how to deploy the Packet CCM [here](deploy/releases/)!
+`packet-ccm` is the Kubernetes CCM implementation for Packet. Read more about the CCM in [the official Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/).
 
-## Building
-To build the binary, run:
+## Requirements
 
+At the current state of Kubernetes, running the CCM requires a few things.
+Please read through the requirements carefully as they are critical to running the CCM on a Kubernetes cluster.
+
+### Version
+Recommended versions of Packet CCM based on your Kubernetes version:
+* Packet CCM version v0.0.4 supports Kubernetes version >=v1.10
+* Packet CCM version v1.0.0 support Kubernetes version >=1.15.0
+
+## Deployment
+
+**TL;DR**
+
+1. Set kubernetes binary arguments correctly
+1. Get your Packet project and secret API token
+1. Deploy your Packet project and secret API token to your cluster
+1. Deploy the CCM
+
+### Kubernetes Binary Arguments
+
+Control plane binaries in your cluster must start with the correct flags:
+
+* `kubelet`: All kubelets in your cluster **MUST** set the flag `--cloud-provider=external`. This must be done for _every_ kubelet. Note that [k3s](https://k3s.io) sets its own CCM by default. If you want to use the CCM with k3s, you must disable the k3s CCM and enable this one, as `--disable-cloud-controller --kubelet-arg cloud-provider=external`.
+* `kube-apiserver` and `kube-controller-manager` must **NOT** set the flag `--cloud-provider`. They then will use no cloud provider natively, leaving room for the Packet CCM.
+
+**WARNING**: setting the kubelet flag `--cloud-provider=external` will taint all nodes in a cluster with `node.cloudprovider.kubernetes.io/uninitialized`.
+The CCM itself will untaint those nodes when it initializes them.
+Any pod that does not tolerate that taint will be unscheduled until the CCM is running.
+
+#### Kubernetes node names must match the device name
+
+By default, the kubelet will name nodes based on the node's hostname.
+Packet's device hostnames are set based on the name of the device.
+It is important that the Kubernetes node name matches the device name.
+
+### Get Packet Project ID and API Token
+
+To run `packet-ccm`, you need your Packet project ID and secret API key ID that your cluster is running in.
+If you are already logged into the [Packet portal](https://app.packet.net), you can create one by clicking on your
+profile in the upper right then "API keys".
+To get your project ID click into the project that your cluster is under and select "project settings" from the header.
+Under General you will see "Project ID". Once you have this information you will be able to fill in the config needed for the CCM.
+
+#### Deploy Project and API
+Copy [deploy/template/secret.yaml](./deploy/template/secret.yaml) to someplace useful:
+
+```bash
+cp deploy/template/secret.yaml /tmp/secret.yaml
 ```
-make build
+
+Replace the placeholder in the copy with your token. When you're done, the `yaml` should look something like this:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: packet-cloud-config
+  namespace: kube-system
+stringData:
+  apiKey: "abc123abc123abc123"
+  projectID: "abc123abc123abc123"
 ```
 
-It will deposit the binary for your local architecture as `dist/bin/packet-cloud-controller-manager-$(ARCH)`
+Then apply the file via `kubectl`, e.g.:
 
-By default `make build` builds the binary using a docker container. To install using your locally installed go toolchain, do:
-
-```
-make build LOCALBUILD=true
+```bash
+kubectl apply -f /tmp/secret.yaml`
 ```
 
-## Docker Image
-To build a docker image, run:
+You can confirm that the secret was created with the following:
 
+````bash
+$ kubectl -n kube-system get secrets packet-cloud-config
+NAME                  TYPE                                  DATA      AGE
+packet-cloud-config   Opaque                                1         2m
+````
+
+##
+
+You can apply the rest of the CCM by using `kubectl` to apply `deploy/releases/<version>/deployment.yaml`, e.g:
+
+```bash
+kubectl apply -f deploy/releases/v1.0.0/deployment.yaml
 ```
-make image
-```
 
-The image will be tagged with `:latest`
+### Logging
 
-## CI/CD/Release pipeline
-The CI/CD/Release pipeline is run via the following steps:
+By default, ccm does minimal logging, relying on the supporting infrastructure from kubernetes. However, it does support
+optional additional logging levels via the `--v=<level>` flag. In general:
 
-* `make ci`: builds the binary, runs all tests, builds the OCI image
-* `make cd`: takes the image from the prior stage, tags it with the name of the branch and git hash from the commit, and pushes to the docker registry
-* `make release`: takes the image from the `ci` stage, tags it with the git tag, and pushes to the docker registry
-
-The assumptions about workflow are as follows:
-
-* `make ci` can be run anywhere. The built binaries and OCI image will be named and tagged as per `make build` and `make image` above.
-* `make cd` should be run only on a merge into `master`. It generally will be run only in a CI system, e.g. travis or drone. It requires passing both `CONFIRM=true` to tell it that it is ok to push, and `BRANCH_NAME=${BRANCH_NAME}` to tell it what tag should be used in addition to the git hash. For example, to push out the current commit as master: `make cd CONFIRM=true BRANCH_NAME=master`
-* `make release` should be run only on applying a tag to `master`, although it can run elsewhere. It generally will be run only in a CI system. It requires passing both `CONFIRM=true` to tell it that it is ok to push, and `RELEASE_TAG=${RELEASE_TAG}` to tell it what tag this release should be. For example, to push out a tagged version `v1.2.3` on the current commit: `make release CONFIRM=true RELEASE_TAG=v1.2.3`.
-
-For both `make cd` and `make release`, if you wish to push out a _different_ commit, then check that one out first.
-
-The flow to make changes normally should be:
-
-1. `master` is untouched, a protected branch.
-2. In your local copy, create a new working branch.
-3. Make your changes in your working branch, commit and push.
-4. Open a Pull Request or Merge Request from the branch to `master`. This will cause `make ci` to run.
-5. When CI passes and maintainers approve, merge the PR/MR into `master`. This will cause `make ci` and `make cd CONFIRM=true BRANCH_NAME=master` to run, pushing out images tagged with `:master` and `:${GIT_HASH}`
-6. When a particular commit is ready to cut a release, **on master** add a git tag and push. This will cause `make release CONFIRM=true RELEASE_TAG=<applied git tag>` to run, pushing out an image tagged with `:${RELEASE_TAG}`
+* `--v=2`: log most function calls for devices and facilities, when relevant logging the returned values
+* `--v=3`: log additional data when logging returned values, usually entire go structs
+* `--v=5`: log every function call, including those called very frequently
