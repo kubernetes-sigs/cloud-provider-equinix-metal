@@ -2,10 +2,8 @@ package packet
 
 import (
 	"io"
-	"os"
 
 	"github.com/packethost/packngo"
-	"github.com/pkg/errors"
 
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog"
@@ -25,20 +23,14 @@ type cloud struct {
 	zones     cloudprovider.Zones
 }
 
-func readEnvVars() (string, string, error) {
-	token := os.Getenv(packetAuthTokenEnvVar)
-	project := os.Getenv(packetProjectIDEnvVar)
-
-	if token == "" {
-		return "", "", errors.Errorf("environment variable %q is required", packetAuthTokenEnvVar)
-	}
-
-	if project == "" {
-		return "", "", errors.Errorf("environment variable %q is required", packetProjectIDEnvVar)
-	}
-	return token, project, nil
+// Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different packet API endpoint
+type Config struct {
+	AuthToken string  `json:"apiKey"`
+	ProjectID string  `json:"projectId"`
+	BaseURL   *string `json:"base-url,omitempty"`
 }
-func newCloud(config io.Reader, token, project string, client *packngo.Client) (cloudprovider.Interface, error) {
+
+func newCloud(config io.Reader, project string, client *packngo.Client) (cloudprovider.Interface, error) {
 	return &cloud{
 		client:    client,
 		instances: newInstances(client, project),
@@ -46,16 +38,13 @@ func newCloud(config io.Reader, token, project string, client *packngo.Client) (
 	}, nil
 }
 
-func init() {
+func InitializeProvider(packetConfig Config) error {
 	cloudprovider.RegisterCloudProvider(providerName, func(config io.Reader) (cloudprovider.Interface, error) {
-		token, project, err := readEnvVars()
-		if err != nil {
-			return nil, err
-		}
-		client := packngo.NewClientWithAuth("", token, nil)
+		client := packngo.NewClientWithAuth("", packetConfig.AuthToken, nil)
 
-		return newCloud(config, token, project, client)
+		return newCloud(config, packetConfig.ProjectID, client)
 	})
+	return nil
 }
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn goroutines
