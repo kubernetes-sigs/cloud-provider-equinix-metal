@@ -1,0 +1,148 @@
+---
+# drone config
+kind: pipeline
+name: default
+
+platform:
+  os: linux
+  arch: amd64
+
+workspace:
+  base: /go
+  path: src/github.com/packethost/packet-ccm
+
+steps:
+- name: test
+  pull: always
+  image: golang:1.12-alpine
+  commands:
+  - apk --update add make git
+  - make ci
+
+## git tagged and latest images
+
+- name: publish-amd64
+  pull: always
+  image: plugins/docker
+  settings:
+    dockerfile: Dockerfile.amd64
+    password:
+      from_secret: docker_password
+    repo: packethost/packet-ccm
+    tags:
+    - "${DRONE_COMMIT}-amd64"
+    - latest-amd64
+    username:
+      from_secret: docker_username
+  when:
+    branch:
+    - master
+    event: push
+
+- name: publish-arm64
+  pull: always
+  image: plugins/docker
+  settings:
+    dockerfile: Dockerfile.arm64
+    password:
+      from_secret: docker_password
+    repo: packethost/packet-ccm
+    tags:
+    - "${DRONE_COMMIT}-arm64"
+    - latest-arm64
+    username:
+      from_secret: docker_username
+  when:
+    branch:
+    - master
+    event: push
+
+## manifests
+
+- name: manifest-commit
+  pull: always
+  image: plugins/manifest
+  settings:
+    target: "packethost/packet-ccm:${DRONE_COMMIT}"
+    template: "packethost/packet-ccm:${DRONE_COMMIT}-ARCH"
+    password:
+      from_secret: docker_password
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    username:
+      from_secret: docker_username
+  when:
+    branch:
+    - master
+    event: push
+
+- name: manifest-latest
+  pull: always
+  image: plugins/manifest
+  settings:
+    target: packethost/packet-ccm:latest
+    template: packethost/packet-ccm:latest-ARCH
+    password:
+      from_secret: docker_password
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    username:
+      from_secret: docker_username
+  when:
+    branch:
+    - master
+    event: push
+
+## Releases
+
+- name: release-amd64
+  pull: always
+  image: plugins/docker
+  settings:
+    dockerfile: Dockerfile.amd64
+    password:
+      from_secret: docker_password
+    repo: packethost/packet-ccm
+    tags:
+    - "${DRONE_TAG}-amd64"
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - tag
+
+- name: release-arm64
+  pull: always
+  image: plugins/docker
+  settings:
+    dockerfile: Dockerfile.arm64
+    password:
+      from_secret: docker_password
+    repo: packethost/packet-ccm
+    tags:
+    - "${DRONE_TAG}-arm64"
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - tag
+
+- name: release-manifest-commit
+  pull: always
+  image: plugins/manifest
+  settings:
+    target: "packethost/packet-ccm:${DRONE_TAG}"
+    template: "packethost/packet-ccm:${DRONE_TAG}-ARCH"
+    password:
+      from_secret: docker_password
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    username:
+      from_secret: docker_username
+  when:
+    event:
+      - tag
+

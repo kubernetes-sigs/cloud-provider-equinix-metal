@@ -233,7 +233,8 @@ clean:
 .PHONY: ci cd build deploy push release confirm pull-images
 ## Run what CI runs
 # race has an issue with alpine, see https://github.com/golang/go/issues/14481
-ci: build-all fmt-check lint test vet image-all # race
+# image-all removed so can run ci locally
+ci: build-all fmt-check lint test vet # image-all race
 
 confirm:
 ifndef CONFIRM
