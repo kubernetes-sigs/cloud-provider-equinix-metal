@@ -61,7 +61,7 @@ func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
 	client := constructClient(token, &urlString)
 
 	// now just need to create a client
-	c, _ := newCloud(nil, token, projectID, client)
+	c, _ := newCloud(nil, projectID, client)
 	validCloud = c.(*cloud)
 	return validCloud, backend
 }

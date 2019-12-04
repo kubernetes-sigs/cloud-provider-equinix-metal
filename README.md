@@ -62,8 +62,11 @@ metadata:
   name: packet-cloud-config
   namespace: kube-system
 stringData:
-  apiKey: "abc123abc123abc123"
-  projectID: "abc123abc123abc123"
+  cloud-sa.json: |
+    {
+    "apiKey": "abc123abc123abc123"
+    "projectID": "abc123abc123abc123"
+    }  
 ```
 
 Then apply the file via `kubectl`, e.g.:
