@@ -64,7 +64,7 @@ metadata:
 stringData:
   cloud-sa.json: |
     {
-    "apiKey": "abc123abc123abc123"
+    "apiKey": "abc123abc123abc123",
     "projectID": "abc123abc123abc123"
     }  
 ```
