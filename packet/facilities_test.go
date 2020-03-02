@@ -39,7 +39,7 @@ func TestGetZoneByProviderID(t *testing.T) {
 		err        error
 	}{
 		{"", "", fmt.Errorf("providerID cannot be empty")},                                     // empty ID
-		{"foo-bar-abcdefg", "", fmt.Errorf("unexpected providerID format")},                    // invalid format
+		{"foo-bar-abcdefg", "", fmt.Errorf("instance not found")},                              // invalid format
 		{"aws://abcdef5667", "", fmt.Errorf("provider name from providerID should be packet")}, // not packet
 		{"packet://acbdef-56788", "", fmt.Errorf("instance not found")},                        // unknown ID
 		{fmt.Sprintf("packet://%s", dev.ID), validRegionCode, nil},                             // valid
