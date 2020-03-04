@@ -87,10 +87,11 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 		err       error
 	}{
 		{"", nil, fmt.Errorf("providerID cannot be empty")},                                     // empty ID
-		{"foo-bar-abcdefg", nil, fmt.Errorf("unexpected providerID format")},                    // invalid format
+		{"foo-bar-abcdefg", nil, fmt.Errorf("instance not found")},                              // invalid format
 		{"aws://abcdef5667", nil, fmt.Errorf("provider name from providerID should be packet")}, // not packet
 		{"packet://acbdef-56788", nil, fmt.Errorf("instance not found")},                        // unknown ID
 		{fmt.Sprintf("packet://%s", dev.ID), validAddresses, nil},                               // valid
+		{dev.ID, validAddresses, nil},                                                           // valid
 	}
 
 	for i, tt := range tests {
@@ -176,7 +177,7 @@ func TestInstanceTypeByProviderID(t *testing.T) {
 		err  error
 	}{
 		{"", "", fmt.Errorf("providerID cannot be empty")},                                     // empty name
-		{"foo-bar-abcdefg", "", fmt.Errorf("unexpected providerID format")},                    // invalid format
+		{"foo-bar-abcdefg", "", fmt.Errorf("instance not found")},                              // invalid format
 		{"aws://abcdef5667", "", fmt.Errorf("provider name from providerID should be packet")}, // not packet
 		{"packet://acbdef-56788", "", fmt.Errorf("instance not found")},                        // unknown ID
 		{fmt.Sprintf("packet://%s", dev.ID), dev.Plan.Slug, nil},                               // valid
@@ -233,10 +234,11 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 		err    error
 	}{
 		{"", false, fmt.Errorf("providerID cannot be empty")},                                     // empty name
-		{"foo-bar-abcdefg", false, fmt.Errorf("unexpected providerID format")},                    // invalid format
+		{"foo-bar-abcdefg", false, nil},                                                           // invalid format
 		{"aws://abcdef5667", false, fmt.Errorf("provider name from providerID should be packet")}, // not packet
 		{"packet://acbdef-56788", false, nil},                                                     // unknown ID
 		{fmt.Sprintf("packet://%s", dev.ID), true, nil},                                           // valid
+		{dev.ID, true, nil}, // valid
 	}
 
 	for i, tt := range tests {
@@ -270,11 +272,13 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 		err  error
 	}{
 		{"", false, fmt.Errorf("providerID cannot be empty")},                                     // empty name
-		{"foo-bar-abcdefg", false, fmt.Errorf("unexpected providerID format")},                    // invalid format
+		{"foo-bar-abcdefg", false, fmt.Errorf("instance not found")},                              // invalid format
 		{"aws://abcdef5667", false, fmt.Errorf("provider name from providerID should be packet")}, // not packet
 		{"packet://acbdef-56788", false, fmt.Errorf("instance not found")},                        // unknown ID
 		{fmt.Sprintf("packet://%s", devActive.ID), false, nil},                                    // valid
+		{devActive.ID, false, nil},                                                                // valid
 		{fmt.Sprintf("packet://%s", devInactive.ID), true, nil},                                   // valid
+		{devInactive.ID, true, nil},                                                               // valid
 	}
 
 	for i, tt := range tests {

@@ -2,6 +2,7 @@ package packet
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/packethost/packngo"
@@ -86,8 +87,20 @@ func (i *instances) InstanceID(_ context.Context, nodeName types.NodeName) (stri
 		return "", err
 	}
 
-	klog.V(2).Infof("InstanceID for %s: %s", nodeName, device.ID)
-	return device.ID, nil
+	// safely handle if it already is structured as packet://<id>
+	split := strings.Split(device.ID, "://")
+	var devID string
+	switch len(split) {
+	case 2:
+		devID = split[1]
+	case 1:
+		devID = device.ID
+	default:
+		return "", fmt.Errorf("unknown format for deviceID: %s", device.ID)
+	}
+
+	klog.V(2).Infof("InstanceID for %s: %s", nodeName, devID)
+	return devID, nil
 }
 
 // InstanceType returns the type of the specified instance.
@@ -186,7 +199,7 @@ func deviceByName(client *packngo.Client, projectID string, nodeName types.NodeN
 // deviceIDFromProviderID returns a device's ID from providerID.
 //
 // The providerID spec should be retrievable from the Kubernetes
-// node object. The expected format is: packet://device-id
+// node object. The expected format is: packet://device-id or just device-id
 func deviceIDFromProviderID(providerID string) (string, error) {
 	klog.V(2).Infof("called deviceIDFromProviderID with providerID %s", providerID)
 	if providerID == "" {
@@ -194,15 +207,20 @@ func deviceIDFromProviderID(providerID string) (string, error) {
 	}
 
 	split := strings.Split(providerID, "://")
-	if len(split) != 2 {
-		return "", errors.Errorf("unexpected providerID format: %s, format should be: packet://device-id", providerID)
+	var deviceID string
+	switch len(split) {
+	case 2:
+		deviceID = split[1]
+		if split[0] != providerName {
+			return "", errors.Errorf("provider name from providerID should be %s, was %s", providerName, split[0])
+		}
+	case 1:
+		deviceID = providerID
+	default:
+		return "", errors.Errorf("unexpected providerID format: %s, format should be: 'device-id' or 'packet://device-id'", providerID)
 	}
 
-	if split[0] != providerName {
-		return "", errors.Errorf("provider name from providerID should be packet: %s", providerID)
-	}
-
-	return split[1], nil
+	return deviceID, nil
 }
 
 // deviceFromProviderID uses providerID to get the device id and return the device
