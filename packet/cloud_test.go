@@ -1,12 +1,11 @@
 package packet
 
 import (
-	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	packetServer "github.com/packethost/packet-api-server/pkg/server"
 	"github.com/packethost/packet-api-server/pkg/store"
 	"github.com/packethost/packngo"
@@ -61,7 +60,11 @@ func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
 	client := constructClient(token, &urlString)
 
 	// now just need to create a client
-	c, _ := newCloud(nil, projectID, client)
+	config := Config{
+		ProjectID:           projectID,
+		DisableLoadBalancer: true,
+	}
+	c, _ := newCloud(config, client)
 	validCloud = c.(*cloud)
 	return validCloud, backend
 }
@@ -159,12 +162,14 @@ func TestHasClusterID(t *testing.T) {
 
 // builds a packet client
 func constructClient(authToken string, baseURL *string) *packngo.Client {
-	tr := &http.Transport{
-		MaxIdleConns:       10,
-		IdleConnTimeout:    30 * time.Second,
-		DisableCompression: true,
-	}
-	client := &http.Client{Transport: tr}
+	/*
+		tr := &http.Transport{
+			MaxIdleConns:       10,
+			IdleConnTimeout:    30 * time.Second,
+			DisableCompression: true,
+		}
+	*/
+	client := retryablehttp.NewClient()
 
 	// client.Transport = logging.NewTransport("Packet", client.Transport)
 	if baseURL != nil {

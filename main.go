@@ -11,21 +11,26 @@ import (
 
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
+	_ "k8s.io/component-base/metrics/prometheus/clientgo" // for client metric registration
+	_ "k8s.io/component-base/metrics/prometheus/version"  // for version metric registration
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
-	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
-	_ "k8s.io/kubernetes/pkg/version/prometheus"        // for version metric registration
 
 	"github.com/packethost/packet-ccm/packet"
 	"github.com/spf13/pflag"
 )
 
 const (
-	apiKeyName    = "PACKET_API_KEY"
-	projectIDName = "PACKET_PROJECT_ID"
+	apiKeyName              = "PACKET_API_KEY"
+	projectIDName           = "PACKET_PROJECT_ID"
+	facilityName            = "PACKET_FACILITY_NAME"
+	disableLoadBalancerName = "PACKET_DISABLE_LB"
+	// fixedDisableLoadBalancers disabled until the packet API is ready with IP management
+	fixedDisableLoadBalancers = true
 )
 
 var (
-	providerConfig string
+	providerConfig           string
+	loadBalancerManifestPath string
 )
 
 func main() {
@@ -38,6 +43,7 @@ func main() {
 
 	// add our config
 	command.PersistentFlags().StringVar(&providerConfig, "provider-config", "", "path to provider config file")
+	command.PersistentFlags().StringVar(&loadBalancerManifestPath, "load-balancer-manifest", "", "path to load-balancer manifests")
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
@@ -46,7 +52,7 @@ func main() {
 	command.ParseFlags(os.Args[1:])
 
 	// register the provider
-	config, err := getPacketConfig(providerConfig)
+	config, err := getPacketConfig(providerConfig, loadBalancerManifestPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "provider config error: %v\n", err)
 		os.Exit(1)
@@ -63,7 +69,7 @@ func main() {
 	}
 }
 
-func getPacketConfig(providerConfig string) (packet.Config, error) {
+func getPacketConfig(providerConfig, loadBalancerManifestPath string) (packet.Config, error) {
 	// get our token and project
 	var config, rawConfig packet.Config
 	if providerConfig != "" {
@@ -90,6 +96,17 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 	}
 	config.ProjectID = projectID
 
+	disableLoadBalancer := os.Getenv(disableLoadBalancerName)
+	config.DisableLoadBalancer = rawConfig.DisableLoadBalancer
+	if disableLoadBalancer == "true" || fixedDisableLoadBalancers {
+		config.DisableLoadBalancer = true
+	}
+
+	facility := os.Getenv(facilityName)
+	if facility == "" {
+		facility = rawConfig.Facility
+	}
+
 	if apiToken == "" {
 		return config, fmt.Errorf("environment variable %q is required", apiKeyName)
 	}
@@ -97,5 +114,25 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 	if projectID == "" {
 		return config, fmt.Errorf("environment variable %q is required", projectIDName)
 	}
+
+	// try to read the load balancer manifest
+	if !config.DisableLoadBalancer {
+		b, err := ioutil.ReadFile(loadBalancerManifestPath)
+		if err != nil {
+			return config, fmt.Errorf("error loading the load balancer manifest from %s: %v", loadBalancerManifestPath, err)
+		}
+		config.LoadBalancerManifest = b
+	}
+
+	// if facility was not defined, retrieve it from our metadata
+	if facility == "" {
+		metadata, err := packet.GetAndParseMetadata("")
+		if err != nil {
+			return config, fmt.Errorf("facility not set in environment variable %q or config file, and error reading metadata: %v", facilityName, err)
+		}
+		facility = metadata.Facility
+	}
+	config.Facility = facility
+
 	return config, nil
 }

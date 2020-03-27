@@ -11,6 +11,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog"
 )
@@ -20,9 +21,25 @@ type instances struct {
 	project string
 }
 
-func newInstances(client *packngo.Client, projectID string) cloudprovider.Instances {
+func newInstances(client *packngo.Client, projectID string) *instances {
 	return &instances{client, projectID}
 }
+
+// cloudService implementation
+func (i *instances) name() string {
+	return "instances"
+}
+func (i *instances) init(k8sclient kubernetes.Interface) error {
+	return nil
+}
+func (i *instances) nodeReconciler() nodeReconciler {
+	return nil
+}
+func (i *instances) serviceReconciler() serviceReconciler {
+	return nil
+}
+
+// cloudprovider.Instances interface implementation
 
 // NodeAddresses returns the addresses of the specified instance.
 func (i *instances) NodeAddresses(_ context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
