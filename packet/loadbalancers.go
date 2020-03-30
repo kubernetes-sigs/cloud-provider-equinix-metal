@@ -19,22 +19,22 @@ import (
 )
 
 const (
-	asn                   = 65000
 	bufferSize            = 4096
 	checkLoopTimerSeconds = 60
 )
 
 type loadBalancers struct {
-	client    *packngo.Client
-	k8sclient kubernetes.Interface
-	project   string
-	disabled  bool
-	facility  string
-	manifest  []byte
+	client            *packngo.Client
+	k8sclient         kubernetes.Interface
+	project           string
+	disabled          bool
+	facility          string
+	manifest          []byte
+	localASN, peerASN int
 }
 
-func newLoadBalancers(client *packngo.Client, projectID, facility string, disabled bool, manifest []byte) *loadBalancers {
-	return &loadBalancers{client, nil, projectID, disabled, facility, manifest}
+func newLoadBalancers(client *packngo.Client, projectID, facility string, disabled bool, manifest []byte, localASN, peerASN int) *loadBalancers {
+	return &loadBalancers{client, nil, projectID, disabled, facility, manifest, localASN, peerASN}
 }
 
 func (l *loadBalancers) name() string {
@@ -149,7 +149,7 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 			if peer, err = getNodePeerAddress(id, l.client); err != nil {
 				klog.Errorf("could not add metallb node peer address for node %s: %v", node.Name, err)
 			}
-			config = addNodePeer(config, node.Name, peer)
+			config = addNodePeer(config, node.Name, peer, l.localASN, l.peerASN)
 			if config == nil {
 				klog.V(2).Info("config unchanged, not updating")
 				return nil
@@ -265,39 +265,16 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error
 	return nil
 }
 
-// getNodePeerAddress get the BGP peer address for a specific node
-func getNodePeerAddress(device string, client *packngo.Client) (address string, err error) {
-	ips, _, err := client.DeviceIPs.List(device, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to get device IPs for device %s: %v", device, err)
-	}
-	// we need to get the ip address that is all of:
-	// - AddressFamily == 4
-	// - Public == false
-	// - Management == true
-	var addr string
-	for _, ip := range ips {
-		if ip.AddressFamily == 4 && !ip.Public && ip.Management {
-			addr = ip.Network
-			break
-		}
-	}
-	if addr == "" {
-		return addr, errors.New("no matching IP address found that is private+ipv4+management")
-	}
-	return addr, nil
-}
-
 // addNodePeer update the configmap to ensure that the given node has the given peer
-func addNodePeer(config *metallb.ConfigFile, nodeName string, peer string) *metallb.ConfigFile {
+func addNodePeer(config *metallb.ConfigFile, nodeName string, peer string, localASN, peerASN int) *metallb.ConfigFile {
 	ns := metallb.NodeSelector{
 		MatchLabels: map[string]string{
 			hostnameKey: nodeName,
 		},
 	}
 	p := metallb.Peer{
-		MyASN:         localASN,
-		ASN:           peerASN,
+		MyASN:         uint32(localASN),
+		ASN:           uint32(peerASN),
 		Addr:          peer,
 		NodeSelectors: []metallb.NodeSelector{ns},
 	}

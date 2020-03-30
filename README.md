@@ -120,30 +120,58 @@ The Packet CCM works in one facility at a time. You can control which facility i
 The overrides of environment variable and config file are provided so that you can run the CCM
 on a node in a different facility, or even outside of Packet entirely.
 
+### BGP
+
+The Packet CCM enables BGP for the project and enables it on all nodes as they come up. It sets the ASNs as follows:
+
+* Node, a.k.a. local, ASN: 65000
+* Peer Router ASN: 65530
+
+These are the settings per Packet's BGP config, see [here](https://github.com/packet-labs/kubernetes-bgp). It is
+_not_ recommended to override them. However, the settings are set as follows:
+
+1. If the environment variables `PACKET_LOCAL_ASN` and `PACKET_PEER_ASN` are set. Else...
+1. If the config file has fields named `localASN` and `peerASN`. Else...
+1. Use the above defaults.
+
+In addition to enabling BGP and setting ASNs, the Packet CCM sets Kubernetes annotations on the nodes. It sets the
+following information:
+
+* `packet.com/node.asn` - Node, or local, ASN
+* `packet.com/peer.asns` - Peer ASNs, comma-separated if multiple
+* `packet.com/peer.ips` - Peer IPs, comma-separated if multiple
+
+These annotation names can be overridden, if you so choose. The settings are as follows:
+
+1. If the environment variables `PACKET_ANNOTATION_LOCAL_ASN`, `PACKET_ANNOTATION_PEER_ASNS`, `PACKET_ANNOTATION_PEER_IPS` are set. Else...
+1. If the config file has files named `annotationLocalASN`, `annotationPeerASNs`, `annotationPeerIPs`. Else...
+1. Use the above defaults.
+
 ### Load Balancers
 
 Packet does not offer managed load balancers like [AWS ELB](https://aws.amazon.com/elasticloadbalancing/) or [GCP Load Balancers](https://cloud.google.com/load-balancing/).
 Instead, Packet uses BGP and [metallb](https://metallb.universe.tf) to provide the _equivalence_ of load balancing, without requiring an additional
 managed service (or hop).
 
+**Note:** The below load balancer behaviour is currently disabled. It will be enabled in a future release.
+
 By default, the load balancer is deployed. You can disable the load balancer when
 deploying the CCM, which will prevent the load balancer from running. To do so,
 you use one of these two options:
 
 * set the environment variable `PACKET_DISABLE_LB=true` before running the CCM
-* set the `packet-cloud-config` secret property "disable-loadbalancer" to `true`
+* in the kubernetes secret `packet-cloud-config`, set the property "disable-loadbalancer" to `true`
 
 The Packet CCM, when the load balancer feature is not disabled, does the following.
 
 Upon start, CCM does the following:
 
-* Ensure MetalLB is deployed to the cluster, using an ASN of `65000`, while the top-of-rack (ToR) routers are `65530`
-* Ensure the project has BGP enabled
+* Ensure MetalLB is deployed to the cluster, using the peer IPs and ASNs configured above
 * List each node in the cluster using a kubernetes node lister; for each:
-  * ensure it has BGP enabled
-  * add it to the metallb `ConfigMap` with the top-of-the-rack (ToR) router peer IP address for that node, and a kubernetes selector ensuring that the peer is only for this node.
+  * retrieve its BGP node ASN, peer IPs and peer ASNs
+  * add them to the metallb `ConfigMap` with a kubernetes selector ensuring that the peer is only for this node
 * Start a kubernetes informer for node changes, responding to node addition and removals
-  * Node addition: ensure the node has BGP enabled, and is in the metallb `ConfigMap` as above
+  * Node addition: ensure the node is in the metallb `ConfigMap` as above
   * Node deletion: remove the node from the metallb `ConfigMap`
 * List all of the services in the cluster using a kubernetes service lister; for each:
   * If the service is not of `type=LoadBalancer`, ignore it
