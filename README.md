@@ -171,3 +171,20 @@ In order to ease understanding, we use several different terms for an IP address
 
 From Packet's perspective, the IP reservation is either Requested or Reserved, but not both. For the
 load balancer to work, the IP address needs to be all of: Reserved, Assigned, Mapped.
+
+## Running Locally
+
+You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This _dramatically_ speeds up development. To do so:
+
+1. Deploy everything except for the `Deployment` and, optionally, the `Secret`
+1. Build it for your local platform `make build`
+1. Set the environment variable `CCM_SECRET` to a file with the secret contents as a json, i.e. the content of the secret's `stringData`, e.g. `CCM_SECRET=ccm-secret.json`
+1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
+1. Set the environment variable `PACKET_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `PACKET_FACILITY_NAME=EWR1`
+1. Run the command, e.g.:
+
+```
+PACKET_FACILITY_NAME=EWR1 dist/bin/packet-cloud-controller-manager-darwin-amd64 --cloud-provider=packet --leader-elect=false --allow-untagged-cloud=true --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
+```
+
+For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.
