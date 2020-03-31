@@ -67,6 +67,11 @@ type Config struct {
 	DisableLoadBalancer  bool    `json:"disableLoadBalancer,omitempty"`
 	Facility             string  `json:"facility,omitempty"`
 	LoadBalancerManifest []byte
+	PeerASN              int    `json:"peerASN,omitempty"`
+	LocalASN             int    `json:"localASN,omitempty"`
+	AnnotationLocalASN   string `json:"annotationLocalASN,omitEmpty"`
+	AnnotationPeerASNs   string `json:"annotationPeerASNs,omitEmpty"`
+	AnnotationPeerIPs    string `json:"annotationPeerIPs,omitEmpty"`
 }
 
 func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
@@ -75,8 +80,8 @@ func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interf
 		facility:     packetConfig.Facility,
 		instances:    newInstances(client, packetConfig.ProjectID),
 		zones:        newZones(client, packetConfig.ProjectID),
-		loadBalancer: newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.DisableLoadBalancer, packetConfig.LoadBalancerManifest),
-		bgp:          newBGP(client, packetConfig.ProjectID),
+		loadBalancer: newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.DisableLoadBalancer, packetConfig.LoadBalancerManifest, packetConfig.LocalASN, packetConfig.PeerASN),
+		bgp:          newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs),
 	}, nil
 }
 
@@ -190,6 +195,7 @@ func startNodesWatcher(informer informers.SharedInformerFactory, handlers []node
 	if err != nil {
 		return fmt.Errorf("failed to list nodes: %v", err)
 	}
+	klog.V(2).Infof("existing nodes: %v", nodeList)
 	for _, h := range handlers {
 		if err := h(nodeList, false); err != nil {
 			klog.Errorf("failed to update and sync nodes for handler: %v", err)
