@@ -1,7 +1,7 @@
 ---
-# drone config
+# test
 kind: pipeline
-name: default
+name: test
 
 platform:
   os: linux
@@ -19,13 +19,30 @@ steps:
   - apk --update add make git
   - make ci
 
+---
+# drone config
+kind: pipeline
+name: amd64
+
+platform:
+  os: linux
+  arch: amd64
+
+depends_on:
+- test
+
+workspace:
+  base: /go
+  path: src/github.com/packethost/packet-ccm
+
+steps:
 ## git tagged and latest images
 
 - name: publish-amd64
   pull: always
   image: plugins/docker
   settings:
-    dockerfile: Dockerfile.amd64
+    dockerfile: Dockerfile
     password:
       from_secret: docker_password
     repo: packethost/packet-ccm
@@ -38,12 +55,65 @@ steps:
     branch:
     - master
     event: push
+## release image
+- name: release-amd64
+  pull: always
+  image: plugins/docker
+  settings:
+    dockerfile: Dockerfile
+    password:
+      from_secret: docker_password
+    repo: packethost/packet-ccm
+    tags:
+    - "${DRONE_TAG}-amd64"
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - tag
 
+---
+# drone config
+kind: pipeline
+name: arm64
+
+platform:
+  os: linux
+  arch: arm64
+
+depends_on:
+- test
+
+workspace:
+  base: /go
+  path: src/github.com/packethost/packet-ccm
+
+steps:
+## git tagged and latest images
+
+## release
+- name: release-arm64
+  pull: always
+  image: plugins/docker
+  settings:
+    dockerfile: Dockerfile
+    password:
+      from_secret: docker_password
+    repo: packethost/packet-ccm
+    tags:
+    - "${DRONE_TAG}-arm64"
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - tag
+
+## publish git tagged and latest
 - name: publish-arm64
   pull: always
   image: plugins/docker
   settings:
-    dockerfile: Dockerfile.arm64
+    dockerfile: Dockerfile
     password:
       from_secret: docker_password
     repo: packethost/packet-ccm
@@ -57,8 +127,21 @@ steps:
     - master
     event: push
 
-## manifests
+---
+# drone config
+kind: pipeline
+name: manifests
 
+platform:
+  os: linux
+  arch: amd64
+
+depends_on:
+- amd64
+- arm64
+
+## manifests
+steps:
 - name: manifest-commit
   pull: always
   image: plugins/manifest
@@ -97,37 +180,6 @@ steps:
 
 ## Releases
 
-- name: release-amd64
-  pull: always
-  image: plugins/docker
-  settings:
-    dockerfile: Dockerfile.amd64
-    password:
-      from_secret: docker_password
-    repo: packethost/packet-ccm
-    tags:
-    - "${DRONE_TAG}-amd64"
-    username:
-      from_secret: docker_username
-  when:
-    event:
-    - tag
-
-- name: release-arm64
-  pull: always
-  image: plugins/docker
-  settings:
-    dockerfile: Dockerfile.arm64
-    password:
-      from_secret: docker_password
-    repo: packethost/packet-ccm
-    tags:
-    - "${DRONE_TAG}-arm64"
-    username:
-      from_secret: docker_username
-  when:
-    event:
-    - tag
 
 - name: release-manifest-commit
   pull: always
@@ -145,4 +197,3 @@ steps:
   when:
     event:
       - tag
-

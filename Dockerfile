@@ -6,7 +6,7 @@ RUN apk --update add ca-certificates
 FROM scratch as runner
 
 ARG BINARY=packet-cloud-controller-manager
-ARG ARCH=amd64
+ARG ARCH
 ARG OS=linux
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
