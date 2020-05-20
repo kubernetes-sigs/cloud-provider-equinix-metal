@@ -36,8 +36,13 @@ workspace:
 
 steps:
 ## git tagged and latest images
+- name: build
+  image: golang:1.12-alpine
+  commands:
+  - apk --update add make git
+  - make build ARCH=${DRONE_STAGE_ARCH}
 
-- name: publish-amd64
+- name: publish
   pull: always
   image: plugins/docker
   settings:
@@ -46,10 +51,10 @@ steps:
       from_secret: docker_password
     repo: packethost/packet-ccm
     build_args:
-      ARCH=amd64
+      ARCH=${DRONE_STAGE_ARCH}
     tags:
-    - "${DRONE_COMMIT}-amd64"
-    - latest-amd64
+    - "${DRONE_COMMIT}-${DRONE_STAGE_ARCH}"
+    - latest-${DRONE_STAGE_ARCH}
     username:
       from_secret: docker_username
   when:
@@ -57,7 +62,7 @@ steps:
     - master
     event: push
 ## release image
-- name: release-amd64
+- name: release
   pull: always
   image: plugins/docker
   settings:
@@ -66,9 +71,9 @@ steps:
       from_secret: docker_password
     repo: packethost/packet-ccm
     build_args:
-      ARCH=amd64
+      ARCH=${DRONE_STAGE_ARCH}
     tags:
-    - "${DRONE_TAG}-amd64"
+    - "${DRONE_TAG}-${DRONE_STAGE_ARCH}"
     username:
       from_secret: docker_username
   when:
@@ -92,10 +97,14 @@ workspace:
   path: src/github.com/packethost/packet-ccm
 
 steps:
+- name: build
+  image: golang:1.12-alpine
+  commands:
+  - apk --update add make git
+  - make build ARCH=${DRONE_STAGE_ARCH}
+
 ## git tagged and latest images
-
-## release
-- name: release-arm64
+- name: publish
   pull: always
   image: plugins/docker
   settings:
@@ -104,29 +113,10 @@ steps:
       from_secret: docker_password
     repo: packethost/packet-ccm
     build_args:
-      ARCH=arm64
+      ARCH=${DRONE_STAGE_ARCH}
     tags:
-    - "${DRONE_TAG}-arm64"
-    username:
-      from_secret: docker_username
-  when:
-    event:
-    - tag
-
-## publish git tagged and latest
-- name: publish-arm64
-  pull: always
-  image: plugins/docker
-  settings:
-    dockerfile: Dockerfile
-    password:
-      from_secret: docker_password
-    repo: packethost/packet-ccm
-    build_args:
-      ARCH=arm64
-    tags:
-    - "${DRONE_COMMIT}-arm64"
-    - latest-arm64
+    - "${DRONE_COMMIT}-${DRONE_STAGE_ARCH}"
+    - latest-${DRONE_STAGE_ARCH}
     username:
       from_secret: docker_username
   when:
@@ -134,6 +124,24 @@ steps:
     - master
     event: push
 
+## release
+- name: release
+  pull: always
+  image: plugins/docker
+  settings:
+    dockerfile: Dockerfile
+    password:
+      from_secret: docker_password
+    repo: packethost/packet-ccm
+    build_args:
+      ARCH=${DRONE_STAGE_ARCH}
+    tags:
+    - "${DRONE_TAG}-${DRONE_STAGE_ARCH}"
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - tag
 ---
 # drone config
 kind: pipeline
