@@ -45,6 +45,8 @@ steps:
     password:
       from_secret: docker_password
     repo: packethost/packet-ccm
+    build_args:
+      ARCH=amd64
     tags:
     - "${DRONE_COMMIT}-amd64"
     - latest-amd64
@@ -63,6 +65,8 @@ steps:
     password:
       from_secret: docker_password
     repo: packethost/packet-ccm
+    build_args:
+      ARCH=amd64
     tags:
     - "${DRONE_TAG}-amd64"
     username:
@@ -99,6 +103,8 @@ steps:
     password:
       from_secret: docker_password
     repo: packethost/packet-ccm
+    build_args:
+      ARCH=arm64
     tags:
     - "${DRONE_TAG}-arm64"
     username:
@@ -116,6 +122,8 @@ steps:
     password:
       from_secret: docker_password
     repo: packethost/packet-ccm
+    build_args:
+      ARCH=arm64
     tags:
     - "${DRONE_COMMIT}-arm64"
     - latest-arm64
