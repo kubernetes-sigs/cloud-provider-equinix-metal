@@ -26,6 +26,15 @@ jobs:
         go-version: '1.14.3' # The Go version to download (if necessary) and use.
     - name: ci
       run: make ci
+    - name: Register binfmt_misc entries for qemu-user-static
+      run: make register
+    - name: set buildx cross-builder
+      run: |
+        docker buildx create --name cross-builder
+        docker buildx use cross-builder
+        docker buildx inspect --bootstrap
+    - name: check buildx
+      run: docker buildx ls
     - name: image
       run: make image-all
     - name: hub login
