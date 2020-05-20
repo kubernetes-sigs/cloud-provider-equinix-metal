@@ -1,7 +1,7 @@
 ---
 # test
 kind: pipeline
-name: test
+name: ci
 
 platform:
   os: linux
@@ -12,13 +12,12 @@ workspace:
   path: src/github.com/packethost/packet-ccm
 
 steps:
-- name: test
-  pull: always
+- name: test-build
   image: golang:1.12-alpine
   commands:
   - apk --update add make git
   - make ci
-
+  - make build-all
 ---
 # drone config
 kind: pipeline
@@ -29,7 +28,7 @@ platform:
   arch: amd64
 
 depends_on:
-- test
+- ci
 
 workspace:
   base: /go
@@ -82,7 +81,7 @@ platform:
   arch: arm64
 
 depends_on:
-- test
+- ci
 
 workspace:
   base: /go
