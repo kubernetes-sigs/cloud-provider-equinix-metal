@@ -14,7 +14,7 @@ FROMTAG ?= latest
 LDFLAGS ?= -ldflags '-extldflags "-static" -X "$(PACKAGE_NAME)/pkg/version.VERSION=$(VERSION)"'
 
 # which arches can we support
-ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
+ARCHES=arm64 amd64
 
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
@@ -94,7 +94,7 @@ version:
 
 
 ## Check the file format
-fmt-check: 
+fmt-check:
 	@if [ -n "$(shell $(BUILD_CMD) gofmt -l ${GO_FILES})" ]; then \
 	  $(BUILD_CMD) gofmt -s -e -d ${GO_FILES}; \
 	  exit 1; \
@@ -128,15 +128,15 @@ race: pkgs
 	@$(BUILD_CMD) go test -race -short ${PKG_LIST}
 
 ## Display this help screen
-help: 
+help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 ## Delete the ccm
-undeploy: 
+undeploy:
 	kubectl delete --now -f releases/v0.0.0.yaml
 
 ## Deploy the controller to kubernetes
-deploy: 
+deploy:
 	kubectl apply -f releases/v0.0.0.yaml
 
 
@@ -172,7 +172,8 @@ sub-image-%:
 
 ## make the image for a single ARCH
 image: register
-	docker image build -t $(BUILD_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+	docker buildx build -t $(BUILD_IMAGE):latest-$(ARCH) -f Dockerfile --build-arg ARCH=$(ARCH) --platform $(OS)/$(ARCH) .
+	echo "Done. image is at $(BUILD_IMAGE):latest-$(ARCH)"
 
 # Targets used when cross building.
 .PHONY: register
@@ -207,7 +208,7 @@ tag-images-all: $(addprefix sub-tag-image-, $(ARCHES))
 sub-tag-image-%:
 	@$(MAKE) ARCH=$* IMAGETAG=$(IMAGETAG) tag-images
 
-tag-images: imagetag 
+tag-images: imagetag
 	docker tag $(BUILD_IMAGE):$(FROMTAG)-$(ARCH) $(IMAGENAME)
 
 ## ensure that a particular tagged image exists across all support archs
