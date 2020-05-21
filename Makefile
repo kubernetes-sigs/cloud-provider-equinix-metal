@@ -175,7 +175,7 @@ sub-image-%:
 
 ## make the image for a single ARCH
 image:
-	docker buildx build -t $(BUILD_IMAGE):latest-$(ARCH) -f Dockerfile --build-arg ARCH=$(ARCH) --platform $(OS)/$(ARCH) .
+	docker buildx build --load -t $(BUILD_IMAGE):latest-$(ARCH) -f Dockerfile --build-arg ARCH=$(ARCH) --platform $(OS)/$(ARCH) .
 	echo "Done. image is at $(BUILD_IMAGE):latest-$(ARCH)"
 
 # Targets used when cross building.
