@@ -415,53 +415,53 @@ func TestNodeSelectorsEqual(t *testing.T) {
 func TestSelectorRequirementsCompare(t *testing.T) {
 	// basic set we use for our tests.
 	ns := map[string]SelectorRequirements{
-		"empty": SelectorRequirements{},
-		"ad": SelectorRequirements{
+		"empty": {},
+		"ad": {
 			Key:      "a",
 			Operator: "d",
 			Values:   []string{},
 		},
-		"dd": SelectorRequirements{
+		"dd": {
 			Key:      "d",
 			Operator: "d",
 			Values:   []string{},
 		},
-		"ap": SelectorRequirements{
+		"ap": {
 			Key:      "a",
 			Operator: "p",
 			Values:   []string{},
 		},
-		"ap-values-empty": SelectorRequirements{
+		"ap-values-empty": {
 			Key:      "a",
 			Operator: "p",
 			Values:   []string{},
 		},
-		"ap-values-nil": SelectorRequirements{
+		"ap-values-nil": {
 			Key:      "a",
 			Operator: "p",
 			Values:   nil,
 		},
-		"ap-values-a": SelectorRequirements{
+		"ap-values-a": {
 			Key:      "a",
 			Operator: "p",
 			Values:   []string{"a"},
 		},
-		"ap-values-b": SelectorRequirements{
+		"ap-values-b": {
 			Key:      "a",
 			Operator: "p",
 			Values:   []string{"b"},
 		},
-		"ap-values-ab": SelectorRequirements{
+		"ap-values-ab": {
 			Key:      "a",
 			Operator: "p",
 			Values:   []string{"a", "b"},
 		},
-		"ap-values-ap": SelectorRequirements{
+		"ap-values-ap": {
 			Key:      "a",
 			Operator: "p",
 			Values:   []string{"a", "p"},
 		},
-		"ap-values-pa": SelectorRequirements{
+		"ap-values-pa": {
 			Key:      "a",
 			Operator: "p",
 			Values:   []string{"p", "a"},

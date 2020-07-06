@@ -153,8 +153,6 @@ Packet does not offer managed load balancers like [AWS ELB](https://aws.amazon.c
 Instead, Packet uses BGP and [metallb](https://metallb.universe.tf) to provide the _equivalence_ of load balancing, without requiring an additional
 managed service (or hop).
 
-**Note:** The below load balancer behaviour is currently disabled. It will be enabled in a future release.
-
 By default, the load balancer is deployed. You can disable the load balancer when
 deploying the CCM, which will prevent the load balancer from running. To do so,
 you use one of these two options:
@@ -209,10 +207,11 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Set the environment variable `CCM_SECRET` to a file with the secret contents as a json, i.e. the content of the secret's `stringData`, e.g. `CCM_SECRET=ccm-secret.json`
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
 1. Set the environment variable `PACKET_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `PACKET_FACILITY_NAME=EWR1`
+1. Set the path to the loadbalancer manifest, available in this repository as [lb/manifests.yaml](./lib/manifests.yaml), e.g. `LB_MANIFEST=./lib/manifests.yaml`
 1. Run the command, e.g.:
 
 ```
-PACKET_FACILITY_NAME=EWR1 dist/bin/packet-cloud-controller-manager-darwin-amd64 --cloud-provider=packet --leader-elect=false --allow-untagged-cloud=true --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
+PACKET_FACILITY_NAME=${PACKET_FACILITY_NAME} dist/bin/packet-cloud-controller-manager-darwin-amd64 --cloud-provider=packet --leader-elect=false --allow-untagged-cloud=true --authentication-skip-lookup=true --provider-config=$CCM_SECRET --load-balancer-manifest=$LB_MANIFEST --kubeconfig=$KUBECONFIG
 ```
 
 For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.

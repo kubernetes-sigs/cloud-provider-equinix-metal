@@ -8,13 +8,13 @@ require (
 	github.com/alecthomas/gocyclo v0.0.0-20150208221726-aa8f8b160214 // indirect
 	github.com/alexkohler/nakedret v1.0.0 // indirect
 	github.com/hashicorp/go-hclog v0.12.0 // indirect
-	github.com/hashicorp/go-retryablehttp v0.6.4
+	github.com/hashicorp/go-retryablehttp v0.6.6
 	github.com/mdempsky/unconvert v0.0.0-20200228143138-95ecdbfc0b5f // indirect
 	github.com/mikioh/ipaddr v0.0.0-20190404000644-d465c8ab6721
 	github.com/opennota/check v0.0.0-20180911053232-0c771f5545ff // indirect
 	github.com/packethost/metabot v1.0.0
-	github.com/packethost/packet-api-server v0.0.0-20191111173258-323bdfe6671d
-	github.com/packethost/packngo v0.2.1-0.20200220143658-05f78a847cb6
+	github.com/packethost/packet-api-server v0.0.0-20200706140707-f0f79ef89944
+	github.com/packethost/packngo v0.2.1-0.20200629161839-1810e48469b4
 	github.com/pallinder/go-randomdata v1.2.0
 	github.com/pkg/errors v0.8.1
 	github.com/spf13/pflag v1.0.5

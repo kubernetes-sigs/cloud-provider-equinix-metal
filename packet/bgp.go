@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/packethost/packngo"
 	"github.com/pkg/errors"
@@ -54,8 +55,16 @@ func (b *bgp) serviceReconciler() serviceReconciler {
 	return nil
 }
 
+// reconcileNodes ensures each node has the annotations showing the peer address
+// and ASN. MetalLB currently does not use this, although it is in process, see
+// http://github.com/metallb/metallb/pull/593 . Once that is in, we will not
+// need to update the configmap.
 func (b *bgp) reconcileNodes(nodes []*v1.Node, remove bool) error {
-	klog.V(2).Infof("bgp.reconcileNodes(): called for nodes %v", nodes)
+	nodeNames := []string{}
+	for _, node := range nodes {
+		nodeNames = append(nodeNames, node.Name)
+	}
+	klog.V(2).Infof("bgp.reconcileNodes(): called for nodes %v", nodeNames)
 	for _, node := range nodes {
 		// are we adding or removing the node?
 		if !remove {
@@ -145,7 +154,12 @@ func ensureNodeBGPEnabled(id string, client *packngo.Client) error {
 	req := packngo.CreateBGPSessionRequest{
 		AddressFamily: "ipv4",
 	}
-	_, _, err = client.BGPSessions.Create(id, req)
+	_, response, err := client.BGPSessions.Create(id, req)
+	// if we already had one, then we can ignore the error
+	// this really should be a 409, but 422 is what is returned
+	if response.StatusCode == 422 && strings.Contains(fmt.Sprintf("%s", err), "already has session") {
+		err = nil
+	}
 	return err
 }
 

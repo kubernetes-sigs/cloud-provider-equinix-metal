@@ -26,10 +26,11 @@ func (cfg *ConfigFile) Bytes() ([]byte, error) {
 }
 
 // AddPeer adds a peer. If a matching peer already exists, do not change anything
-func (cfg *ConfigFile) AddPeer(add *Peer) {
+// Returns if anything changed
+func (cfg *ConfigFile) AddPeer(add *Peer) bool {
 	// ignore empty peer; nothing to add
 	if add == nil {
-		return
+		return false
 	}
 	var found bool
 
@@ -46,9 +47,11 @@ func (cfg *ConfigFile) AddPeer(add *Peer) {
 		// they were equal, so we found a matcher
 		found = true
 	}
-	if !found {
-		cfg.Peers = append(cfg.Peers, *add)
+	if found {
+		return false
 	}
+	cfg.Peers = append(cfg.Peers, *add)
+	return true
 }
 
 // RemovePeer remove a peer. If the matching peer does not exist, do not change anything
@@ -82,11 +85,12 @@ func (cfg *ConfigFile) RemovePeerBySelector(remove *NodeSelector) {
 	cfg.Peers = peers
 }
 
-// AddAddressPool adds an address pool. If a matching pool already exists, do not change anything
-func (cfg *ConfigFile) AddAddressPool(add *AddressPool) {
+// AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
+// Returns if anything changed
+func (cfg *ConfigFile) AddAddressPool(add *AddressPool) bool {
 	// ignore empty peer; nothing to add
 	if add == nil {
-		return
+		return false
 	}
 	var found bool
 
@@ -98,9 +102,11 @@ func (cfg *ConfigFile) AddAddressPool(add *AddressPool) {
 		// they were equal, so we found a matcher
 		found = true
 	}
-	if !found {
-		cfg.Pools = append(cfg.Pools, *add)
+	if found {
+		return false
 	}
+	cfg.Pools = append(cfg.Pools, *add)
+	return true
 }
 
 // RemoveAddressPool remove a pool. If the matching pool does not exist, do not change anything
