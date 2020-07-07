@@ -89,6 +89,7 @@ func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interf
 func InitializeProvider(packetConfig Config) error {
 	// set up our client and create the cloud interface
 	client := packngo.NewClientWithAuth("", packetConfig.AuthToken, nil)
+	client.UserAgent = fmt.Sprintf("packet-ccm/%s %s", VERSION, client.UserAgent)
 	cloud, err := newCloud(packetConfig, client)
 	if err != nil {
 		return fmt.Errorf("failed to create new cloud handler: %v", err)
