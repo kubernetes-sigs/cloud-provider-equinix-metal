@@ -10,7 +10,7 @@ Please read through the requirements carefully as they are critical to running t
 ### Version
 Recommended versions of Packet CCM based on your Kubernetes version:
 * Packet CCM version v0.0.4 supports Kubernetes version >=v1.10
-* Packet CCM version v1.0.0 support Kubernetes version >=1.15.0
+* Packet CCM version v1.0.0+ supports Kubernetes version >=1.15.0
 
 ## Deployment
 
@@ -89,7 +89,7 @@ packet-cloud-config   Opaque                                1         2m
 You can apply the rest of the CCM by using `kubectl` to apply `deploy/releases/<version>/deployment.yaml`, e.g:
 
 ```bash
-kubectl apply -f deploy/releases/v1.0.0/deployment.yaml
+kubectl apply -f deploy/releases/v1.0.1/deployment.yaml
 ```
 
 ### Logging
