@@ -30,8 +30,6 @@ const (
 	envVarAnnotationLocalASN = "PACKET_ANNOTATION_LOCAL_ASN"
 	envVarAnnotationPeerASNs = "PACKET_ANNOTATION_PEER_ASNS"
 	envVarAnnotationPeerIPs  = "PACKET_ANNOTATION_PEER_IPS"
-	// fixedDisableLoadBalancers disabled until the packet API is ready with IP management
-	fixedDisableLoadBalancers = true
 )
 
 var (
@@ -104,7 +102,7 @@ func getPacketConfig(providerConfig, loadBalancerManifestPath string) (packet.Co
 
 	disableLoadBalancer := os.Getenv(disableLoadBalancerName)
 	config.DisableLoadBalancer = rawConfig.DisableLoadBalancer
-	if disableLoadBalancer == "true" || fixedDisableLoadBalancers {
+	if disableLoadBalancer == "true" {
 		config.DisableLoadBalancer = true
 	}
 
