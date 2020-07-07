@@ -147,7 +147,7 @@ deploy:
 
 
 
-.PHONY: build build-all image push deploy ci cd dep manifest-tool
+.PHONY: build build-all image push deploy ci cd prerelease dep manifest-tool
 
 ## Build the binaries for all supported ARCH
 build-all: $(addprefix sub-build-, $(ARCHES))
@@ -253,6 +253,17 @@ ifndef BRANCH_NAME
 endif
 	$(MAKE) tag-images-all push-all push-manifest IMAGETAG=${BRANCH_NAME}
 	$(MAKE) tag-images-all push-all push-manifest IMAGETAG=${GIT_VERSION}
+
+## update README and deployment yamls for the next release
+prerelease:
+ifeq (,$(RELEASE_TAG))
+	$(error RELEASE_TAG must be defined so manifests and documentation can be prepared)
+endif
+	mkdir -p deploy/releases/$(RELEASE_TAG)
+	envsubst < deploy/template/deployment.yaml > deploy/releases/$(RELEASE_TAG)/deployment.yaml
+	$(eval TMP := $(shell mktemp))
+	sed -E -e "s_(kubectl apply -f deploy/releases/)(v[0-9.]+)(/deployment.yaml)_\1$(RELEASE_TAG)\3_" README.md > $(TMP)
+	mv $(TMP) README.md
 
 ## cut a release by using the latest git tag should only be run for an image that already exists and was pushed out
 release: confirm
