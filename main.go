@@ -47,7 +47,7 @@ func main() {
 
 	// add our config
 	command.PersistentFlags().StringVar(&providerConfig, "provider-config", "", "path to provider config file")
-	command.PersistentFlags().StringVar(&loadBalancerManifestPath, "load-balancer-manifest", "", "path to load-balancer manifests")
+	command.PersistentFlags().StringVar(&loadBalancerManifestPath, "load-balancer-manifest", "lb/manifests.yaml", "path to load-balancer manifests")
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
