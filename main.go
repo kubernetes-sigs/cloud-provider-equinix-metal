@@ -30,6 +30,7 @@ const (
 	envVarAnnotationLocalASN = "PACKET_ANNOTATION_LOCAL_ASN"
 	envVarAnnotationPeerASNs = "PACKET_ANNOTATION_PEER_ASNS"
 	envVarAnnotationPeerIPs  = "PACKET_ANNOTATION_PEER_IPS"
+	envVarEIPTag             = "PACKET_EIP_TAG"
 )
 
 var (
@@ -183,6 +184,11 @@ func getPacketConfig(providerConfig, loadBalancerManifestPath string) (packet.Co
 	annotationPeerIPs := os.Getenv(envVarAnnotationPeerIPs)
 	if annotationPeerIPs != "" {
 		config.AnnotationPeerIPs = annotationPeerIPs
+	}
+
+	eipTag := os.Getenv(envVarEIPTag)
+	if eipTag != "" {
+		config.EIPTag = eipTag
 	}
 
 	return config, nil

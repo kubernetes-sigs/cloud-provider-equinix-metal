@@ -51,11 +51,12 @@ type cloudZones interface {
 
 // cloud implements cloudprovider.Interface
 type cloud struct {
-	client       *packngo.Client
-	instances    cloudInstances
-	zones        cloudZones
-	loadBalancer cloudLoadBalancers
-	facility     string
+	client                      *packngo.Client
+	instances                   cloudInstances
+	zones                       cloudZones
+	loadBalancer                cloudLoadBalancers
+	facility                    string
+	controlPlaneEndpointManager *controlPlaneEndpointManager
 	// holds our bgp service handler
 	bgp *bgp
 }
@@ -73,17 +74,22 @@ type Config struct {
 	AnnotationLocalASN   string `json:"annotationLocalASN,omitEmpty"`
 	AnnotationPeerASNs   string `json:"annotationPeerASNs,omitEmpty"`
 	AnnotationPeerIPs    string `json:"annotationPeerIPs,omitEmpty"`
+	EIPTag               string `json:"eipTag,omitEmpty"`
 }
 
 func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
-	return &cloud{
+	c := &cloud{
 		client:       client,
 		facility:     packetConfig.Facility,
 		instances:    newInstances(client, packetConfig.ProjectID),
 		zones:        newZones(client, packetConfig.ProjectID),
 		loadBalancer: newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.DisableLoadBalancer, packetConfig.LoadBalancerManifest, packetConfig.LocalASN, packetConfig.PeerASN),
 		bgp:          newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs),
-	}, nil
+	}
+	if packetConfig.EIPTag != "" {
+		c.controlPlaneEndpointManager = newControlPlaneEndpointManager(packetConfig.EIPTag, client.DeviceIPs, c.instances)
+	}
+	return c, nil
 }
 
 func InitializeProvider(packetConfig Config) error {
@@ -130,6 +136,11 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 			serviceReconcilers = append(serviceReconcilers, s)
 		}
 	}
+
+	if c.controlPlaneEndpointManager != nil {
+		nodeReconcilers = append(nodeReconcilers, c.controlPlaneEndpointManager.instances.nodeReconciler())
+	}
+
 	if err := startNodesWatcher(sharedInformer, nodeReconcilers, stop); err != nil {
 		klog.Errorf("nodes watcher initialization failed: %v", err)
 	}
