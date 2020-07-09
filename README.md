@@ -204,10 +204,10 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 
 1. Deploy everything except for the `Deployment` and, optionally, the `Secret`
 1. Build it for your local platform `make build`
-1. Set the environment variable `CCM_SECRET` to a file with the secret contents as a json, i.e. the content of the secret's `stringData`, e.g. `CCM_SECRET=ccm-secret.json`
+1. Set the environment variable `CCM_SECRET` to a file with the secret contents as a json, i.e. the content of the secret's `stringData`, e.g. `CCM_SECRET=ccm-secret.yaml`
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
 1. Set the environment variable `PACKET_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `PACKET_FACILITY_NAME=EWR1`
-1. Set the path to the loadbalancer manifest, available in this repository as [lb/manifests.yaml](./lib/manifests.yaml), e.g. `LB_MANIFEST=./lib/manifests.yaml`
+1. If you want to use a different path to the loadbalancer manifest, available in this repository as [lb/manifests.yaml](./lib/manifests.yaml), e.g. `LB_MANIFEST=./lb/manifests.yaml` and set it to the argument `--load-balancer-manifest=$LB_MANIFEST`; the CCM default is `./lb/manifests.yaml`
 1. Run the command, e.g.:
 
 ```
