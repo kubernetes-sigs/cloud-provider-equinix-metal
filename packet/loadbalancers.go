@@ -107,8 +107,8 @@ func (l *loadBalancers) serviceReconciler() serviceReconciler {
 // by adding it to or removing it from the known metallb configmap
 func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 	var (
-		peer string
-		err  error
+		peers []string
+		err   error
 	)
 	// get the configmap
 	cmInterface := l.k8sclient.CoreV1().ConfigMaps(metalLBNamespace)
@@ -133,10 +133,11 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 			if id == "" {
 				return fmt.Errorf("no provider ID given")
 			}
-			if peer, err = getNodePeerAddress(id, l.client); err != nil {
+			if peers, err = getNodePeerAddress(id, l.client); err != nil || len(peers) < 1 {
 				klog.Errorf("could not add metallb node peer address for node %s: %v", node.Name, err)
+				continue
 			}
-			config = addNodePeer(config, node.Name, peer, l.localASN, l.peerASN)
+			config = addNodePeer(config, node.Name, peers[0], l.localASN, l.peerASN)
 			if config == nil {
 				klog.V(2).Info("config unchanged, not updating")
 				return nil

@@ -83,8 +83,8 @@ func (b *bgp) reconcileNodes(nodes []*v1.Node, remove bool) error {
 			// add annotations for bgp
 			klog.V(2).Infof("bgp.reconcileNodes(): setting annotations on node %s", node.Name)
 			// get the bgp info
-			peerAddress, err := getNodePeerAddress(id, b.client)
-			if err != nil {
+			peers, err := getNodePeerAddress(id, b.client)
+			if err != nil || len(peers) < 1 {
 				klog.Errorf("bgp.reconcileNodes(): could not get BGP info for node %s: %v", node.Name, err)
 			} else {
 				localASN := strconv.Itoa(b.localASN)
@@ -105,8 +105,8 @@ func (b *bgp) reconcileNodes(nodes []*v1.Node, remove bool) error {
 				}
 
 				val, ok = oldAnnotations[b.annotationPeerIPs]
-				if !ok || val != peerAddress {
-					newAnnotations[b.annotationPeerIPs] = peerAddress
+				if !ok || val != peers[0] {
+					newAnnotations[b.annotationPeerIPs] = peers[0]
 				}
 
 				// patch the node with the new annotations
@@ -164,30 +164,28 @@ func ensureNodeBGPEnabled(id string, client *packngo.Client) error {
 }
 
 // getNodePeerAddress get the BGP peer address for a specific node
-func getNodePeerAddress(providerID string, client *packngo.Client) (address string, err error) {
+func getNodePeerAddress(providerID string, client *packngo.Client) (address []string, err error) {
 	id, err := deviceIDFromProviderID(providerID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	ips, _, err := client.DeviceIPs.List(id, nil)
+	neighbours, _, err := client.Devices.ListBGPNeighbors(id, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to get device IPs for device %s: %v", id, err)
+		return nil, fmt.Errorf("failed to get device neighbours for device %s: %v", id, err)
 	}
-	// we need to get the ip address that is all of:
-	// - AddressFamily == 4
-	// - Public == false
-	// - Management == true
-	var addr string
-	for _, ip := range ips {
-		if ip.AddressFamily == 4 && !ip.Public && ip.Management {
-			addr = ip.Network
-			break
+	// we need the ipv4 neighbour
+	var addrs []string
+	for _, n := range neighbours {
+		if n.AddressFamily != 4 {
+			continue
 		}
+		addrs = n.PeerIps
+		break
 	}
-	if addr == "" {
-		return addr, errors.New("no matching IP address found that is private+ipv4+management")
+	if len(addrs) == 0 {
+		return addrs, errors.New("no matching ipv4 neighbour found")
 	}
-	return addr, nil
+	return addrs, nil
 }
 
 // patchUpdatedNode apply a patch to the node
