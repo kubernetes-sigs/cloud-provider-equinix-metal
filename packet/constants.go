@@ -13,5 +13,5 @@ const (
 	DefaultAnnotationPeerIPs  = "packet.com/peer.ips"
 	DefaultLocalASN           = 65000
 	DefaultPeerASN            = 65530
-	DefaultApiServerPort      = 6443
+	DefaultAPIServerPort      = 6443
 )

@@ -157,7 +157,7 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error {
 	var err error
 	// get IP address reservations and check if they any exists for this svc
-	ips, _, err := l.client.ProjectIPs.List(l.project)
+	ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
 	}

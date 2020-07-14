@@ -75,7 +75,7 @@ type Config struct {
 	AnnotationPeerASNs   string `json:"annotationPeerASNs,omitEmpty"`
 	AnnotationPeerIPs    string `json:"annotationPeerIPs,omitEmpty"`
 	EIPTag               string `json:"eipTag,omitEmpty"`
-	ApiServerPort        int    `json:"apiServerPort,omitEmpty"`
+	APIServerPort        int    `json:"apiServerPort,omitEmpty"`
 }
 
 func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
@@ -87,7 +87,7 @@ func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interf
 		zones:                       newZones(client, packetConfig.ProjectID),
 		loadBalancer:                newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.DisableLoadBalancer, packetConfig.LoadBalancerManifest, packetConfig.LocalASN, packetConfig.PeerASN),
 		bgp:                         newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs),
-		controlPlaneEndpointManager: newControlPlaneEndpointManager(packetConfig.EIPTag, packetConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, packetConfig.ApiServerPort),
+		controlPlaneEndpointManager: newControlPlaneEndpointManager(packetConfig.EIPTag, packetConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, packetConfig.APIServerPort),
 	}, nil
 }
 

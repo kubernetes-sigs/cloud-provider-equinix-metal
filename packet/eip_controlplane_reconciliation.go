@@ -57,54 +57,57 @@ func (m *controlPlaneEndpointManager) init(k8sclient kubernetes.Interface) error
 }
 
 func (m *controlPlaneEndpointManager) nodeReconciler() nodeReconciler {
-	return m.reconciler()
+	return m.reconcileNodes
 }
 func (m *controlPlaneEndpointManager) serviceReconciler() serviceReconciler {
 	return nil
 }
 
-func (m *controlPlaneEndpointManager) reconciler() func(nodes []*v1.Node, remove bool) error {
-	return func(nodes []*v1.Node, remove bool) error {
-		klog.V(2).Info("controlPlaneEndpoint.reconcile: new reconciliation")
-		if m.inProcess {
-			klog.V(2).Info("controlPlaneEndpoint.reconcileNodes: already in process, not starting a new one")
-			return nil
-		}
-		m.inProcess = true
-		defer func() {
-			m.inProcess = false
-		}()
-		if m.eipTag == "" {
-			return errors.New("elastic ip tag is empty. Nothing to do")
-		}
-		ipList, _, err := m.ipResSvr.List(m.projectID)
-		if err != nil {
-			return err
-		}
-		controlPlaneEndpoint := ipReservationByTags([]string{m.eipTag}, ipList)
-		if controlPlaneEndpoint == nil {
-			// IP NOT FOUND nothing to do here.
-			klog.Errorf("elastic IP not found. Please verify you have one with the expected tag: %s", m.eipTag)
-			return err
-		}
-		klog.Infof("healthcheck elastic ip %s", fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort))
-		req, err := http.NewRequest("GET", fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort), nil)
-		if err != nil {
-			return err
-		}
-		resp, err := m.httpClient.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			if err != nil {
-				klog.Errorf("http client error during healthcheck. err \"%s\"", err)
-			}
-			if err := m.reassign(context.Background(), nodes, controlPlaneEndpoint); err != nil {
-				klog.Errorf("error reassigning control plane endpoint to a different device. err \"%s\"", err)
-				return err
-			}
-		}
-		defer resp.Body.Close()
+func (m *controlPlaneEndpointManager) reconcileNodes(nodes []*v1.Node, remove bool) error {
+	klog.V(2).Info("controlPlaneEndpoint.reconcile: new reconciliation")
+	if m.inProcess {
+		klog.V(2).Info("controlPlaneEndpoint.reconcileNodes: already in process, not starting a new one")
 		return nil
 	}
+	m.inProcess = true
+	defer func() {
+		m.inProcess = false
+	}()
+	if m.eipTag == "" {
+		return errors.New("elastic ip tag is empty. Nothing to do")
+	}
+	ipList, _, err := m.ipResSvr.List(m.projectID, &packngo.ListOptions{
+		Includes: []string{"assignments"},
+	})
+	if err != nil {
+		return err
+	}
+	controlPlaneEndpoint := ipReservationByTags([]string{m.eipTag}, ipList)
+	if controlPlaneEndpoint == nil {
+		// IP NOT FOUND nothing to do here.
+		klog.Errorf("elastic IP not found. Please verify you have one with the expected tag: %s", m.eipTag)
+		return err
+	}
+	if len(controlPlaneEndpoint.Assignments) > 1 {
+		return fmt.Errorf("the elastic ip %s has more than one node assigned to it and this is currently not supported. Fix it manually unassigning devices", controlPlaneEndpoint.ID)
+	}
+	klog.Infof("healthcheck elastic ip %s", fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort))
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := m.httpClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if err != nil {
+			klog.Errorf("http client error during healthcheck. err \"%s\"", err)
+		}
+		if err := m.reassign(context.Background(), nodes, controlPlaneEndpoint); err != nil {
+			klog.Errorf("error reassigning control plane endpoint to a different device. err \"%s\"", err)
+			return err
+		}
+	}
+	defer resp.Body.Close()
+	return nil
 }
 
 func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.Node, ip *packngo.IPAddressReservation) error {
@@ -139,8 +142,10 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 				if err != nil {
 					return err
 				}
-				if _, err := m.deviceIPSrv.Unassign(ip.ID); err != nil {
-					return err
+				if len(ip.Assignments) == 1 {
+					if _, err := m.deviceIPSrv.Unassign(ip.Assignments[0].ID); err != nil {
+						return err
+					}
 				}
 				if _, _, err := m.deviceIPSrv.Assign(deviceID, &packngo.AddressStruct{
 					Address: ip.Address,
@@ -148,9 +153,9 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 					return err
 				}
 				klog.V(2).Infof("control plane endpoint assigned to new device %s", node.Name)
+				return nil
 			}
 		}
-
 	}
 	return errors.New("ccm didn't find a good candidate for IP allocation. Cluster is unhealthy")
 }
