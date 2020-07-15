@@ -51,11 +51,12 @@ type cloudZones interface {
 
 // cloud implements cloudprovider.Interface
 type cloud struct {
-	client       *packngo.Client
-	instances    cloudInstances
-	zones        cloudZones
-	loadBalancer cloudLoadBalancers
-	facility     string
+	client                      *packngo.Client
+	instances                   cloudInstances
+	zones                       cloudZones
+	loadBalancer                cloudLoadBalancers
+	facility                    string
+	controlPlaneEndpointManager *controlPlaneEndpointManager
 	// holds our bgp service handler
 	bgp *bgp
 }
@@ -73,16 +74,20 @@ type Config struct {
 	AnnotationLocalASN   string `json:"annotationLocalASN,omitEmpty"`
 	AnnotationPeerASNs   string `json:"annotationPeerASNs,omitEmpty"`
 	AnnotationPeerIPs    string `json:"annotationPeerIPs,omitEmpty"`
+	EIPTag               string `json:"eipTag,omitEmpty"`
+	APIServerPort        int    `json:"apiServerPort,omitEmpty"`
 }
 
 func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
+	i := newInstances(client, packetConfig.ProjectID)
 	return &cloud{
-		client:       client,
-		facility:     packetConfig.Facility,
-		instances:    newInstances(client, packetConfig.ProjectID),
-		zones:        newZones(client, packetConfig.ProjectID),
-		loadBalancer: newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.DisableLoadBalancer, packetConfig.LoadBalancerManifest, packetConfig.LocalASN, packetConfig.PeerASN),
-		bgp:          newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs),
+		client:                      client,
+		facility:                    packetConfig.Facility,
+		instances:                   i,
+		zones:                       newZones(client, packetConfig.ProjectID),
+		loadBalancer:                newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.DisableLoadBalancer, packetConfig.LoadBalancerManifest, packetConfig.LocalASN, packetConfig.PeerASN),
+		bgp:                         newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs),
+		controlPlaneEndpointManager: newControlPlaneEndpointManager(packetConfig.EIPTag, packetConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, packetConfig.APIServerPort),
 	}, nil
 }
 
@@ -106,7 +111,7 @@ func InitializeProvider(packetConfig Config) error {
 
 // services get those elements that are initializable
 func (c *cloud) services() []cloudService {
-	return []cloudService{c.loadBalancer, c.instances, c.zones, c.bgp}
+	return []cloudService{c.loadBalancer, c.instances, c.zones, c.bgp, c.controlPlaneEndpointManager}
 }
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn goroutines
@@ -130,6 +135,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 			serviceReconcilers = append(serviceReconcilers, s)
 		}
 	}
+
 	if err := startNodesWatcher(sharedInformer, nodeReconcilers, stop); err != nil {
 		klog.Errorf("nodes watcher initialization failed: %v", err)
 	}

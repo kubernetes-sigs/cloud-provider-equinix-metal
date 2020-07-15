@@ -30,6 +30,8 @@ const (
 	envVarAnnotationLocalASN = "PACKET_ANNOTATION_LOCAL_ASN"
 	envVarAnnotationPeerASNs = "PACKET_ANNOTATION_PEER_ASNS"
 	envVarAnnotationPeerIPs  = "PACKET_ANNOTATION_PEER_IPS"
+	envVarEIPTag             = "PACKET_EIP_TAG"
+	envVarAPIServerPort      = "PACKET_API_SERVER_PORT"
 )
 
 var (
@@ -183,6 +185,28 @@ func getPacketConfig(providerConfig, loadBalancerManifestPath string) (packet.Co
 	annotationPeerIPs := os.Getenv(envVarAnnotationPeerIPs)
 	if annotationPeerIPs != "" {
 		config.AnnotationPeerIPs = annotationPeerIPs
+	}
+
+	if rawConfig.EIPTag != "" {
+		config.EIPTag = rawConfig.EIPTag
+	}
+	eipTag := os.Getenv(envVarEIPTag)
+	if eipTag != "" {
+		config.EIPTag = eipTag
+	}
+
+	apiServer := os.Getenv(envVarAPIServerPort)
+	switch {
+	case apiServer != "":
+		apiServerNo, err := strconv.Atoi(apiServer)
+		if err != nil {
+			return config, fmt.Errorf("env var %s must be a number, was %s: %v", envVarAPIServerPort, apiServer, err)
+		}
+		config.APIServerPort = apiServerNo
+	case rawConfig.APIServerPort != 0:
+		config.APIServerPort = rawConfig.APIServerPort
+	default:
+		config.APIServerPort = packet.DefaultAPIServerPort
 	}
 
 	return config, nil

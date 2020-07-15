@@ -198,6 +198,40 @@ In order to ease understanding, we use several different terms for an IP address
 From Packet's perspective, the IP reservation is either Requested or Reserved, but not both. For the
 load balancer to work, the IP address needs to be all of: Reserved, Assigned, Mapped.
 
+## Elastic IP as Control Plane Endpoint
+
+It is a common procedure to use Elastic IP as Control Plane endpoint in order to
+have a static endpoint that you can use from the outside, or when configuring
+the advertise address for the kubelet.
+
+In [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet) we
+create one for every cluster for example. Packet does not provide an as a
+service load balancer it means that in some way we have to check if the Elastic
+IP is still assigned to an healthy control plane.
+
+In order to do so CCM implements a reconciliation loop that checks if the
+Control Plane Endpoint respond correctly using the `/healthz` endpoint.
+
+When the healthcheck fails CCM looks for the other Control Planes, when it gets
+a healthy one it move the Elastic IP to the new device.
+
+This feature by default is disabled and it assumes that the ElasticIP for the
+cluster is available and tagged with an arbitrary label. CAPP for example uses:
+
+```
+cluster-api-provider-packet:cluster-id:<clusterName>
+```
+
+When the tag is present CCM will filter the available elastic ip for the
+specified project via tag to lookup the one used by your cluster.
+
+It will check the correct answer, when it stops responding the IP reassign logic
+will start.
+
+The logic will circle over all the available control planes looking for an
+active api server. As soon as it can find one the Elastic IP will be unassigned
+and reassigned to the working node.
+
 ## Running Locally
 
 You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This _dramatically_ speeds up development. To do so:
