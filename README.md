@@ -1,5 +1,12 @@
 # Kubernetes Cloud Controller Manager for Packet
 
+[![GitHub release](https://img.shields.io/github/release/packethost/packet-ccm/all.svg?style=flat-square)](https://github.com/packethost/packet-ccm/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/packethost/packet-ccm)](https://goreportcard.com/report/github.com/packethost/packet-ccm)
+![Continuous Integration](https://github.com/packethost/packet-ccm/workflows/Continuous%20Integration/badge.svg)
+[![Docker Pulls](https://img.shields.io/docker/pulls/packethost/packet-ccm.svg)](https://hub.docker.com/r/packethost/packet-ccm/)
+[![Slack](https://slack.packet.com/badge.svg)](https://slack.packet.com)
+[![Twitter Follow](https://img.shields.io/twitter/follow/packethost.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=packethost&user_id=788180534543339520)
+
 `packet-ccm` is the Kubernetes CCM implementation for Packet. Read more about the CCM in [the official Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/).
 
 ## Requirements
