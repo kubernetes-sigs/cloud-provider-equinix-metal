@@ -7,7 +7,7 @@ GIT_VERSION?=$(shell git log -1 --format="%h")
 VERSION?=$(GIT_VERSION)
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
 ifneq (,$(RELEASE_TAG))
-VERSION=$(RELEASE_TAG)-$(VERSION)
+VERSION := $(RELEASE_TAG)-$(VERSION)
 endif
 GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
 FROMTAG ?= latest
