@@ -1,10 +1,12 @@
 name: Continuous Integration
 on:
- pull_request:
-   types: [opened, synchronize, reopened]
- push:
-   branches:
-     - master
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+    - master
+    tags:
+    - 'v*'
 
 jobs:
   report:
@@ -37,12 +39,13 @@ jobs:
       run: docker buildx ls
     - name: image
       run: make image-all
+    # the rest of these only work if we push to master or pushed a tag
     - name: hub login
-      if: (github.event_name == 'push' && endsWith(github.ref,'/master')) || (github.event_name == 'create' && startsWith(github.ref,'refs/tags/'))
+      if: github.event_name == 'push' && (endsWith(github.ref,'/master') || startsWith(github.ref,'refs/tags/'))
       run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
     - name: deploy   # when merged into master, tag master and push - ideally, this would be a separate job, but you cannot share docker build cache between jobs
       if: github.event_name == 'push' && endsWith(github.ref,'/master')
       run: make cd CONFIRM=true BRANCH_NAME=master
-    - name: release  # when based on a tag, tag master and push - ideally, this would be a separate job, but you cannot share docker build cache between jobs
-      if: github.event_name == 'create' && startsWith(github.ref,'refs/tags/')
-      run: make release CONFIRM=true
+    - name: release images  # when based on a tag, tag master and push - ideally, this would be a separate job, but you cannot share docker build cache between jobs
+      if: github.event_name == 'push' && startsWith(github.ref,'refs/tags/')
+      run: make release CONFIRM=true # this pushes out the various images to docker hub

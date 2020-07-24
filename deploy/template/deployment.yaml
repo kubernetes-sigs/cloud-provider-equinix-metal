@@ -33,7 +33,7 @@ spec:
         - key: "node-role.kubernetes.io/master"
           effect: NoSchedule
       containers:
-      - image: packethost/packet-ccm:v1.0.1
+      - image: packethost/packet-ccm:RELEASE_TAG
         name: packet-cloud-controller-manager
         command:
           - "./packet-cloud-controller-manager"
