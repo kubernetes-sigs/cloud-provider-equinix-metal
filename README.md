@@ -91,13 +91,12 @@ NAME                  TYPE                                  DATA      AGE
 packet-cloud-config   Opaque                                1         2m
 ````
 
-##
+#### Deploy CCM
 
-You can apply the rest of the CCM by using `kubectl` to apply `deploy/releases/<version>/deployment.yaml`, e.g:
+To apply the CCM itself:
 
-```bash
-kubectl apply -f deploy/releases/v1.0.1/deployment.yaml
-```
+1. Download the manifest `deployment.yaml` for your release from the [releases page](https://github.com/packethost/packet-ccm/releases)
+1. `kubectl apply -f deployment.yaml`
 
 ### Logging
 
