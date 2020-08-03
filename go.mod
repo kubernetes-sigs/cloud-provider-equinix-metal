@@ -3,8 +3,10 @@ module github.com/packethost/packet-ccm
 go 1.12
 
 require (
+	github.com/alecthomas/gocyclo v0.0.0-20150208221726-aa8f8b160214 // indirect
 	github.com/hashicorp/go-hclog v0.12.0 // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.6
+	github.com/jgautheron/goconst v0.0.0-20200227150835-cda7ea3bf591 // indirect
 	github.com/packethost/packet-api-server v0.0.0-20200706140707-f0f79ef89944
 	github.com/packethost/packngo v0.2.1-0.20200713114653-4867738f7769
 	github.com/pallinder/go-randomdata v1.2.0

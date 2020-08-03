@@ -11,9 +11,18 @@ import (
 
 	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+)
+
+const (
+	controlPlaneLabel        = "node-role.kubernetes.io/master"
+	externalServiceName      = "packet-ccm-kubernetes-external"
+	externalServiceNamespace = "kube-system"
+	metallbAnnotation        = "metallb.universe.tf/address-pool"
+	metallbDisabledtag       = "disabled-metallb-do-not-use-any-address-pool"
 )
 
 /*
@@ -60,7 +69,7 @@ func (m *controlPlaneEndpointManager) nodeReconciler() nodeReconciler {
 	return m.reconcileNodes
 }
 func (m *controlPlaneEndpointManager) serviceReconciler() serviceReconciler {
-	return nil
+	return m.reconcileServices
 }
 
 func (m *controlPlaneEndpointManager) reconcileNodes(nodes []*v1.Node, remove bool) error {
@@ -101,7 +110,15 @@ func (m *controlPlaneEndpointManager) reconcileNodes(nodes []*v1.Node, remove bo
 		if err != nil {
 			klog.Errorf("http client error during healthcheck. err \"%s\"", err)
 		}
-		if err := m.reassign(context.Background(), nodes, controlPlaneEndpoint); err != nil {
+		// filter down to only those nodes that are tagged as control plane
+		cpNodes := []*v1.Node{}
+		for _, n := range nodes {
+			if _, ok := n.Labels[controlPlaneLabel]; ok {
+				cpNodes = append(cpNodes, n)
+				klog.V(2).Infof("adding control plane node %s", n.Name)
+			}
+		}
+		if err := m.reassign(context.Background(), cpNodes, controlPlaneEndpoint); err != nil {
 			klog.Errorf("error reassigning control plane endpoint to a different device. err \"%s\"", err)
 			return err
 		}
@@ -121,8 +138,13 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 		// I decided to iterate over all the addresses assigned to the node to avoid network missconfiguration
 		// The first one for example is the node name, and if the hostname is not well configured it will never work.
 		for _, a := range addresses {
-			klog.Infof("healthcheck node %s", fmt.Sprintf("https://%s:%d/healthz", a.Address, m.apiServerPort))
-			req, err := http.NewRequest("GET", fmt.Sprintf("https://%s:%d/healthz", a.Address, m.apiServerPort), nil)
+			if a.Type == "Hostname" {
+				klog.V(2).Infof("skipping address check of type Hostname: %s", a.Address)
+				continue
+			}
+			healthCheckAddress := fmt.Sprintf("https://%s:%d/healthz", a.Address, m.apiServerPort)
+			klog.Infof("healthcheck node %s", healthCheckAddress)
+			req, err := http.NewRequest("GET", healthCheckAddress, nil)
 			if err != nil {
 				klog.Errorf("healthcheck failed for node %s. err \"%s\"", node.Name, err)
 				continue
@@ -174,4 +196,124 @@ func newControlPlaneEndpointManager(eipTag, projectID string, deviceIPSrv packng
 		deviceIPSrv:   deviceIPSrv,
 		apiServerPort: apiServerPort,
 	}
+}
+
+// reconcileServices ensure that our Elastic IP is assigned as `externalIPs` for
+// the `default/kubernetes` service
+func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, remove bool) error {
+	if m.eipTag == "" {
+		return errors.New("elastic ip tag is empty. Nothing to do")
+	}
+
+	var err error
+	// get IP address reservations and check if they any exists for this svc
+	ipList, _, err := m.ipResSvr.List(m.projectID, &packngo.ListOptions{
+		Includes: []string{"assignments"},
+	})
+	if err != nil {
+		return err
+	}
+	controlPlaneEndpoint := ipReservationByTags([]string{m.eipTag}, ipList)
+	if controlPlaneEndpoint == nil {
+		// IP NOT FOUND nothing to do here.
+		klog.Errorf("elastic IP not found. Please verify you have one with the expected tag: %s", m.eipTag)
+		return err
+	}
+	if len(controlPlaneEndpoint.Assignments) > 1 {
+		return fmt.Errorf("the elastic ip %s has more than one node assigned to it and this is currently not supported. Fix it manually unassigning devices", controlPlaneEndpoint.ID)
+	}
+
+	// for ease of use
+	eip := controlPlaneEndpoint.Address
+
+	for _, svc := range svcs {
+		// only take default/kubernetes
+		if svc.Namespace != "default" || svc.Name != "kubernetes" {
+			continue
+		}
+
+		// get the endpoints for this service
+		eps := m.k8sclient.CoreV1().Endpoints(svc.Namespace)
+		ep, err := eps.Get(svc.Name, metav1.GetOptions{})
+		if err != nil {
+			klog.V(2).Infof("failed to get endpoints %s: %v", svc.Name, err)
+			return fmt.Errorf("failed to get endpoints %s: %v", svc.Name, err)
+		}
+		// two options:
+		// - our endpoints already exists: just copy the endpoints
+		// - our endpoints does not exist: create it
+		epExisted := true
+		myeps := m.k8sclient.CoreV1().Endpoints(externalServiceNamespace)
+		myep, err := myeps.Get(externalServiceName, metav1.GetOptions{})
+		if err != nil {
+			klog.Infof("endpoint %s/%s did not yet exist, creating", externalServiceNamespace, externalServiceName)
+			myep = &v1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      externalServiceName,
+					Namespace: externalServiceNamespace,
+				},
+			}
+			epExisted = false
+		}
+
+		myep.Subsets = []v1.EndpointSubset{}
+		for _, s := range ep.Subsets {
+			copiedSubset := s.DeepCopy()
+			myep.Subsets = append(myep.Subsets, *copiedSubset)
+		}
+
+		// save the endpoints
+		if epExisted {
+			if _, err := myeps.Update(myep); err != nil {
+				klog.Errorf("failed to update my endpoints: %v", err)
+				return fmt.Errorf("failed to update my endpoints: %v", err)
+			}
+		} else {
+			if _, err := myeps.Create(myep); err != nil {
+				klog.Errorf("failed to create my endpoints: %v", err)
+				return fmt.Errorf("failed to create my endpoints: %v", err)
+			}
+		}
+
+		// now for my service
+		svcIntf := m.k8sclient.CoreV1().Services(externalServiceNamespace)
+		if _, err := svcIntf.Get(externalServiceName, metav1.GetOptions{}); err == nil {
+			klog.V(2).Infof("service %s already exists, nothing left to do", externalServiceName)
+			return nil
+		}
+		klog.V(2).Infof("service %s did not exist, creating", externalServiceName)
+		ports := []v1.ServicePort{}
+		for _, p := range svc.Spec.Ports {
+			copiedPort := p.DeepCopy()
+			ports = append(ports, *copiedPort)
+		}
+
+		externalService := v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: externalServiceName,
+				Annotations: map[string]string{
+					metallbAnnotation: metallbDisabledtag,
+				},
+				Namespace: externalServiceNamespace,
+			},
+			Spec: v1.ServiceSpec{
+				Type:           v1.ServiceTypeLoadBalancer,
+				LoadBalancerIP: eip,
+				Ports:          ports,
+			},
+			Status: v1.ServiceStatus{
+				LoadBalancer: v1.LoadBalancerStatus{
+					Ingress: []v1.LoadBalancerIngress{
+						{IP: eip},
+					},
+				},
+			},
+		}
+		if _, err := svcIntf.Create(&externalService); err != nil {
+			klog.Errorf("failed to create my service: %v", err)
+			return fmt.Errorf("failed to create my service: %v", err)
+		}
+		return nil
+	}
+	return fmt.Errorf("Service default/kubernetes not found")
 }

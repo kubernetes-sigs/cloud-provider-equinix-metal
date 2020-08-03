@@ -155,9 +155,19 @@ These annotation names can be overridden, if you so choose. The settings are as 
 
 ### Load Balancers
 
-Packet does not offer managed load balancers like [AWS ELB](https://aws.amazon.com/elasticloadbalancing/) or [GCP Load Balancers](https://cloud.google.com/load-balancing/).
-Instead, Packet uses BGP and [metallb](https://metallb.universe.tf) to provide the _equivalence_ of load balancing, without requiring an additional
-managed service (or hop).
+Packet does not offer managed load balancers like [AWS ELB](https://aws.amazon.com/elasticloadbalancing/)
+or [GCP Load Balancers](https://cloud.google.com/load-balancing/). Instead, Packet provides the following
+load-balancing options, both using Packet's Elastic IP.
+
+For user-deployed Kubernetes `Service` of `type=LoadBalancer`, the Packet CCM uses BGP and
+[metallb](https://metallb.universe.tf) to provide the _equivalence_ of load balancing, without
+requiring an additional managed service (or hop). BGP route advertisements enable Packet's network
+to route traffic for your services at the Elastic IP to the correct host. This section describes how to use it, and how to
+disable it.
+
+For the control plane nodes, the Packet CCM uses static Elastic IP assignment, via the Packet API, to tell the
+Packet network which control plane node should receive the traffic. For more details on the control plane
+load-balancer, see [this section](#Elastic_IP_as_Control_Plane_Endpoint).
 
 By default, the load balancer is deployed. You can disable the load balancer when
 deploying the CCM, which will prevent the load balancer from running. To do so,
@@ -238,6 +248,33 @@ The logic will circle over all the available control planes looking for an
 active api server. As soon as it can find one the Elastic IP will be unassigned
 and reassigned to the working node.
 
+### How the Elastic IP Traffic is Routed
+
+Of course, even if the router sends traffic for your Elastic IP (EIP) to a given control
+plane node, that node needs to know to process the traffic. Rather than require you to
+manage the IP assignment on each node, which can lead to some complex timing issues,
+the Packet CCM handles it for you.
+
+The structure relies on the already existing `default/kubernetes` service, which
+creates an `Endpoints` structure that includes all of the functioning control plane
+nodes. The CCM does the following on each loop:
+
+1. Finds all of the endpoints for `default/kubernetes` and creates or updates parallel endpoints in `kube-system/packet-ccm-kubernetes-external`
+1. Creates a service named `kube-system/packet-ccm-kubernetes-external` with the following settings:
+   * `type=LoadBalancer`
+   * `spec.loadBalancerIP=<eip>`
+   * `status.loadBalancer.ingress[0].ip=<eip>`
+   * `metadata.annotations["metallb.universe.tf/address-pool"]=disabled-metallb-do-not-use-any-address-pool`
+
+This has the following effect:
+
+* the annotation prevents metallb from trying to manage it
+* the `spec.loadBalancerIP` and `status.loadBalancer.ingress[0].ip` cause kube-proxy to set up routes on all of the nodes
+* the endpoints cause the traffic to be routed to the control plane nodes
+
+Note that we _wanted_ to just set `externalIPs` on the original `default/kubernetes`, but that would prevent traffic
+from being routed to it from the control nodes, due to iptables rules. LoadBalancer types allow local traffic.
+
 ## Running Locally
 
 You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This _dramatically_ speeds up development. To do so:
@@ -248,6 +285,7 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
 1. Set the environment variable `PACKET_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `PACKET_FACILITY_NAME=EWR1`
 1. If you want to use a different path to the loadbalancer manifest, available in this repository as [lb/manifests.yaml](./lib/manifests.yaml), e.g. `LB_MANIFEST=./lb/manifests.yaml` and set it to the argument `--load-balancer-manifest=$LB_MANIFEST`; the CCM default is `./lb/manifests.yaml`
+1. If you want to use a managed Elastic IP for the control plane, create one using the Packet API or Web UI, tag it uniquely, and set the environment variable `PACKET_EIP_TAG=<tag>`
 1. Run the command, e.g.:
 
 ```
