@@ -18,7 +18,11 @@ import (
 )
 
 const (
-	controlPlaneLabel = "node-role.kubernetes.io/master"
+	controlPlaneLabel        = "node-role.kubernetes.io/master"
+	externalServiceName      = "packet-ccm-kubernetes-external"
+	externalServiceNamespace = "kube-system"
+	metallbAnnotation        = "metallb.universe.tf/address-pool"
+	metallbDisabledtag       = "disabled-metallb-do-not-use-any-address-pool"
 )
 
 /*
@@ -228,27 +232,88 @@ func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, remo
 			continue
 		}
 
-		for _, ip := range svc.Spec.ExternalIPs {
-			if ip == eip {
-				klog.V(2).Infof("EIP %s already as external IP, nothing to do", eip)
-				return nil
+		// get the endpoints for this service
+		eps := m.k8sclient.CoreV1().Endpoints(svc.Namespace)
+		ep, err := eps.Get(svc.Name, metav1.GetOptions{})
+		if err != nil {
+			klog.V(2).Infof("failed to get endpoints %s: %v", svc.Name, err)
+			return fmt.Errorf("failed to get endpoints %s: %v", svc.Name, err)
+		}
+		// two options:
+		// - our endpoints already exists: just copy the endpoints
+		// - our endpoints does not exist: create it
+		epExisted := true
+		myeps := m.k8sclient.CoreV1().Endpoints(externalServiceNamespace)
+		myep, err := myeps.Get(externalServiceName, metav1.GetOptions{})
+		if err != nil {
+			klog.Infof("endpoint %s/%s did not yet exist, creating", externalServiceNamespace, externalServiceName)
+			myep = &v1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      externalServiceName,
+					Namespace: externalServiceNamespace,
+				},
+			}
+			epExisted = false
+		}
+
+		myep.Subsets = []v1.EndpointSubset{}
+		for _, s := range ep.Subsets {
+			copiedSubset := s.DeepCopy()
+			myep.Subsets = append(myep.Subsets, *copiedSubset)
+		}
+
+		// save the endpoints
+		if epExisted {
+			if _, err := myeps.Update(myep); err != nil {
+				klog.Errorf("failed to update my endpoints: %v", err)
+				return fmt.Errorf("failed to update my endpoints: %v", err)
+			}
+		} else {
+			if _, err := myeps.Create(myep); err != nil {
+				klog.Errorf("failed to create my endpoints: %v", err)
+				return fmt.Errorf("failed to create my endpoints: %v", err)
 			}
 		}
 
-		// if we made it here, there was no match, so add it
-
-		// and save
-		intf := m.k8sclient.CoreV1().Services(svc.Namespace)
-		existing, err := intf.Get(svc.Name, metav1.GetOptions{})
-		if err != nil || existing == nil {
-			klog.V(2).Infof("failed to get latest for service %s: %v", svc.Name, err)
-			return fmt.Errorf("failed to get latest for service %s: %v", svc.Name, err)
+		// now for my service
+		svcIntf := m.k8sclient.CoreV1().Services(externalServiceNamespace)
+		if _, err := svcIntf.Get(externalServiceName, metav1.GetOptions{}); err == nil {
+			klog.V(2).Infof("service %s already exists, nothing left to do", externalServiceName)
+			return nil
 		}
-		klog.V(2).Infof("adding EIP %s", eip)
-		existing.Spec.ExternalIPs = append(svc.Spec.ExternalIPs, eip)
+		klog.V(2).Infof("service %s did not exist, creating", externalServiceName)
+		ports := []v1.ServicePort{}
+		for _, p := range svc.Spec.Ports {
+			copiedPort := p.DeepCopy()
+			ports = append(ports, *copiedPort)
+		}
 
-		_, err = intf.Update(existing)
-		return err
+		externalService := v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: externalServiceName,
+				Annotations: map[string]string{
+					metallbAnnotation: metallbDisabledtag,
+				},
+				Namespace: externalServiceNamespace,
+			},
+			Spec: v1.ServiceSpec{
+				Type:           v1.ServiceTypeLoadBalancer,
+				LoadBalancerIP: eip,
+				Ports:          ports,
+			},
+			Status: v1.ServiceStatus{
+				LoadBalancer: v1.LoadBalancerStatus{
+					Ingress: []v1.LoadBalancerIngress{
+						{IP: eip},
+					},
+				},
+			},
+		}
+		if _, err := svcIntf.Create(&externalService); err != nil {
+			klog.Errorf("failed to create my service: %v", err)
+			return fmt.Errorf("failed to create my service: %v", err)
+		}
+		return nil
 	}
 	return fmt.Errorf("Service default/kubernetes not found")
 }

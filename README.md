@@ -257,9 +257,23 @@ the Packet CCM handles it for you.
 
 The structure relies on the already existing `default/kubernetes` service, which
 creates an `Endpoints` structure that includes all of the functioning control plane
-nodes. The CCM modifies the `default/kubernetes` service to add an `externalIPs`
-address which maps to the EIP. This causes Kubernetes itself, specifically `kube-proxy`,
-to create the necessary routes to allow the traffic to pass.
+nodes. The CCM does the following on each loop:
+
+1. Finds all of the endpoints for `default/kubernetes` and creates or updates parallel endpoints in `kube-system/packet-ccm-kubernetes-external`
+1. Creates a service named `kube-system/packet-ccm-kubernetes-external` with the following settings:
+   * `type=LoadBalancer`
+   * `spec.loadBalancerIP=<eip>`
+   * `status.loadBalancer.ingress[0].ip=<eip>`
+   * `metadata.annotations["metallb.universe.tf/address-pool"]=disabled-metallb-do-not-use-any-address-pool`
+
+This has the following effect:
+
+* the annotation prevents metallb from trying to manage it
+* the `spec.loadBalancerIP` and `status.loadBalancer.ingress[0].ip` cause kube-proxy to set up routes on all of the nodes
+* the endpoints cause the traffic to be routed to the control plane nodes
+
+Note that we _wanted_ to just set `externalIPs` on the original `default/kubernetes`, but that would prevent traffic
+from being routed to it from the control nodes, due to iptables rules. LoadBalancer types allow local traffic.
 
 ## Running Locally
 
