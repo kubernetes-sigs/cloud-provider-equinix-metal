@@ -134,12 +134,19 @@ func (b *bgp) reconcileNodes(nodes []*v1.Node, remove bool) error {
 
 // enableBGP enable bgp on the project
 func (b *bgp) enableBGP() error {
+	// first check if it is enabled before trying to create it
+	bgpConfig, _, err := b.client.BGPConfig.Get(b.project, &packngo.GetOptions{})
+	// if we already have a config, just return
+	if err == nil || bgpConfig != nil {
+		return nil
+	}
+
 	req := packngo.CreateBGPConfigRequest{
 		Asn:            b.localASN,
 		DeploymentType: "local",
 		UseCase:        "kubernetes-load-balancer",
 	}
-	_, err := b.client.BGPConfig.Create(b.project, req)
+	_, err = b.client.BGPConfig.Create(b.project, req)
 	return err
 }
 
