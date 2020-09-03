@@ -128,7 +128,7 @@ func (i *instances) InstanceType(_ context.Context, nodeName types.NodeName) (st
 		return "", err
 	}
 
-	return device.Plan.Slug, nil
+	return device.Plan.Name, nil
 }
 
 // InstanceTypeByProviderID returns the type of the specified instance.
@@ -139,7 +139,7 @@ func (i *instances) InstanceTypeByProviderID(_ context.Context, providerID strin
 		return "", err
 	}
 
-	return device.Plan.Slug, nil
+	return device.Plan.Name, nil
 }
 
 // AddSSHKeyToAllInstances adds an SSH public key as a legal identity for all instances
