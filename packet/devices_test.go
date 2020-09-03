@@ -149,7 +149,7 @@ func TestInstanceType(t *testing.T) {
 	}{
 		{"", "", fmt.Errorf("node name cannot be empty")},          // empty name
 		{"thisdoesnotexist", "", fmt.Errorf("instance not found")}, // unknown name
-		{devName, dev.Plan.Slug, nil},                              // valid
+		{devName, dev.Plan.Name, nil},                              // valid
 	}
 
 	for i, tt := range tests {
@@ -180,7 +180,7 @@ func TestInstanceTypeByProviderID(t *testing.T) {
 		{"foo-bar-abcdefg", "", fmt.Errorf("instance not found")},                              // invalid format
 		{"aws://abcdef5667", "", fmt.Errorf("provider name from providerID should be packet")}, // not packet
 		{"packet://acbdef-56788", "", fmt.Errorf("instance not found")},                        // unknown ID
-		{fmt.Sprintf("packet://%s", dev.ID), dev.Plan.Slug, nil},                               // valid
+		{fmt.Sprintf("packet://%s", dev.ID), dev.Plan.Name, nil},                               // valid
 	}
 
 	for i, tt := range tests {
