@@ -6,8 +6,12 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/packethost/packet-ccm.svg)](https://hub.docker.com/r/packethost/packet-ccm/)
 [![Slack](https://slack.packet.com/badge.svg)](https://slack.packet.com)
 [![Twitter Follow](https://img.shields.io/twitter/follow/packethost.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=packethost&user_id=788180534543339520)
+![Packet Maintained](https://img.shields.io/badge/stability-maintained-green.svg)
+
 
 `packet-ccm` is the Kubernetes CCM implementation for Packet. Read more about the CCM in [the official Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/).
+
+This repository is [Maintained](https://github.com/packethost/standards/blob/master/maintained-statement.md)!
 
 ## Requirements
 
