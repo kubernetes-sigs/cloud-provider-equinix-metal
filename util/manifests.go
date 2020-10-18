@@ -30,6 +30,7 @@ func ApplyManifests(m []byte, client kubernetes.Interface) error {
 		return fmt.Errorf("error parsing manifests: %v", err)
 	}
 	for i, m := range manifests {
+		var err2 error
 		klog.V(2).Infof("applying manifest %d %v", i, m.GetObjectKind().GroupVersionKind())
 		// now figure out what kind it is
 		// for each kind, we get it. There are three possiblities:
@@ -41,96 +42,96 @@ func ApplyManifests(m []byte, client kubernetes.Interface) error {
 			intf := client.CoreV1().Namespaces()
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *appsv1.Deployment:
 			intf := client.AppsV1().Deployments(o.ObjectMeta.Namespace)
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *appsv1.StatefulSet:
 			intf := client.AppsV1().StatefulSets(o.ObjectMeta.Namespace)
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *appsv1.DaemonSet:
 			intf := client.AppsV1().DaemonSets(o.ObjectMeta.Namespace)
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *v1.ConfigMap:
 			intf := client.CoreV1().ConfigMaps(o.ObjectMeta.Namespace)
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *rbacv1.Role:
 			intf := client.RbacV1().Roles(o.ObjectMeta.Namespace)
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *rbacv1.ClusterRole:
 			intf := client.RbacV1().ClusterRoles()
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *v1.ServiceAccount:
 			intf := client.CoreV1().ServiceAccounts(o.ObjectMeta.Namespace)
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *rbacv1.RoleBinding:
 			intf := client.RbacV1().RoleBindings(o.ObjectMeta.Namespace)
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *rbacv1.ClusterRoleBinding:
 			intf := client.RbacV1().ClusterRoleBindings()
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		case *policyv1.PodSecurityPolicy:
 			intf := client.PolicyV1beta1().PodSecurityPolicies()
 			existing, err := intf.Get(o.Name, metav1.GetOptions{})
 			if err == nil && existing != nil {
-				_, err = intf.Update(o)
+				_, err2 = intf.Update(o)
 			} else {
-				_, err = intf.Create(o)
+				_, err2 = intf.Create(o)
 			}
 		default:
-			err = fmt.Errorf("unknown type: %v", o)
+			err2 = fmt.Errorf("unknown type: %v", o)
 		}
 
-		if err != nil {
-			return fmt.Errorf("error applying document %d: %v", i, err)
+		if err2 != nil {
+			return fmt.Errorf("error applying document %d: %v", i, err2)
 		}
 	}
 	klog.V(2).Info("all manifests applied")
