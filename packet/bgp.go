@@ -3,6 +3,7 @@ package packet
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -104,9 +105,12 @@ func (b *bgp) reconcileNodes(nodes []*v1.Node, remove bool) error {
 					newAnnotations[b.annotationPeerASNs] = peerASNs
 				}
 
+				// we always set the peer IPs as a sorted list, comma-separated
+				sort.Strings(peers)
+				peerList := strings.Join(peers, ",")
 				val, ok = oldAnnotations[b.annotationPeerIPs]
-				if !ok || val != peers[0] {
-					newAnnotations[b.annotationPeerIPs] = peers[0]
+				if !ok || val != peerList {
+					newAnnotations[b.annotationPeerIPs] = peerList
 				}
 
 				// patch the node with the new annotations
