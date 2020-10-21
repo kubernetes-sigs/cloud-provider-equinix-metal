@@ -137,7 +137,7 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 				klog.Errorf("could not add metallb node peer address for node %s: %v", node.Name, err)
 				continue
 			}
-			config = addNodePeer(config, node.Name, peers[0], l.localASN, l.peerASN)
+			config = addNodePeer(config, node.Name, l.localASN, l.peerASN, peers...)
 			if config == nil {
 				klog.V(2).Info("config unchanged, not updating")
 				return nil
@@ -274,19 +274,25 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error
 }
 
 // addNodePeer update the configmap to ensure that the given node has the given peer
-func addNodePeer(config *metallb.ConfigFile, nodeName string, peer string, localASN, peerASN int) *metallb.ConfigFile {
+func addNodePeer(config *metallb.ConfigFile, nodeName string, localASN, peerASN int, peers ...string) *metallb.ConfigFile {
 	ns := metallb.NodeSelector{
 		MatchLabels: map[string]string{
 			hostnameKey: nodeName,
 		},
 	}
-	p := metallb.Peer{
-		MyASN:         uint32(localASN),
-		ASN:           uint32(peerASN),
-		Addr:          peer,
-		NodeSelectors: []metallb.NodeSelector{ns},
+	var changed bool
+	for _, peer := range peers {
+		p := metallb.Peer{
+			MyASN:         uint32(localASN),
+			ASN:           uint32(peerASN),
+			Addr:          peer,
+			NodeSelectors: []metallb.NodeSelector{ns},
+		}
+		if config.AddPeer(&p) {
+			changed = true
+		}
 	}
-	if !config.AddPeer(&p) {
+	if !changed {
 		return nil
 	}
 	return config
