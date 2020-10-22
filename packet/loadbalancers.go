@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/packethost/packet-ccm/packet/metallb"
-	"github.com/packethost/packet-ccm/util"
 	"github.com/packethost/packngo"
 
 	v1 "k8s.io/api/core/v1"
@@ -25,17 +25,23 @@ const (
 )
 
 type loadBalancers struct {
-	client            *packngo.Client
-	k8sclient         kubernetes.Interface
-	project           string
-	disabled          bool
-	facility          string
-	manifest          []byte
-	localASN, peerASN int
+	client             *packngo.Client
+	k8sclient          kubernetes.Interface
+	project            string
+	configmapnamespace string
+	configmapname      string
+	facility           string
+	localASN, peerASN  int
 }
 
-func newLoadBalancers(client *packngo.Client, projectID, facility string, disabled bool, manifest []byte, localASN, peerASN int) *loadBalancers {
-	return &loadBalancers{client, nil, projectID, disabled, facility, manifest, localASN, peerASN}
+func newLoadBalancers(client *packngo.Client, projectID, facility string, configmap string, localASN, peerASN int) *loadBalancers {
+	// parse the configmap - we only accept a full namespace and name, no fallback defaults
+	var configmapnamespace, configmapname string
+	cmparts := strings.SplitN(configmap, ":", 2)
+	if len(cmparts) >= 2 {
+		configmapnamespace, configmapname = cmparts[0], cmparts[1]
+	}
+	return &loadBalancers{client, nil, projectID, configmapnamespace, configmapname, facility, localASN, peerASN}
 }
 
 func (l *loadBalancers) name() string {
@@ -44,15 +50,12 @@ func (l *loadBalancers) name() string {
 func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 	klog.V(2).Info("loadBalancers.init(): started")
 	l.k8sclient = k8sclient
-	if l.disabled {
-		klog.V(2).Info("loadBalancers disabled, not deploying metallb")
+	if l.configmapname == "" {
+		klog.V(2).Info("loadBalancers disabled, not managing metallb")
 		return nil
 	}
 	// deploy metallb
-	klog.V(2).Info("loadBalancers.init(): deploying metallb")
-	if err := l.deployMetalLB(); err != nil {
-		return fmt.Errorf("failed to deploy metallb: %v", err)
-	}
+	klog.V(2).Info("loadBalancers.init(): complete")
 	return nil
 }
 
@@ -77,18 +80,8 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 
 // utility funcs
 
-// deployMetalLB deploy the metallb config to the kubernetes cluster
-func (l *loadBalancers) deployMetalLB() error {
-	// save to k8s
-	if err := util.ApplyManifests(l.manifest, l.k8sclient); err != nil {
-		return fmt.Errorf("failed to apply manifests: %v", err)
-	}
-	klog.V(2).Info("all manifests applied")
-	return nil
-}
-
 func (l *loadBalancers) nodeReconciler() nodeReconciler {
-	if l.disabled {
+	if l.configmapname == "" {
 		klog.V(2).Info("loadBalancers disabled, not enabling nodeReconciler")
 		return nil
 	}
@@ -96,7 +89,7 @@ func (l *loadBalancers) nodeReconciler() nodeReconciler {
 }
 
 func (l *loadBalancers) serviceReconciler() serviceReconciler {
-	if l.disabled {
+	if l.configmapname == "" {
 		klog.V(2).Info("loadBalancers disabled, not enabling serviceReconciler")
 		return nil
 	}
@@ -111,11 +104,11 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 		err   error
 	)
 	// get the configmap
-	cmInterface := l.k8sclient.CoreV1().ConfigMaps(metalLBNamespace)
+	cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
 
-	config, err := getMetalConfigMap(cmInterface)
+	config, err := getMetalConfigMap(cmInterface, l.configmapname)
 	if err != nil {
-		return fmt.Errorf("failed to get metallb config map: %v", err)
+		return fmt.Errorf("failed to get metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
 	}
 	for _, node := range nodes {
 		// are we adding or removing the node?
@@ -144,7 +137,7 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 			}
 		}
 		klog.V(2).Info("config changed, updating")
-		err = saveUpdatedConfigMap(cmInterface, config)
+		err = saveUpdatedConfigMap(cmInterface, l.configmapname, config)
 	}
 	return nil
 }
@@ -162,11 +155,11 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error
 		return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
 	}
 	// get the configmap
-	cmInterface := l.k8sclient.CoreV1().ConfigMaps(metalLBNamespace)
+	cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
 
-	config, err := getMetalConfigMap(cmInterface)
+	config, err := getMetalConfigMap(cmInterface, l.configmapname)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map: %v", err)
+		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
 	}
 
 	for _, svc := range svcs {
@@ -197,7 +190,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error
 			}
 			// remove it from the configmap
 			svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
-			if err = unmapIP(config, svcIPCidr, l.k8sclient); err != nil {
+			if err = unmapIP(config, svcIPCidr, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
 				return fmt.Errorf("error mapping IP %s: %v", svcName, err)
 			}
 		} else {
@@ -265,7 +258,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error
 			}
 			svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
 			// Update the service and configmap and save them
-			if err = mapIP(config, svcIPCidr, svcName, l.k8sclient); err != nil {
+			if err = mapIP(config, svcIPCidr, svcName, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
 				return fmt.Errorf("error mapping IP %s: %v", svcName, err)
 			}
 		}
@@ -298,10 +291,10 @@ func addNodePeer(config *metallb.ConfigFile, nodeName string, localASN, peerASN 
 	return config
 }
 
-func getMetalConfigMap(getter typedv1.ConfigMapInterface) (*metallb.ConfigFile, error) {
-	cm, err := getter.Get(metalLBConfigMapName, metav1.GetOptions{})
+func getMetalConfigMap(getter typedv1.ConfigMapInterface, name string) (*metallb.ConfigFile, error) {
+	cm, err := getter.Get(name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("unable to get metallb configmap %s: %v", metalLBConfigMapName, err)
+		return nil, fmt.Errorf("unable to get metallb configmap %s: %v", name, err)
 	}
 	var (
 		configData string
@@ -313,7 +306,7 @@ func getMetalConfigMap(getter typedv1.ConfigMapInterface) (*metallb.ConfigFile, 
 	return metallb.ParseConfig([]byte(configData))
 }
 
-func saveUpdatedConfigMap(cmi typedv1.ConfigMapInterface, cfg *metallb.ConfigFile) error {
+func saveUpdatedConfigMap(cmi typedv1.ConfigMapInterface, name string, cfg *metallb.ConfigFile) error {
 	b, err := cfg.Bytes()
 	if err != nil {
 		return fmt.Errorf("error converting configfile data to bytes: %v", err)
@@ -327,7 +320,7 @@ func saveUpdatedConfigMap(cmi typedv1.ConfigMapInterface, cfg *metallb.ConfigFil
 
 	klog.V(2).Infof("patching configmap:\n%s", mergePatch)
 	// save to k8s
-	_, err = cmi.Patch(metalLBConfigMapName, k8stypes.MergePatchType, mergePatch)
+	_, err = cmi.Patch(name, k8stypes.MergePatchType, mergePatch)
 
 	return err
 }
@@ -348,17 +341,17 @@ func serviceTag(svc *v1.Service) string {
 }
 
 // unmapIP remove a given IP address from the metalllb config map
-func unmapIP(config *metallb.ConfigFile, addr string, k8sclient kubernetes.Interface) error {
+func unmapIP(config *metallb.ConfigFile, addr, configmapnamespace, configmapname string, k8sclient kubernetes.Interface) error {
 	klog.V(2).Infof("unmapping IP %s", addr)
-	return updateMapIP(config, addr, "", k8sclient, false)
+	return updateMapIP(config, addr, "", configmapnamespace, configmapname, k8sclient, false)
 }
 
 // mapIP add a given ip address to the metallb configmap
-func mapIP(config *metallb.ConfigFile, addr, svcName string, k8sclient kubernetes.Interface) error {
+func mapIP(config *metallb.ConfigFile, addr, svcName, configmapnamespace, configmapname string, k8sclient kubernetes.Interface) error {
 	klog.V(2).Infof("mapping IP %s", addr)
-	return updateMapIP(config, addr, svcName, k8sclient, true)
+	return updateMapIP(config, addr, svcName, configmapnamespace, configmapname, k8sclient, true)
 }
-func updateMapIP(config *metallb.ConfigFile, addr, svcName string, k8sclient kubernetes.Interface, add bool) error {
+func updateMapIP(config *metallb.ConfigFile, addr, svcName, configmapnamespace, configmapname string, k8sclient kubernetes.Interface, add bool) error {
 	if config == nil {
 		klog.V(2).Info("config unchanged, not updating")
 		return nil
@@ -379,7 +372,7 @@ func updateMapIP(config *metallb.ConfigFile, addr, svcName string, k8sclient kub
 		config.RemoveAddressPoolByAddress(addr)
 	}
 	klog.V(2).Info("config changed, updating")
-	if err := saveUpdatedConfigMap(k8sclient.CoreV1().ConfigMaps(metalLBNamespace), config); err != nil {
+	if err := saveUpdatedConfigMap(k8sclient.CoreV1().ConfigMaps(configmapnamespace), configmapname, config); err != nil {
 		klog.V(2).Infof("error updating configmap: %v", err)
 		return fmt.Errorf("failed to update configmap: %v", err)
 	}
