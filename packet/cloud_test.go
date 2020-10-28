@@ -61,8 +61,7 @@ func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
 
 	// now just need to create a client
 	config := Config{
-		ProjectID:           projectID,
-		DisableLoadBalancer: true,
+		ProjectID: projectID,
 	}
 	c, _ := newCloud(config, client)
 	validCloud = c.(*cloud)

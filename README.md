@@ -31,6 +31,7 @@ Recommended versions of Packet CCM based on your Kubernetes version:
 1. Get your Packet project and secret API token
 1. Deploy your Packet project and secret API token to your cluster
 1. Deploy the CCM
+1. Deploy the load balancer (optional)
 
 ### Kubernetes Binary Arguments
 
@@ -42,6 +43,9 @@ Control plane binaries in your cluster must start with the correct flags:
 **WARNING**: setting the kubelet flag `--cloud-provider=external` will taint all nodes in a cluster with `node.cloudprovider.kubernetes.io/uninitialized`.
 The CCM itself will untaint those nodes when it initializes them.
 Any pod that does not tolerate that taint will be unscheduled until the CCM is running.
+
+You **must** set the kubelet flag the first time you run the kubelet. Stopping the kubelet, adding it after,
+and then restarting it will not work.
 
 #### Kubernetes node names must match the device name
 
@@ -58,6 +62,7 @@ To get your project ID click into the project that your cluster is under and sel
 Under General you will see "Project ID". Once you have this information you will be able to fill in the config needed for the CCM.
 
 #### Deploy Project and API
+
 Copy [deploy/template/secret.yaml](./deploy/template/secret.yaml) to someplace useful:
 
 ```bash
@@ -97,10 +102,33 @@ packet-cloud-config   Opaque                                1         2m
 
 #### Deploy CCM
 
-To apply the CCM itself:
+To apply the CCM itself, select your release and apply the manifest:
 
-1. Download the manifest `deployment.yaml` for your release from the [releases page](https://github.com/packethost/packet-ccm/releases)
-1. `kubectl apply -f deployment.yaml`
+```
+RELEASE=v1.1.0
+kubectl apply -f https://github.com/packethost/packet-ccm/releases/download/${RELEASE}/deployment.yaml
+```
+
+#### Deploy Load Balancer
+
+If you want load balancing to work as well, deploy the load balancer manifest:
+
+```
+kubectl apply -f https://github.com/packethost/packet-ccm/releases/download/${RELEASE}/loadbalancer.yaml
+```
+
+As of this writing, the load balancer is metallb. CCM provides the correct logic to manage the load balancer
+config.
+
+You can deploy metallb on your own, and simply direct CCM to control a different configuration map, or
+none at all. On startup and on each create or delete of a `Service` that is of `type=LoadBalancer`,
+CCM checks for the existence of a `ConfigMap` in the correct namespace.
+
+* if loadbalancer management is disabled, do nothing
+* if it finds no configmap, do nothing
+* if it finds a configmap, configure it
+
+See further in this document under loadbalancing, for details.
 
 ### Logging
 
@@ -110,6 +138,7 @@ optional additional logging levels via the `--v=<level>` flag. In general:
 * `--v=2`: log most function calls for devices and facilities, when relevant logging the returned values
 * `--v=3`: log additional data when logging returned values, usually entire go structs
 * `--v=5`: log every function call, including those called very frequently
+
 ## How It Works
 
 The Kubernetes CCM for Packet deploys as a `Deployment` into your cluster with a replica of `1`. It provides the following services:
@@ -173,34 +202,46 @@ For the control plane nodes, the Packet CCM uses static Elastic IP assignment, v
 Packet network which control plane node should receive the traffic. For more details on the control plane
 load-balancer, see [this section](#Elastic_IP_as_Control_Plane_Endpoint).
 
-By default, the load balancer is deployed. You can disable the load balancer when
-deploying the CCM, which will prevent the load balancer from running. To do so,
-you use one of these two options:
+By default, CCM controls the loadbalancer by updating the `ConfigMap` named `metallb-system:config`,
+i.e. a `ConfigMap` named `config` in the `metallb-system` namespace. This behaviour is controlled
+in one of two ways:
 
-* set the environment variable `PACKET_DISABLE_LB=true` before running the CCM
-* in the kubernetes secret `packet-cloud-config`, set the property "disable-loadbalancer" to `true`
+* by the environment variable `PACKET_LB_CONFIGMAP`
+* by the property `loadbalancer-configmap` in the kubernetes secret `packet-cloud-config`
 
-The Packet CCM, when the load balancer feature is not disabled, does the following.
+For each, CCM's behaviour is as follows:
 
-Upon start, CCM does the following:
+* if unset, default to `metallb-system:config`
+* if set to `<namespace>:<name>`, look for and manage a `ConfigMap` with name `<name>` in namespace `<namespace>`.You _must_ include a namespace; there is no default namespace when providing a specific `ConfigMap` name.
+* if set to `disabled`, do not attempt to manage any config
 
-* Ensure MetalLB is deployed to the cluster, using the peer IPs and ASNs configured above
-* List each node in the cluster using a kubernetes node lister; for each:
-  * retrieve its BGP node ASN, peer IPs and peer ASNs
-  * add them to the metallb `ConfigMap` with a kubernetes selector ensuring that the peer is only for this node
-* Start a kubernetes informer for node changes, responding to node addition and removals
-  * Node addition: ensure the node is in the metallb `ConfigMap` as above
-  * Node deletion: remove the node from the metallb `ConfigMap`
-* List all of the services in the cluster using a kubernetes service lister; for each:
-  * If the service is not of `type=LoadBalancer`, ignore it
-  * If a facility-specific `/32` IP address reservation tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"` exists, and it already has that IP address affiliated with it, it is ready; ignore
-  * If the service does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure it is in the pools of the metallb `ConfigMap` with `auto-assign: false`
-* Start a kubernetes informer for service changes, responding to service addition and removals
-  * Service addition: create a facility-specific `/32` IP address reservation tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"`; if it is ready immediately, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`
-  * Service deletion: find the `/32` IP address on the service spec and remove it; remove from the `ConfigMap`
-* Start an independent loop that checks every 30 seconds (configurable) for IP address reservations that are tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"` but not on any services. If it finds one:
-  * If a service exists that matches the `<service-hash>`, that is an indication that an IP address reservation request was made, not completed at request time, and now is available. Add the IP to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`
-  * If no service exists that is missing an IP, or none with a matching hash, delete the IP reservation
+Environment variable overrides setting in kubernetes secret; the secret will be checked only if
+the environment variable is unset. Only if _both_ are unset will it default.
+
+If the `ConfigMap` is not disabled, then upon start, CCM does the following:
+
+1. Get the appropriate namespace and name of the `ConfigMap`, based on the rules above.
+1. If the `ConfigMap` does not exist, do nothing more.
+1. List each node in the cluster using a kubernetes node lister; for each:
+   * retrieve its BGP node ASN, peer IPs and peer ASNs
+   * add them to the metallb `ConfigMap` with a kubernetes selector ensuring that the peer is only for this node
+1. Start a kubernetes informer for node changes, responding to node addition and removals
+   * Node addition: ensure the node is in the metallb `ConfigMap` as above
+   * Node deletion: remove the node from the metallb `ConfigMap`
+1. List all of the services in the cluster using a kubernetes service lister; for each:
+   * If the service is not of `type=LoadBalancer`, ignore it
+   * If a facility-specific `/32` IP address reservation tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"` exists, and it already has that IP address affiliated with it, it is ready; ignore
+   * If the service does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure it is in the pools of the metallb `ConfigMap` with `auto-assign: false`
+1. Start a kubernetes informer for service changes, responding to service addition and removals
+   * Service addition: create a facility-specific `/32` IP address reservation tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"`; if it is ready immediately, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`
+   * Service deletion: find the `/32` IP address on the service spec and remove it; remove from the `ConfigMap`
+1. Start an independent loop that checks every 30 seconds (configurable) for IP address reservations that are tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"` but not on any services. If it finds one:
+   * If a service exists that matches the `<service-hash>`, that is an indication that an IP address reservation request was made, not completed at request time, and now is available. Add the IP to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`
+   * If no service exists that is missing an IP, or none with a matching hash, delete the IP reservation
+
+At **no** point does CCM itself deploy the load-balancer or any part of it, including the `ConfigMap`. It only
+modifies an existing `ConfigMap`. This can be deployed by the administrator separately, using the manifest
+provided in the releases page, or by any other manner.
 
 In all cases of tagging the IP address reservation, we tag the IP reservation with `usage="packet-ccm-auto"` and `service="<service-hash>"` where `<service-hash>` is the sha256 hash of `<namespace>.<service-name>`. We do this so that the name of the service does not leak out to Packet itself.
 
@@ -288,12 +329,12 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Set the environment variable `CCM_SECRET` to a file with the secret contents as a json, i.e. the content of the secret's `stringData`, e.g. `CCM_SECRET=ccm-secret.yaml`
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
 1. Set the environment variable `PACKET_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `PACKET_FACILITY_NAME=EWR1`
-1. If you want to use a different path to the loadbalancer manifest, available in this repository as [lb/manifests.yaml](./lib/manifests.yaml), e.g. `LB_MANIFEST=./lb/manifests.yaml` and set it to the argument `--load-balancer-manifest=$LB_MANIFEST`; the CCM default is `./lb/manifests.yaml`
+1. If you want to run the loadbalancer, and it is not yet deployed, run `kubectl apply -f deploy/loadbalancer.yaml`
 1. If you want to use a managed Elastic IP for the control plane, create one using the Packet API or Web UI, tag it uniquely, and set the environment variable `PACKET_EIP_TAG=<tag>`
 1. Run the command, e.g.:
 
 ```
-PACKET_FACILITY_NAME=${PACKET_FACILITY_NAME} dist/bin/packet-cloud-controller-manager-darwin-amd64 --cloud-provider=packet --leader-elect=false --allow-untagged-cloud=true --authentication-skip-lookup=true --provider-config=$CCM_SECRET --load-balancer-manifest=$LB_MANIFEST --kubeconfig=$KUBECONFIG
+PACKET_FACILITY_NAME=${PACKET_FACILITY_NAME} dist/bin/packet-cloud-controller-manager-darwin-amd64 --cloud-provider=packet --leader-elect=false --allow-untagged-cloud=true --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
 ```
 
 For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.

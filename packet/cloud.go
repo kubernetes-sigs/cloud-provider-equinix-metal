@@ -61,23 +61,6 @@ type cloud struct {
 	bgp *bgp
 }
 
-// Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different packet API endpoint
-type Config struct {
-	AuthToken            string  `json:"apiKey"`
-	ProjectID            string  `json:"projectId"`
-	BaseURL              *string `json:"base-url,omitempty"`
-	DisableLoadBalancer  bool    `json:"disableLoadBalancer,omitempty"`
-	Facility             string  `json:"facility,omitempty"`
-	LoadBalancerManifest []byte
-	PeerASN              int    `json:"peerASN,omitempty"`
-	LocalASN             int    `json:"localASN,omitempty"`
-	AnnotationLocalASN   string `json:"annotationLocalASN,omitEmpty"`
-	AnnotationPeerASNs   string `json:"annotationPeerASNs,omitEmpty"`
-	AnnotationPeerIPs    string `json:"annotationPeerIPs,omitEmpty"`
-	EIPTag               string `json:"eipTag,omitEmpty"`
-	APIServerPort        int    `json:"apiServerPort,omitEmpty"`
-}
-
 func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
 	i := newInstances(client, packetConfig.ProjectID)
 	return &cloud{
@@ -85,7 +68,7 @@ func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interf
 		facility:                    packetConfig.Facility,
 		instances:                   i,
 		zones:                       newZones(client, packetConfig.ProjectID),
-		loadBalancer:                newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.DisableLoadBalancer, packetConfig.LoadBalancerManifest, packetConfig.LocalASN, packetConfig.PeerASN),
+		loadBalancer:                newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.LoadBalancerConfigMap, packetConfig.LocalASN, packetConfig.PeerASN),
 		bgp:                         newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs),
 		controlPlaneEndpointManager: newControlPlaneEndpointManager(packetConfig.EIPTag, packetConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, packetConfig.APIServerPort),
 	}, nil

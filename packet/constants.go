@@ -1,8 +1,6 @@
 package packet
 
 const (
-	metalLBNamespace          = "metallb-system"
-	metalLBConfigMapName      = "config"
 	configMapResource         = "configmaps"
 	hostnameKey               = "kubernetes.io/hostname"
 	packetIdentifier          = "packet-ccm-auto"

@@ -14,6 +14,7 @@ import (
 	"k8s.io/component-base/logs"
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // for client metric registration
 	_ "k8s.io/component-base/metrics/prometheus/version"  // for version metric registration
+	"k8s.io/klog"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
 
 	"github.com/packethost/packet-ccm/packet"
@@ -21,22 +22,22 @@ import (
 )
 
 const (
-	apiKeyName               = "PACKET_API_KEY"
-	projectIDName            = "PACKET_PROJECT_ID"
-	facilityName             = "PACKET_FACILITY_NAME"
-	disableLoadBalancerName  = "PACKET_DISABLE_LB"
-	envVarLocalASN           = "PACKET_LOCAL_ASN"
-	envVarPeerASN            = "PACKET_PEER_ASN"
-	envVarAnnotationLocalASN = "PACKET_ANNOTATION_LOCAL_ASN"
-	envVarAnnotationPeerASNs = "PACKET_ANNOTATION_PEER_ASNS"
-	envVarAnnotationPeerIPs  = "PACKET_ANNOTATION_PEER_IPS"
-	envVarEIPTag             = "PACKET_EIP_TAG"
-	envVarAPIServerPort      = "PACKET_API_SERVER_PORT"
+	apiKeyName                   = "PACKET_API_KEY"
+	projectIDName                = "PACKET_PROJECT_ID"
+	facilityName                 = "PACKET_FACILITY_NAME"
+	loadBalancerConfigMapName    = "PACKET_LB_CONFIGMAP"
+	envVarLocalASN               = "PACKET_LOCAL_ASN"
+	envVarPeerASN                = "PACKET_PEER_ASN"
+	envVarAnnotationLocalASN     = "PACKET_ANNOTATION_LOCAL_ASN"
+	envVarAnnotationPeerASNs     = "PACKET_ANNOTATION_PEER_ASNS"
+	envVarAnnotationPeerIPs      = "PACKET_ANNOTATION_PEER_IPS"
+	envVarEIPTag                 = "PACKET_EIP_TAG"
+	envVarAPIServerPort          = "PACKET_API_SERVER_PORT"
+	defaultLoadBalancerConfigMap = "metallb-system:config"
 )
 
 var (
-	providerConfig           string
-	loadBalancerManifestPath string
+	providerConfig string
 )
 
 func main() {
@@ -49,7 +50,6 @@ func main() {
 
 	// add our config
 	command.PersistentFlags().StringVar(&providerConfig, "provider-config", "", "path to provider config file")
-	command.PersistentFlags().StringVar(&loadBalancerManifestPath, "load-balancer-manifest", "lb/manifests.yaml", "path to load-balancer manifests")
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
@@ -58,11 +58,14 @@ func main() {
 	command.ParseFlags(os.Args[1:])
 
 	// register the provider
-	config, err := getPacketConfig(providerConfig, loadBalancerManifestPath)
+	config, err := getPacketConfig(providerConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "provider config error: %v\n", err)
 		os.Exit(1)
 	}
+	// report the config
+	printPacketConfig(config)
+
 	// register the provider
 	if err := packet.InitializeProvider(config); err != nil {
 		fmt.Fprintf(os.Stderr, "provider initialization error: %v\n", err)
@@ -75,7 +78,7 @@ func main() {
 	}
 }
 
-func getPacketConfig(providerConfig, loadBalancerManifestPath string) (packet.Config, error) {
+func getPacketConfig(providerConfig string) (packet.Config, error) {
 	// get our token and project
 	var config, rawConfig packet.Config
 	if providerConfig != "" {
@@ -102,10 +105,18 @@ func getPacketConfig(providerConfig, loadBalancerManifestPath string) (packet.Co
 	}
 	config.ProjectID = projectID
 
-	disableLoadBalancer := os.Getenv(disableLoadBalancerName)
-	config.DisableLoadBalancer = rawConfig.DisableLoadBalancer
-	if disableLoadBalancer == "true" {
-		config.DisableLoadBalancer = true
+	loadBalancerConfigMap := os.Getenv(loadBalancerConfigMapName)
+	config.LoadBalancerConfigMap = rawConfig.LoadBalancerConfigMap
+	// rule for processing: any setting in env var overrides setting from file
+	if loadBalancerConfigMap != "" {
+		config.LoadBalancerConfigMap = loadBalancerConfigMap
+	}
+	// and set for default
+	if config.LoadBalancerConfigMap == "" {
+		config.LoadBalancerConfigMap = defaultLoadBalancerConfigMap
+	}
+	if config.LoadBalancerConfigMap == "disabled" {
+		config.LoadBalancerConfigMap = ""
 	}
 
 	facility := os.Getenv(facilityName)
@@ -119,15 +130,6 @@ func getPacketConfig(providerConfig, loadBalancerManifestPath string) (packet.Co
 
 	if projectID == "" {
 		return config, fmt.Errorf("environment variable %q is required", projectIDName)
-	}
-
-	// try to read the load balancer manifest
-	if !config.DisableLoadBalancer {
-		b, err := ioutil.ReadFile(loadBalancerManifestPath)
-		if err != nil {
-			return config, fmt.Errorf("error loading the load balancer manifest from %s: %v", loadBalancerManifestPath, err)
-		}
-		config.LoadBalancerManifest = b
 	}
 
 	// if facility was not defined, retrieve it from our metadata
@@ -210,4 +212,12 @@ func getPacketConfig(providerConfig, loadBalancerManifestPath string) (packet.Co
 	}
 
 	return config, nil
+}
+
+// printPacketConfig report the config to startup logs
+func printPacketConfig(config packet.Config) {
+	lines := config.Strings()
+	for _, l := range lines {
+		klog.Infof(l)
+	}
 }
