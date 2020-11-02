@@ -141,10 +141,18 @@ func (b *bgp) enableBGP() error {
 	// first check if it is enabled before trying to create it
 	bgpConfig, _, err := b.client.BGPConfig.Get(b.project, &packngo.GetOptions{})
 	// if we already have a config, just return
-	if err == nil || bgpConfig != nil {
+	// we need some extra handling logic because the API always returns 200, even if
+	// not BGP config is in place.
+	// We treat it as valid config already exists only if ALL of the above is true:
+	// - no error
+	// - bgpConfig struct exists
+	// - bgpConfig struct has non-blank ID
+	// - bgpConfig struct does not have Status=="disabled"
+	if err == nil && bgpConfig != nil && bgpConfig.ID != "" && strings.ToLower(bgpConfig.Status) != "disabled" {
 		return nil
 	}
 
+	// we did not have a valid one, so create it
 	req := packngo.CreateBGPConfigRequest{
 		Asn:            b.localASN,
 		DeploymentType: "local",
