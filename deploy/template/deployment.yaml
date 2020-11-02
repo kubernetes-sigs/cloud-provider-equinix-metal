@@ -70,16 +70,16 @@ metadata:
   name: system:cloud-controller-manager
 rules:
 - apiGroups:
-   # reason: so ccm can monitor and update endpoints, used for control plane loadbalancer
-   - ""
-   resources:
-   - endpoints
-   verbs:
-   - create
-   - get
-   - list
-   - watch
-   - update
+  # reason: so ccm can monitor and update endpoints, used for control plane loadbalancer
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
 - apiGroups:
   # reason: so ccm can read and update nodes and annotations
   - ""
