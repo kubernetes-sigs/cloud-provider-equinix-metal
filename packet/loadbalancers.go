@@ -100,46 +100,58 @@ func (l *loadBalancers) serviceReconciler() serviceReconciler {
 // by adding it to or removing it from the known metallb configmap
 func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 	var (
-		peers []string
-		err   error
+		peers        []string
+		err          error
+		changedNodes bool
+		changed      bool
 	)
+	klog.V(2).Infof("loadbalancers.reconcileNodes(): called for nodes %v", nodes)
 	// get the configmap
 	cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
 
+	klog.V(2).Infof("loadbalancers.reconcileNodes(): getting configmap %s/%s", l.configmapnamespace, l.configmapname)
 	config, err := getMetalConfigMap(cmInterface, l.configmapname)
 	if err != nil {
 		return fmt.Errorf("failed to get metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
 	}
+	klog.V(5).Infof("loadbalancers.reconcileNodes(): original configmap %#v", config)
 	for _, node := range nodes {
 		// are we adding or removing the node?
 		if remove {
-			// go through the peers and see if we have one with our hostname.
-			selector := metallb.NodeSelector{
-				MatchLabels: map[string]string{
-					hostnameKey: node.Name,
-				},
+			klog.V(2).Infof("loadbalancers.reconcileNodes(): reconciling remove node %s", node.Name)
+			config, changed = removeNodePeer(config, node.Name)
+			if !changed {
+				klog.V(2).Infof("loadbalancers.reconcileNodes(): config unchanged for remove %s", node.Name)
+			} else {
+				klog.V(2).Infof("loadbalancers.reconcileNodes(): config changed for remove %s", node.Name)
+				changedNodes = true
 			}
-			config.RemovePeerBySelector(&selector)
 		} else {
+			klog.V(2).Infof("loadbalancers.reconcileNodes(): reconciling add node %s", node.Name)
 			// get the node provider ID
 			id := node.Spec.ProviderID
 			if id == "" {
 				return fmt.Errorf("no provider ID given")
 			}
 			if peers, err = getNodePeerAddress(id, l.client); err != nil || len(peers) < 1 {
-				klog.Errorf("could not add metallb node peer address for node %s: %v", node.Name, err)
+				klog.Errorf("loadbalancers.reconcileNodes(): could not add metallb node peer address for node %s: %v", node.Name, err)
 				continue
 			}
-			config = addNodePeer(config, node.Name, l.localASN, l.peerASN, peers...)
-			if config == nil {
-				klog.V(2).Info("config unchanged, not updating")
-				return nil
+			config, changed = addNodePeer(config, node.Name, l.localASN, l.peerASN, peers...)
+			if !changed {
+				klog.V(2).Infof("loadbalancers.reconcileNodes(): config unchanged for add %s", node.Name)
+			} else {
+				klog.V(2).Infof("loadbalancers.reconcileNodes(): config changed for add %s", node.Name)
+				changedNodes = true
 			}
 		}
-		klog.V(2).Info("config changed, updating")
-		err = saveUpdatedConfigMap(cmInterface, l.configmapname, config)
 	}
-	return nil
+	if !changedNodes {
+		klog.V(2).Info("loadbalancers.reconcileNodes(): no change to configmap, not updating")
+		return nil
+	}
+	klog.V(2).Infof("loadbalancers.reconcileNodes(): config changed, updating to %#v", config)
+	return saveUpdatedConfigMap(cmInterface, l.configmapname, config)
 }
 
 // reconcileServices add or remove services to have loadbalancers. If it adds a
@@ -267,7 +279,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error
 }
 
 // addNodePeer update the configmap to ensure that the given node has the given peer
-func addNodePeer(config *metallb.ConfigFile, nodeName string, localASN, peerASN int, peers ...string) *metallb.ConfigFile {
+func addNodePeer(config *metallb.ConfigFile, nodeName string, localASN, peerASN int, peers ...string) (*metallb.ConfigFile, bool) {
 	ns := metallb.NodeSelector{
 		MatchLabels: map[string]string{
 			hostnameKey: nodeName,
@@ -285,10 +297,22 @@ func addNodePeer(config *metallb.ConfigFile, nodeName string, localASN, peerASN 
 			changed = true
 		}
 	}
-	if !changed {
-		return nil
+	return config, changed
+}
+
+// removeNodePeer update the configmap to ensure that the given node does not have the peer
+func removeNodePeer(config *metallb.ConfigFile, nodeName string) (*metallb.ConfigFile, bool) {
+	// go through the peers and see if we have one with our hostname.
+	selector := metallb.NodeSelector{
+		MatchLabels: map[string]string{
+			hostnameKey: nodeName,
+		},
 	}
-	return config
+	var changed bool
+	if config.RemovePeerBySelector(&selector) {
+		changed = true
+	}
+	return config, changed
 }
 
 func getMetalConfigMap(getter typedv1.ConfigMapInterface, name string) (*metallb.ConfigFile, error) {

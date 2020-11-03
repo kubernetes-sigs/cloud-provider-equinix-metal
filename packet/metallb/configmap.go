@@ -70,11 +70,13 @@ func (cfg *ConfigFile) RemovePeer(remove *Peer) {
 	cfg.Peers = peers
 }
 
-// RemovePeerBySelector remove a peer by selector. If the matching peer does not exist, do not change anything
-func (cfg *ConfigFile) RemovePeerBySelector(remove *NodeSelector) {
+// RemovePeerBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
+// Returns if anything changed.
+func (cfg *ConfigFile) RemovePeerBySelector(remove *NodeSelector) bool {
 	if remove == nil {
-		return
+		return false
 	}
+	originalCount := len(cfg.Peers)
 	// go through the peers and see if we have a match
 	peers := make([]Peer, 0)
 	for _, peer := range cfg.Peers {
@@ -83,6 +85,7 @@ func (cfg *ConfigFile) RemovePeerBySelector(remove *NodeSelector) {
 		}
 	}
 	cfg.Peers = peers
+	return len(cfg.Peers) != originalCount
 }
 
 // AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
