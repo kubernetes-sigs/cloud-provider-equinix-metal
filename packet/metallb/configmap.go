@@ -14,7 +14,7 @@ import (
 
 func ParseConfig(bs []byte) (*ConfigFile, error) {
 	var raw ConfigFile
-	if err := yaml.UnmarshalStrict(bs, &raw); err != nil {
+	if err := yaml.Unmarshal(bs, &raw); err != nil {
 		return nil, fmt.Errorf("could not parse config: %s", err)
 	}
 
