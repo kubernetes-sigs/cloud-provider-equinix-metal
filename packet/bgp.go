@@ -60,15 +60,17 @@ func (b *bgp) serviceReconciler() serviceReconciler {
 // and ASN. MetalLB currently does not use this, although it is in process, see
 // http://github.com/metallb/metallb/pull/593 . Once that is in, we will not
 // need to update the configmap.
-func (b *bgp) reconcileNodes(nodes []*v1.Node, remove bool) error {
+func (b *bgp) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error {
 	nodeNames := []string{}
 	for _, node := range nodes {
 		nodeNames = append(nodeNames, node.Name)
 	}
 	klog.V(2).Infof("bgp.reconcileNodes(): called for nodes %v", nodeNames)
-	for _, node := range nodes {
-		// are we adding or removing the node?
-		if !remove {
+	// whether adding or syncing, we just enable bgp. Nothing to do when we remove.
+	switch mode {
+	case ModeAdd, ModeSync:
+		for _, node := range nodes {
+			klog.V(2).Infof("bgp.reconcileNodes(): add node %s", node.Name)
 			// get the node provider ID
 			id := node.Spec.ProviderID
 			if id == "" {
@@ -131,6 +133,8 @@ func (b *bgp) reconcileNodes(nodes []*v1.Node, remove bool) error {
 				}
 			}
 		}
+	case ModeRemove:
+		klog.V(2).Info("bgp.reconcileNodes(): nothing to do for removing nodes")
 	}
 	klog.V(2).Info("bgp.reconcileNodes(): complete")
 	return nil
