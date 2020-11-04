@@ -1,15 +1,15 @@
-# Kubernetes Cloud Controller Manager for Packet
+# Kubernetes Cloud Controller Manager for Equinix Metal
 
 [![GitHub release](https://img.shields.io/github/release/packethost/packet-ccm/all.svg?style=flat-square)](https://github.com/packethost/packet-ccm/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/packethost/packet-ccm)](https://goreportcard.com/report/github.com/packethost/packet-ccm)
 ![Continuous Integration](https://github.com/packethost/packet-ccm/workflows/Continuous%20Integration/badge.svg)
 [![Docker Pulls](https://img.shields.io/docker/pulls/packethost/packet-ccm.svg)](https://hub.docker.com/r/packethost/packet-ccm/)
-[![Slack](https://slack.packet.com/badge.svg)](https://slack.packet.com)
-[![Twitter Follow](https://img.shields.io/twitter/follow/packethost.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=packethost&user_id=788180534543339520)
-![Packet Maintained](https://img.shields.io/badge/stability-maintained-green.svg)
+[![Slack](https://slack.equinixmetal.com/badge.svg)](https://slack.equinixmetal.com/)
+[![Twitter Follow](https://img.shields.io/twitter/follow/equinixmetal.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=equinixmetal&user_id=788180534543339520)
+![Equinix Metal Maintained](https://img.shields.io/badge/stability-maintained-green.svg)
 
 
-`packet-ccm` is the Kubernetes CCM implementation for Packet. Read more about the CCM in [the official Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/).
+`packet-ccm` is the Kubernetes CCM implementation for Equinix Metal. Read more about the CCM in [the official Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/).
 
 This repository is [Maintained](https://github.com/packethost/standards/blob/master/maintained-statement.md)!
 
@@ -19,17 +19,17 @@ At the current state of Kubernetes, running the CCM requires a few things.
 Please read through the requirements carefully as they are critical to running the CCM on a Kubernetes cluster.
 
 ### Version
-Recommended versions of Packet CCM based on your Kubernetes version:
-* Packet CCM version v0.0.4 supports Kubernetes version >=v1.10
-* Packet CCM version v1.0.0+ supports Kubernetes version >=1.15.0
+Recommended versions of Equinix Metal CCM based on your Kubernetes version:
+* Equinix Metal CCM version v0.0.4 supports Kubernetes version >=v1.10
+* Equinix Metal CCM version v1.0.0+ supports Kubernetes version >=1.15.0
 
 ## Deployment
 
 **TL;DR**
 
 1. Set kubernetes binary arguments correctly
-1. Get your Packet project and secret API token
-1. Deploy your Packet project and secret API token to your cluster
+1. Get your Equinix Metal project and secret API token
+1. Deploy your Equinix Metal project and secret API token to your cluster
 1. Deploy the CCM
 1. Deploy the load balancer (optional)
 
@@ -38,7 +38,7 @@ Recommended versions of Packet CCM based on your Kubernetes version:
 Control plane binaries in your cluster must start with the correct flags:
 
 * `kubelet`: All kubelets in your cluster **MUST** set the flag `--cloud-provider=external`. This must be done for _every_ kubelet. Note that [k3s](https://k3s.io) sets its own CCM by default. If you want to use the CCM with k3s, you must disable the k3s CCM and enable this one, as `--disable-cloud-controller --kubelet-arg cloud-provider=external`.
-* `kube-apiserver` and `kube-controller-manager` must **NOT** set the flag `--cloud-provider`. They then will use no cloud provider natively, leaving room for the Packet CCM.
+* `kube-apiserver` and `kube-controller-manager` must **NOT** set the flag `--cloud-provider`. They then will use no cloud provider natively, leaving room for the Equinix Metal CCM.
 
 **WARNING**: setting the kubelet flag `--cloud-provider=external` will taint all nodes in a cluster with `node.cloudprovider.kubernetes.io/uninitialized`.
 The CCM itself will untaint those nodes when it initializes them.
@@ -50,13 +50,13 @@ and then restarting it will not work.
 #### Kubernetes node names must match the device name
 
 By default, the kubelet will name nodes based on the node's hostname.
-Packet's device hostnames are set based on the name of the device.
+Equinix Metal's device hostnames are set based on the name of the device.
 It is important that the Kubernetes node name matches the device name.
 
-### Get Packet Project ID and API Token
+### Get Equinix Metal Project ID and API Token
 
-To run `packet-ccm`, you need your Packet project ID and secret API key ID that your cluster is running in.
-If you are already logged into the [Packet portal](https://app.packet.net), you can create one by clicking on your
+To run `packet-ccm`, you need your Equinix Metal project ID and secret API key ID that your cluster is running in.
+If you are already logged into the [Equinix Metal portal](ttps://console.equinix.com/), you can create one by clicking on your
 profile in the upper right then "API keys".
 To get your project ID click into the project that your cluster is under and select "project settings" from the header.
 Under General you will see "Project ID". Once you have this information you will be able to fill in the config needed for the CCM.
@@ -141,39 +141,39 @@ optional additional logging levels via the `--v=<level>` flag. In general:
 
 ## How It Works
 
-The Kubernetes CCM for Packet deploys as a `Deployment` into your cluster with a replica of `1`. It provides the following services:
+The Kubernetes CCM for Equinix Metal deploys as a `Deployment` into your cluster with a replica of `1`. It provides the following services:
 
-* lists available zones, returning Packet regions
-* lists and retrieves instances by ID, returning Packet servers
+* lists available zones, returning Equinix Metal regions
+* lists and retrieves instances by ID, returning Equinix Metal servers
 * manages load balancers
 
 ### Facility
 
-The Packet CCM works in one facility at a time. You can control which facility it works with as follows:
+The Equinix Metal CCM works in one facility at a time. You can control which facility it works with as follows:
 
 1. If the environment variable `PACKET_FACILITY_NAME` is set, use that value. Else..
 1. If the config file has a field named `facility`, use that value. Else..
-1. Read the facility from the Packet metadata of the host where the CCM is running. Else..
+1. Read the facility from the Equinix Metal metadata of the host where the CCM is running. Else..
 1. Fail.
 
 The overrides of environment variable and config file are provided so that you can run the CCM
-on a node in a different facility, or even outside of Packet entirely.
+on a node in a different facility, or even outside of Equinix Metal entirely.
 
 ### BGP
 
-The Packet CCM enables BGP for the project and enables it on all nodes as they come up. It sets the ASNs as follows:
+The Equinix Metal CCM enables BGP for the project and enables it on all nodes as they come up. It sets the ASNs as follows:
 
 * Node, a.k.a. local, ASN: 65000
 * Peer Router ASN: 65530
 
-These are the settings per Packet's BGP config, see [here](https://github.com/packet-labs/kubernetes-bgp). It is
+These are the settings per Equinix Metal's BGP config, see [here](https://github.com/packet-labs/kubernetes-bgp). It is
 _not_ recommended to override them. However, the settings are set as follows:
 
 1. If the environment variables `PACKET_LOCAL_ASN` and `PACKET_PEER_ASN` are set. Else...
 1. If the config file has fields named `localASN` and `peerASN`. Else...
 1. Use the above defaults.
 
-In addition to enabling BGP and setting ASNs, the Packet CCM sets Kubernetes annotations on the nodes. It sets the
+In addition to enabling BGP and setting ASNs, the Equinix Metal CCM sets Kubernetes annotations on the nodes. It sets the
 following information:
 
 * `packet.com/node.asn` - Node, or local, ASN
@@ -188,18 +188,18 @@ These annotation names can be overridden, if you so choose. The settings are as 
 
 ### Load Balancers
 
-Packet does not offer managed load balancers like [AWS ELB](https://aws.amazon.com/elasticloadbalancing/)
-or [GCP Load Balancers](https://cloud.google.com/load-balancing/). Instead, Packet provides the following
-load-balancing options, both using Packet's Elastic IP.
+Equinix Metal does not offer managed load balancers like [AWS ELB](https://aws.amazon.com/elasticloadbalancing/)
+or [GCP Load Balancers](https://cloud.google.com/load-balancing/). Instead, Equinix Metal provides the following
+load-balancing options, both using Equinix Metal's Elastic IP.
 
-For user-deployed Kubernetes `Service` of `type=LoadBalancer`, the Packet CCM uses BGP and
+For user-deployed Kubernetes `Service` of `type=LoadBalancer`, the Equinix Metal CCM uses BGP and
 [metallb](https://metallb.universe.tf) to provide the _equivalence_ of load balancing, without
-requiring an additional managed service (or hop). BGP route advertisements enable Packet's network
+requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host. This section describes how to use it, and how to
 disable it.
 
-For the control plane nodes, the Packet CCM uses static Elastic IP assignment, via the Packet API, to tell the
-Packet network which control plane node should receive the traffic. For more details on the control plane
+For the control plane nodes, the Equinix Metal CCM uses static Elastic IP assignment, via the Equinix Metal API, to tell the
+Equinix Metal network which control plane node should receive the traffic. For more details on the control plane
 load-balancer, see [this section](#Elastic_IP_as_Control_Plane_Endpoint).
 
 By default, CCM controls the loadbalancer by updating the `ConfigMap` named `metallb-system:config`,
@@ -243,7 +243,7 @@ At **no** point does CCM itself deploy the load-balancer or any part of it, incl
 modifies an existing `ConfigMap`. This can be deployed by the administrator separately, using the manifest
 provided in the releases page, or by any other manner.
 
-In all cases of tagging the IP address reservation, we tag the IP reservation with `usage="packet-ccm-auto"` and `service="<service-hash>"` where `<service-hash>` is the sha256 hash of `<namespace>.<service-name>`. We do this so that the name of the service does not leak out to Packet itself.
+In all cases of tagging the IP address reservation, we tag the IP reservation with `usage="packet-ccm-auto"` and `service="<service-hash>"` where `<service-hash>` is the sha256 hash of `<namespace>.<service-name>`. We do this so that the name of the service does not leak out to Equinix Metal itself.
 
 IP addresses always are created `/32`, and are tagged as `"packet-ccm-auto"`
 
@@ -251,12 +251,12 @@ IP addresses always are created `/32`, and are tagged as `"packet-ccm-auto"`
 
 In order to ease understanding, we use several different terms for an IP address:
 
-* Requested: A dedicated `/32` IP address has been requested for the service from Packet. It may be returned immediately, or it may need to wait for Packet intervention.
-* Reserved: A dedicated `/32` IP address has been reserved for the service from Packet.
+* Requested: A dedicated `/32` IP address has been requested for the service from Equinix Metal. It may be returned immediately, or it may need to wait for Equinix Metal intervention.
+* Reserved: A dedicated `/32` IP address has been reserved for the service from Equinix Metal.
 * Assigned: The dedicated IP address has been marked on the service as `Service.Spec.LoadBalancerIP` as assigned.
 * Mapped: The dedicated IP address has been added to the metallb `ConfigMap` as available.
 
-From Packet's perspective, the IP reservation is either Requested or Reserved, but not both. For the
+From Equinix Metal's perspective, the IP reservation is either Requested or Reserved, but not both. For the
 load balancer to work, the IP address needs to be all of: Reserved, Assigned, Mapped.
 
 ## Elastic IP as Control Plane Endpoint
@@ -266,7 +266,7 @@ have a static endpoint that you can use from the outside, or when configuring
 the advertise address for the kubelet.
 
 In [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet) we
-create one for every cluster for example. Packet does not provide an as a
+create one for every cluster for example. Equinix Metal does not provide an as a
 service load balancer it means that in some way we have to check if the Elastic
 IP is still assigned to an healthy control plane.
 
@@ -298,7 +298,7 @@ and reassigned to the working node.
 Of course, even if the router sends traffic for your Elastic IP (EIP) to a given control
 plane node, that node needs to know to process the traffic. Rather than require you to
 manage the IP assignment on each node, which can lead to some complex timing issues,
-the Packet CCM handles it for you.
+the Equinix Metal CCM handles it for you.
 
 The structure relies on the already existing `default/kubernetes` service, which
 creates an `Endpoints` structure that includes all of the functioning control plane
@@ -330,7 +330,7 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
 1. Set the environment variable `PACKET_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `PACKET_FACILITY_NAME=EWR1`
 1. If you want to run the loadbalancer, and it is not yet deployed, run `kubectl apply -f deploy/loadbalancer.yaml`
-1. If you want to use a managed Elastic IP for the control plane, create one using the Packet API or Web UI, tag it uniquely, and set the environment variable `PACKET_EIP_TAG=<tag>`
+1. If you want to use a managed Elastic IP for the control plane, create one using the Equinix Metal API or Web UI, tag it uniquely, and set the environment variable `PACKET_EIP_TAG=<tag>`
 1. Run the command, e.g.:
 
 ```
