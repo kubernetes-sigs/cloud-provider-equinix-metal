@@ -202,6 +202,19 @@ func startNodesWatcher(informer informers.SharedInformerFactory, handlers []node
 		},
 	})
 
+	// what this does:
+	// when you create an informer, you start it by calling informer.Run()
+	// however, it can take some time for the local state to sync up. If you use any methods before
+	// it is completely synced, especially get or list, you can end up missing data. In order to
+	// avoid the issue, you run it in the following order:
+	//
+	// 1. create your informer
+	// 2. informer.Run()
+	// 3. create a slice of sync functions []cache.InformerSynced. The function on each informer is informer.HasSynced
+	// 4. use the utility function cache.WaitForCacheSync(), passing it your sync function slice
+	// 5. when the utility function returns, the cache is synced and you are ready to use it
+	//
+	// for a good overview of controllers and their lifecycle, see https://engineering.bitnami.com/articles/a-deep-dive-into-kubernetes-controllers.html
 	klog.V(5).Info("startNodesWatcher(): nodesInformer.Run()")
 	go nodesInformer.Run(stop)
 	syncFuncs := []cache.InformerSynced{
@@ -244,6 +257,19 @@ func startServicesWatcher(informer informers.SharedInformerFactory, handlers []s
 			}
 		},
 	})
+	// what this does:
+	// when you create an informer, you start it by calling informer.Run()
+	// however, it can take some time for the local state to sync up. If you use any methods before
+	// it is completely synced, especially get or list, you can end up missing data. In order to
+	// avoid the issue, you run it in the following order:
+	//
+	// 1. create your informer
+	// 2. informer.Run()
+	// 3. create a slice of sync functions []cache.InformerSynced. The function on each informer is informer.HasSynced
+	// 4. use the utility function cache.WaitForCacheSync(), passing it your sync function slice
+	// 5. when the utility function returns, the cache is synced and you are ready to use it
+	//
+	// for a good overview of controllers and their lifecycle, see https://engineering.bitnami.com/articles/a-deep-dive-into-kubernetes-controllers.html
 	klog.V(5).Info("startServicesWatcher(): servicesInformer.Run()")
 	go servicesInformer.Run(stop)
 	syncFuncs := []cache.InformerSynced{
