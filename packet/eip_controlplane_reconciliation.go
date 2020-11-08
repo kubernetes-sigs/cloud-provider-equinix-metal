@@ -72,7 +72,7 @@ func (m *controlPlaneEndpointManager) serviceReconciler() serviceReconciler {
 	return m.reconcileServices
 }
 
-func (m *controlPlaneEndpointManager) reconcileNodes(nodes []*v1.Node, remove bool) error {
+func (m *controlPlaneEndpointManager) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error {
 	klog.V(2).Info("controlPlaneEndpoint.reconcile: new reconciliation")
 	if m.inProcess {
 		klog.V(2).Info("controlPlaneEndpoint.reconcileNodes: already in process, not starting a new one")
@@ -91,7 +91,7 @@ func (m *controlPlaneEndpointManager) reconcileNodes(nodes []*v1.Node, remove bo
 	if err != nil {
 		return err
 	}
-	controlPlaneEndpoint := ipReservationByTags([]string{m.eipTag}, ipList)
+	controlPlaneEndpoint := ipReservationByAllTags([]string{m.eipTag}, ipList)
 	if controlPlaneEndpoint == nil {
 		// IP NOT FOUND nothing to do here.
 		klog.Errorf("elastic IP not found. Please verify you have one with the expected tag: %s", m.eipTag)
@@ -200,7 +200,7 @@ func newControlPlaneEndpointManager(eipTag, projectID string, deviceIPSrv packng
 
 // reconcileServices ensure that our Elastic IP is assigned as `externalIPs` for
 // the `default/kubernetes` service
-func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, remove bool) error {
+func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, mode UpdateMode) error {
 	if m.eipTag == "" {
 		return errors.New("elastic ip tag is empty. Nothing to do")
 	}
@@ -213,7 +213,7 @@ func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, remo
 	if err != nil {
 		return err
 	}
-	controlPlaneEndpoint := ipReservationByTags([]string{m.eipTag}, ipList)
+	controlPlaneEndpoint := ipReservationByAllTags([]string{m.eipTag}, ipList)
 	if controlPlaneEndpoint == nil {
 		// IP NOT FOUND nothing to do here.
 		klog.Errorf("elastic IP not found. Please verify you have one with the expected tag: %s", m.eipTag)

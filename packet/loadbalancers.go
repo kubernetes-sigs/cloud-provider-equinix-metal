@@ -98,7 +98,7 @@ func (l *loadBalancers) serviceReconciler() serviceReconciler {
 
 // reconcileNodes given a node, update the metallb load balancer by
 // by adding it to or removing it from the known metallb configmap
-func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
+func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error {
 	var (
 		peers        []string
 		err          error
@@ -115,9 +115,10 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 		return fmt.Errorf("failed to get metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
 	}
 	klog.V(5).Infof("loadbalancers.reconcileNodes(): original configmap %#v", config)
-	for _, node := range nodes {
-		// are we adding or removing the node?
-		if remove {
+	// are we adding, removing or syncing the node?
+	switch mode {
+	case ModeRemove:
+		for _, node := range nodes {
 			klog.V(2).Infof("loadbalancers.reconcileNodes(): reconciling remove node %s", node.Name)
 			config, changed = removeNodePeer(config, node.Name)
 			if !changed {
@@ -126,12 +127,14 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 				klog.V(2).Infof("loadbalancers.reconcileNodes(): config changed for remove %s", node.Name)
 				changedNodes = true
 			}
-		} else {
+		}
+	case ModeAdd:
+		for _, node := range nodes {
 			klog.V(2).Infof("loadbalancers.reconcileNodes(): reconciling add node %s", node.Name)
 			// get the node provider ID
 			id := node.Spec.ProviderID
 			if id == "" {
-				return fmt.Errorf("no provider ID given")
+				return fmt.Errorf("no provider ID given for node %s", node.Name)
 			}
 			if peers, err = getNodePeerAddress(id, l.client); err != nil || len(peers) < 1 {
 				klog.Errorf("loadbalancers.reconcileNodes(): could not add metallb node peer address for node %s: %v", node.Name, err)
@@ -142,6 +145,44 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 				klog.V(2).Infof("loadbalancers.reconcileNodes(): config unchanged for add %s", node.Name)
 			} else {
 				klog.V(2).Infof("loadbalancers.reconcileNodes(): config changed for add %s", node.Name)
+				changedNodes = true
+			}
+		}
+	case ModeSync:
+		// make sure the list of nodes exactly matches between the provided nodes and the ones in the configmap
+		goodMap := map[string]bool{}
+		for _, node := range nodes {
+			goodMap[node.Name] = true
+		}
+		// first remove everything from the configmap that is not in goodMap
+		configNodes := getNodes(config)
+		for _, node := range configNodes {
+			if _, ok := goodMap[node]; !ok {
+				klog.V(2).Infof("loadbalancers.reconcileNodes(): removing node from configmap: %s", node)
+				config, _ = removeNodePeer(config, node)
+				changedNodes = true
+			}
+		}
+		// now see if any nodes are missing
+		// get the list of nodes afresh
+		configNodes = getNodes(config)
+		configMap := map[string]bool{}
+		for _, node := range configNodes {
+			configMap[node] = true
+		}
+		for _, node := range nodes {
+			if _, ok := configMap[node.Name]; !ok {
+				// get the node provider ID
+				id := node.Spec.ProviderID
+				if id == "" {
+					return fmt.Errorf("no provider ID given for node %s", node.Name)
+				}
+				if peers, err = getNodePeerAddress(id, l.client); err != nil || len(peers) < 1 {
+					klog.Errorf("loadbalancers.reconcileNodes(): could not get node peer address for node %s: %v", node.Name, err)
+					continue
+				}
+				config, _ = addNodePeer(config, node.Name, l.localASN, l.peerASN, peers...)
+				// we do not need to check if it is changed; we know it is
 				changedNodes = true
 			}
 		}
@@ -159,7 +200,10 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, remove bool) error {
 // cannot create the IP reservation immediately, then it fails, rather than
 // waiting for human support. It tags the IP reservation so it can find it later.
 // Before trying to create one, it tries to find an IP reservation with the right tags.
-func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error {
+func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) error {
+	klog.V(2).Infof("loadbalancer.reconcileServices(): %v starting", mode)
+	klog.V(5).Infof("loadbalancer.reconcileServices(): services %#v", svcs)
+
 	var err error
 	// get IP address reservations and check if they any exists for this svc
 	ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
@@ -174,108 +218,244 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, remove bool) error
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
 	}
 
+	validSvcs := []*v1.Service{}
 	for _, svc := range svcs {
 		// filter on type: only take those that are of type=LoadBalancer
-		if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
-			continue
+		if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
+			validSvcs = append(validSvcs, svc)
 		}
+	}
+	klog.V(5).Infof("loadbalancer.reconcileServices(): valid services %#v", validSvcs)
 
-		svcName := serviceRep(svc)
-		svcTag := serviceTag(svc)
-		svcIP := svc.Spec.LoadBalancerIP
-		var svcIPCidr string
-		ipReservation := ipReservationByTags([]string{svcTag, packetTag}, ips)
+	switch mode {
+	case ModeAdd:
+		// ADDITION
+		for _, svc := range validSvcs {
+			klog.V(2).Infof("loadbalancer.reconcileServices(): add: service %s", svc.Name)
+			if err := l.addService(svc, ips, config); err != nil {
+				return err
+			}
+		}
+	case ModeRemove:
+		// REMOVAL
+		for _, svc := range validSvcs {
+			svcName := serviceRep(svc)
+			svcTag := serviceTag(svc)
+			svcIP := svc.Spec.LoadBalancerIP
 
-		klog.V(2).Infof("processing %s with existing IP assignment %s", svcName, svcIP)
+			var svcIPCidr string
+			ipReservation := ipReservationByAllTags([]string{svcTag, packetTag}, ips)
 
-		if remove {
-			// REMOVAL
+			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: %s with existing IP assignment %s", svcName, svcIP)
+
 			// get the IPs and see if there is anything to clean up
 			if ipReservation == nil {
-				klog.V(2).Infof("no IP reservation found for %s, nothing to delete", svcName)
-				return nil
+				klog.V(2).Infof("loadbalancer.reconcileServices(): remove: no IP reservation found for %s, nothing to delete", svcName)
+				continue
 			}
 			// delete the reservation
+			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: for %s EIP ID %s", svcName, ipReservation.ID)
 			_, err = l.client.ProjectIPs.Remove(ipReservation.ID)
 			if err != nil {
 				return fmt.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
 			}
 			// remove it from the configmap
 			svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
+			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: for %s configmap entry %s", svcName, svcIPCidr)
 			if err = unmapIP(config, svcIPCidr, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
-				return fmt.Errorf("error mapping IP %s: %v", svcName, err)
+				return fmt.Errorf("error removing IP from configmap for %s: %v", svcName, err)
 			}
-		} else {
-			// ADDITION
-			// if it already has an IP, no need to get it one
-			if svcIP == "" {
-				klog.V(2).Infof("no IP assigned for service %s; searching reservations", svcName)
+			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: removed service from configmap %s", svcName)
+		}
+	case ModeSync:
+		// what we have to do:
+		// 1. get all of the services that are of type=LoadBalancer
+		// 2. for each service, get its eip, if available. if it does not have one, create one for it.
+		// 3. for each EIP, ensure it exists in the configmap
+		// 4. get each EIP in the configmap, check if it is in our list; if not, delete
 
-				// if no IP found, request a new one
-				if ipReservation == nil {
+		// add each service that is in the known list
+		for _, svc := range validSvcs {
+			klog.V(2).Infof("loadbalancer.reconcileServices(): sync: service %s", svc.Name)
+			if err := l.addService(svc, ips, config); err != nil {
+				return err
+			}
+		}
 
-					// if we did not find an IP reserved, create a request
-					klog.V(2).Infof("no IP assignment found for %s, requesting", svcName)
-					// create a request
-					facility := l.facility
-					req := packngo.IPReservationRequest{
-						Type:        "public_ipv4",
-						Quantity:    1,
-						Description: ccmIPDescription,
-						Facility:    &facility,
-						Tags: []string{
-							packetTag,
-							svcTag,
-						},
-						FailOnApprovalRequired: true,
-					}
+		// remove any service that is not in the known list
 
-					ipReservation, _, err = l.client.ProjectIPs.Request(l.project, &req)
-					if err != nil {
-						return fmt.Errorf("failed to request an IP for the load balancer: %v", err)
-					}
+		// we need to get the addresses again, because we might have changed them
+		klog.V(5).Info("loadbalancer.reconcileServices(): sync: getting all IP reservations")
+		ips, _, err = l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
+		}
+		// get all EIP that have the packet tag
+		ipReservations := ipReservationsByAnyTags([]string{packetTag}, ips)
+		// create a map of EIP to svcIP so we can get the CIDR
+		ipCidr := map[string]int{}
+		for _, ipr := range ipReservations {
+			ipCidr[ipr.Address] = ipr.CIDR
+		}
+
+		// create a map of all valid IPs
+		validTags := map[string]bool{}
+		validIPs := map[string]bool{}
+
+		for _, svc := range validSvcs {
+			validTags[serviceTag(svc)] = true
+			svcIP := svc.Spec.LoadBalancerIP
+			if svcIP != "" {
+				if cidr, ok := ipCidr[svcIP]; ok {
+					validIPs[fmt.Sprintf("%s/%d", svcIP, cidr)] = true
 				}
+			}
+		}
 
-				// if we have no IP from existing or a new reservation, log it and return
-				if ipReservation == nil {
-					klog.V(2).Infof("no IP to assign to service %s, will need to wait until it is allocated", svcName)
-					return nil
+		klog.V(2).Infof("loadbalancer.reconcileServices(): sync: valid tags %v", validTags)
+		klog.V(2).Infof("loadbalancer.reconcileServices(): sync: valid svc IPs %v", validIPs)
+
+		// get all IPs registered in the configmap; remove those not in our valid list
+		configIPs := getServiceAddresses(config)
+		klog.V(2).Infof("loadbalancer.reconcileServices(): sync: actual configmap IPs %v", configIPs)
+		for _, ip := range configIPs {
+			if _, ok := validIPs[ip]; !ok {
+				klog.V(2).Infof("loadbalancer.reconcileServices(): sync: removing from configmap ip %s not in valid list", ip)
+				if err = unmapIP(config, ip, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
+					return fmt.Errorf("error removing IP from configmap %s: %v", ip, err)
 				}
+			}
+		}
 
-				// we have an IP, either found from existing reservations or a new reservation.
-				// map and assign it
-				svcIP = ipReservation.Address
+		// remove any EIPs that do not have a reservation
 
-				// assign the IP and save it
-				klog.V(2).Infof("assigning IP %s to %s", svcIP, svcName)
-				intf := l.k8sclient.CoreV1().Services(svc.Namespace)
-				existing, err := intf.Get(svc.Name, metav1.GetOptions{})
-				if err != nil || existing == nil {
-					klog.V(2).Infof("failed to get latest for service %s: %v", svcName, err)
-					return fmt.Errorf("failed to get latest for service %s: %v", svcName, err)
+		klog.V(5).Infof("loadbalancer.reconcileServices(): sync: all reservations with packetTag %#v", ipReservations)
+		for _, ipReservation := range ipReservations {
+			var foundTag bool
+			for _, tag := range ipReservation.Tags {
+				if _, ok := validTags[tag]; ok {
+					foundTag = true
 				}
-				existing.Spec.LoadBalancerIP = svcIP
-
-				_, err = intf.Update(existing)
+			}
+			// did we find a valid tag?
+			if !foundTag {
+				klog.V(2).Infof("loadbalancer.reconcileServices(): sync: removing reservation with service= tag but not in validTags list %#v", ipReservation)
+				// delete the reservation
+				_, err = l.client.ProjectIPs.Remove(ipReservation.ID)
 				if err != nil {
-					klog.V(2).Infof("failed to update service %s: %v", svcName, err)
-					return fmt.Errorf("failed to update service %s: %v", svcName, err)
+					return fmt.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
 				}
-				klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
-			}
-			// our default CIDR for each address is 32
-			cidr := 32
-			if ipReservation != nil {
-				cidr = ipReservation.CIDR
-			}
-			svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
-			// Update the service and configmap and save them
-			if err = mapIP(config, svcIPCidr, svcName, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
-				return fmt.Errorf("error mapping IP %s: %v", svcName, err)
 			}
 		}
 	}
 	return nil
+}
+
+func (l *loadBalancers) addService(svc *v1.Service, ips []packngo.IPAddressReservation, config *metallb.ConfigFile) error {
+	svcName := serviceRep(svc)
+	svcTag := serviceTag(svc)
+	svcIP := svc.Spec.LoadBalancerIP
+
+	var (
+		svcIPCidr string
+		err       error
+	)
+	ipReservation := ipReservationByAllTags([]string{svcTag, packetTag}, ips)
+
+	klog.V(2).Infof("processing %s with existing IP assignment %s", svcName, svcIP)
+	// if it already has an IP, no need to get it one
+	if svcIP == "" {
+		klog.V(2).Infof("no IP assigned for service %s; searching reservations", svcName)
+
+		// if no IP found, request a new one
+		if ipReservation == nil {
+
+			// if we did not find an IP reserved, create a request
+			klog.V(2).Infof("no IP assignment found for %s, requesting", svcName)
+			// create a request
+			facility := l.facility
+			req := packngo.IPReservationRequest{
+				Type:        "public_ipv4",
+				Quantity:    1,
+				Description: ccmIPDescription,
+				Facility:    &facility,
+				Tags: []string{
+					packetTag,
+					svcTag,
+				},
+				FailOnApprovalRequired: true,
+			}
+
+			ipReservation, _, err = l.client.ProjectIPs.Request(l.project, &req)
+			if err != nil {
+				return fmt.Errorf("failed to request an IP for the load balancer: %v", err)
+			}
+		}
+
+		// if we have no IP from existing or a new reservation, log it and return
+		if ipReservation == nil {
+			klog.V(2).Infof("no IP to assign to service %s, will need to wait until it is allocated", svcName)
+			return nil
+		}
+
+		// we have an IP, either found from existing reservations or a new reservation.
+		// map and assign it
+		svcIP = ipReservation.Address
+
+		// assign the IP and save it
+		klog.V(2).Infof("assigning IP %s to %s", svcIP, svcName)
+		intf := l.k8sclient.CoreV1().Services(svc.Namespace)
+		existing, err := intf.Get(svc.Name, metav1.GetOptions{})
+		if err != nil || existing == nil {
+			klog.V(2).Infof("failed to get latest for service %s: %v", svcName, err)
+			return fmt.Errorf("failed to get latest for service %s: %v", svcName, err)
+		}
+		existing.Spec.LoadBalancerIP = svcIP
+
+		_, err = intf.Update(existing)
+		if err != nil {
+			klog.V(2).Infof("failed to update service %s: %v", svcName, err)
+			return fmt.Errorf("failed to update service %s: %v", svcName, err)
+		}
+		klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
+	}
+	// our default CIDR for each address is 32
+	cidr := 32
+	if ipReservation != nil {
+		cidr = ipReservation.CIDR
+	}
+	svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
+	// Update the service and configmap and save them
+	if err = mapIP(config, svcIPCidr, svcName, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
+		return fmt.Errorf("error mapping IP %s: %v", svcName, err)
+	}
+	return nil
+}
+
+// getNodes get the names of nodes in the metallb configmap
+func getNodes(config *metallb.ConfigFile) []string {
+	nodes := []string{}
+	peers := config.Peers
+	for _, p := range peers {
+		for _, selector := range p.NodeSelectors {
+			for k, v := range selector.MatchLabels {
+				if k == hostnameKey {
+					nodes = append(nodes, v)
+				}
+			}
+		}
+	}
+	return nodes
+}
+
+// getServiceAddresses get the IPs of services in the metallb configmap
+func getServiceAddresses(config *metallb.ConfigFile) []string {
+	ips := []string{}
+	pools := config.Pools
+	for _, p := range pools {
+		ips = append(ips, p.Addresses...)
+	}
+	return ips
 }
 
 // addNodePeer update the configmap to ensure that the given node has the given peer

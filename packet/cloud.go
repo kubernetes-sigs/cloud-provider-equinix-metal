@@ -25,8 +25,8 @@ const (
 	checkLoopTimerSeconds        = 60
 )
 
-type nodeReconciler func(nodes []*v1.Node, remove bool) error
-type serviceReconciler func(services []*v1.Service, remove bool) error
+type nodeReconciler func(nodes []*v1.Node, mode UpdateMode) error
+type serviceReconciler func(services []*v1.Service, mode UpdateMode) error
 
 // cloudService an internal service that can be initialize and report a name
 type cloudService interface {
@@ -176,32 +176,18 @@ func (c *cloud) HasClusterID() bool {
 func startNodesWatcher(informer informers.SharedInformerFactory, handlers []nodeReconciler, stop <-chan struct{}) error {
 	klog.V(5).Info("called startNodesWatcher")
 	if len(handlers) == 0 {
-		klog.V(5).Info("no service handlers to process")
+		klog.V(5).Info("no node handlers to process")
 		return nil
-	}
-	nodes := informer.Core().V1().Nodes()
-	nodesLister := nodes.Lister()
-
-	// next make sure existing nodes have it set
-	nodeList, err := nodesLister.List(labels.Everything())
-	if err != nil {
-		return fmt.Errorf("failed to list nodes: %v", err)
-	}
-	klog.V(2).Infof("existing nodes: %v", nodeList)
-	for _, h := range handlers {
-		if err := h(nodeList, false); err != nil {
-			klog.Errorf("failed to update and sync nodes for handler: %v", err)
-		}
 	}
 
 	klog.V(5).Info("startNodesWatcher(): creating nodesInformer")
-	nodesInformer := nodes.Informer()
+	nodesInformer := informer.Core().V1().Nodes().Informer()
 	klog.V(5).Info("startNodesWatcher(): adding event handlers")
 	nodesInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			n := obj.(*v1.Node)
 			for _, h := range handlers {
-				if err := h([]*v1.Node{n}, false); err != nil {
+				if err := h([]*v1.Node{n}, ModeAdd); err != nil {
 					klog.Errorf("failed to update and sync node for add %s for handler: %v", n.Name, err)
 				}
 			}
@@ -209,14 +195,22 @@ func startNodesWatcher(informer informers.SharedInformerFactory, handlers []node
 		DeleteFunc: func(obj interface{}) {
 			n := obj.(*v1.Node)
 			for _, h := range handlers {
-				if err := h([]*v1.Node{n}, false); err != nil {
+				if err := h([]*v1.Node{n}, ModeRemove); err != nil {
 					klog.Errorf("failed to update and sync node for remove %s for handler: %v", n.Name, err)
 				}
 			}
 		},
 	})
+
 	klog.V(5).Info("startNodesWatcher(): nodesInformer.Run()")
 	go nodesInformer.Run(stop)
+	syncFuncs := []cache.InformerSynced{
+		nodesInformer.HasSynced,
+	}
+	klog.V(4).Infof("startNodesWatcher(): waiting for caches to sync")
+	if !cache.WaitForCacheSync(stop, syncFuncs...) {
+		return fmt.Errorf("syncing caches failed")
+	}
 	klog.Info("nodes watcher started")
 	return nil
 }
@@ -229,28 +223,14 @@ func startServicesWatcher(informer informers.SharedInformerFactory, handlers []s
 		klog.V(5).Info("no service handlers to process")
 		return nil
 	}
-	services := informer.Core().V1().Services()
-	servicesLister := services.Lister()
-
-	// next make sure existing nodes have it set
-	servicesList, err := servicesLister.List(labels.Everything())
-	if err != nil {
-		return fmt.Errorf("failed to list services: %v", err)
-	}
-
-	for _, h := range handlers {
-		if err := h(servicesList, false); err != nil {
-			klog.Errorf("failed to update and sync services: %v", err)
-		}
-	}
 
 	// register to capture all new services
-	servicesInformer := services.Informer()
+	servicesInformer := informer.Core().V1().Services().Informer()
 	servicesInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			svc := obj.(*v1.Service)
 			for _, h := range handlers {
-				if err := h([]*v1.Service{svc}, false); err != nil {
+				if err := h([]*v1.Service{svc}, ModeAdd); err != nil {
 					klog.Errorf("failed to update and sync service for add %s/%s: %v", svc.Namespace, svc.Name, err)
 				}
 			}
@@ -258,13 +238,21 @@ func startServicesWatcher(informer informers.SharedInformerFactory, handlers []s
 		DeleteFunc: func(obj interface{}) {
 			svc := obj.(*v1.Service)
 			for _, h := range handlers {
-				if err := h([]*v1.Service{svc}, true); err != nil {
+				if err := h([]*v1.Service{svc}, ModeRemove); err != nil {
 					klog.Errorf("failed to update and sync service for remove %s/%s: %v", svc.Namespace, svc.Name, err)
 				}
 			}
 		},
 	})
+	klog.V(5).Info("startServicesWatcher(): servicesInformer.Run()")
 	go servicesInformer.Run(stop)
+	syncFuncs := []cache.InformerSynced{
+		servicesInformer.HasSynced,
+	}
+	klog.V(4).Infof("startServicesWatcher(): waiting for caches to sync")
+	if !cache.WaitForCacheSync(stop, syncFuncs...) {
+		return fmt.Errorf("syncing caches failed")
+	}
 	klog.Info("services watcher started")
 
 	return nil
@@ -281,7 +269,7 @@ func timerLoop(informer informers.SharedInformerFactory, nodesHandlers []nodeRec
 				klog.Errorf("timed reservations watcher: failed to list services: %v", err)
 			}
 			for _, h := range servicesHandlers {
-				if err := h(servicesList, false); err != nil {
+				if err := h(servicesList, ModeSync); err != nil {
 					klog.Errorf("failed to update and sync services: %v", err)
 				}
 			}
@@ -290,7 +278,7 @@ func timerLoop(informer informers.SharedInformerFactory, nodesHandlers []nodeRec
 				klog.Errorf("timed reservations watcher: failed to list nodes: %v", err)
 			}
 			for _, h := range nodesHandlers {
-				if err := h(nodesList, false); err != nil {
+				if err := h(nodesList, ModeSync); err != nil {
 					klog.Errorf("failed to update and sync nodes: %v", err)
 				}
 			}
