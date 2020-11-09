@@ -166,8 +166,11 @@ ifneq (,$(DESTDIR))
 	cp $(DIST_BINARY) $(DESTDIR)/$(shell basename $(DIST_BINARY))
 endif
 
+$(GOBIN):
+	mkdir -p $(GOBIN)
+
 manifest-tool: $(MANIFEST_TOOL)
-$(MANIFEST_TOOL):
+$(MANIFEST_TOOL): $(GOBIN)
 	curl -L -o $@ $(MANIFEST_URL)
 	chmod +x $@
 
