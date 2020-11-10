@@ -13,6 +13,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
@@ -24,9 +25,16 @@ type bgp struct {
 	k8sclient                                                 kubernetes.Interface
 	peerASN, localASN                                         int
 	annotationLocalASN, annotationPeerASNs, annotationPeerIPs string
+	nodeSelector                                              labels.Selector
 }
 
-func newBGP(client *packngo.Client, project string, localASN, peerASN int, annotationLocalASN, annotationPeerASNs, annotationPeerIPs string) *bgp {
+func newBGP(client *packngo.Client, project string, localASN, peerASN int, annotationLocalASN, annotationPeerASNs, annotationPeerIPs string, nodeSelector string) *bgp {
+
+	selector := labels.Everything()
+	if nodeSelector != "" {
+		selector, _ = labels.Parse(nodeSelector)
+	}
+
 	return &bgp{
 		project:            project,
 		client:             client,
@@ -35,6 +43,7 @@ func newBGP(client *packngo.Client, project string, localASN, peerASN int, annot
 		annotationLocalASN: annotationLocalASN,
 		annotationPeerASNs: annotationPeerASNs,
 		annotationPeerIPs:  annotationPeerIPs,
+		nodeSelector:       selector,
 	}
 }
 
@@ -63,15 +72,23 @@ func (b *bgp) serviceReconciler() serviceReconciler {
 // http://github.com/metallb/metallb/pull/593 . Once that is in, we will not
 // need to update the configmap.
 func (b *bgp) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
-	nodeNames := []string{}
+	filteredNodes := []*v1.Node{}
+
 	for _, node := range nodes {
+		if b.nodeSelector.Matches(labels.Set(node.Labels)) {
+			filteredNodes = append(filteredNodes, node)
+		}
+	}
+
+	nodeNames := []string{}
+	for _, node := range filteredNodes {
 		nodeNames = append(nodeNames, node.Name)
 	}
 	klog.V(2).Infof("bgp.reconcileNodes(): called for nodes %v", nodeNames)
 	// whether adding or syncing, we just enable bgp. Nothing to do when we remove.
 	switch mode {
 	case ModeAdd, ModeSync:
-		for _, node := range nodes {
+		for _, node := range filteredNodes {
 			klog.V(2).Infof("bgp.reconcileNodes(): add node %s", node.Name)
 			// get the node provider ID
 			id := node.Spec.ProviderID

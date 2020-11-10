@@ -16,6 +16,7 @@ type Config struct {
 	AnnotationPeerIPs     string  `json:"annotationPeerIPs,omitEmpty"`
 	EIPTag                string  `json:"eipTag,omitEmpty"`
 	APIServerPort         int     `json:"apiServerPort,omitEmpty"`
+	BGPNodeSelector       string  `json:"bgpNodeSelector,omitEmpty"`
 }
 
 // String converts the Config structure to a string, while masking hidden fields.
@@ -39,5 +40,7 @@ func (c Config) Strings() []string {
 	ret = append(ret, fmt.Sprintf("local ASN: '%d'", c.LocalASN))
 	ret = append(ret, fmt.Sprintf("Elastic IP Tag: '%s'", c.EIPTag))
 	ret = append(ret, fmt.Sprintf("API Server Port: '%d'", c.APIServerPort))
+	ret = append(ret, fmt.Sprintf("BGP Node Selector: '%s'", c.BGPNodeSelector))
+
 	return ret
 }

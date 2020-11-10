@@ -161,7 +161,7 @@ on a node in a different facility, or even outside of Equinix Metal entirely.
 
 ### BGP
 
-The Equinix Metal CCM enables BGP for the project and enables it on all nodes as they come up. It sets the ASNs as follows:
+The Equinix Metal CCM enables BGP for the project and enables it by default on all nodes as they come up. It sets the ASNs as follows:
 
 * Node, a.k.a. local, ASN: 65000
 * Peer Router ASN: 65530
@@ -172,6 +172,13 @@ _not_ recommended to override them. However, the settings are set as follows:
 1. If the environment variables `PACKET_LOCAL_ASN` and `PACKET_PEER_ASN` are set. Else...
 1. If the config file has fields named `localASN` and `peerASN`. Else...
 1. Use the above defaults.
+
+Set of servers on which BGP will be enabled can be filtered using the following settings:
+1. If the environment variable `PACKET_BGP_NODE_SELECTOR` is set. Else...
+1. If the config file has field named `bgpNodeSelector` set. Else...
+1. Select all nodes.
+
+Value for node selector should be a valid Kubernetes label selector (e.g. key1=value1,key2=value2).
 
 In addition to enabling BGP and setting ASNs, the Equinix Metal CCM sets Kubernetes annotations on the nodes. It sets the
 following information:
