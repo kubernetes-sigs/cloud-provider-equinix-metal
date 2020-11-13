@@ -152,7 +152,7 @@ func TestProviderName(t *testing.T) {
 func TestHasClusterID(t *testing.T) {
 	vc, _ := testGetValidCloud(t)
 	cid := vc.HasClusterID()
-	expectedCid := false
+	expectedCid := true
 	if cid != expectedCid {
 		t.Errorf("returned %v instead of expected %v", cid, expectedCid)
 	}

@@ -39,7 +39,6 @@ spec:
           - "./packet-cloud-controller-manager"
           - "--cloud-provider=packet"
           - "--leader-elect=false"
-          - "--allow-untagged-cloud=true"
           - "--authentication-skip-lookup=true"
           - "--provider-config=/etc/cloud-sa/cloud-sa.json"
         resources:
