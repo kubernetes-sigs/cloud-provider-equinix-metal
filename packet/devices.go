@@ -191,7 +191,7 @@ func deviceByID(client *packngo.Client, id string) (*packngo.Device, error) {
 	return device, err
 }
 
-// deviceByName returns an instance thats hostname matches the kubernetes node.Name
+// deviceByName returns an instance whose hostname matches the kubernetes node.Name
 func deviceByName(client *packngo.Client, projectID string, nodeName types.NodeName) (*packngo.Device, error) {
 	klog.V(2).Infof("called deviceByName with projectID %s nodeName %s", projectID, nodeName)
 	if string(nodeName) == "" {

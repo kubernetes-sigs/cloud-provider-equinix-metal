@@ -135,7 +135,7 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 			return err
 		}
 
-		// I decided to iterate over all the addresses assigned to the node to avoid network missconfiguration
+		// I decided to iterate over all the addresses assigned to the node to avoid network misconfiguration
 		// The first one for example is the node name, and if the hostname is not well configured it will never work.
 		for _, a := range addresses {
 			if a.Type == "Hostname" {
