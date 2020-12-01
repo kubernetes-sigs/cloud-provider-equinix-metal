@@ -44,13 +44,13 @@ replace (
 )
 ```
 
-1. Run `go mod downlaod`
+1. Run `go mod download`
 
 ## Upgrading
 
 When upgrading to a new version of kubernetes:
 
-1. Generate a new go.mod to reference the new version, changing anywhere in the above file from the current versio nto the new version
+1. Generate a new go.mod to reference the new version, changing anywhere in the above file from the current version to the new version
 1. `rm go.sum`
 1. Run `go mod download`
 1. Loop through for any errors on mismatched versions, and add `replace` dependencies. These are almost entirely due to `k8s.io/kubernetes`
