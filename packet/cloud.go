@@ -169,7 +169,7 @@ func (c *cloud) ProviderName() string {
 // HasClusterID returns true if a ClusterID is required and set
 func (c *cloud) HasClusterID() bool {
 	klog.V(5).Info("called HasClusterID")
-	return false
+	return true
 }
 
 // startNodesWatcher start a goroutine that watches k8s for nodes and calls any handlers
