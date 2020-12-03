@@ -105,7 +105,7 @@ packet-cloud-config   Opaque                                1         2m
 To apply the CCM itself, select your release and apply the manifest:
 
 ```
-RELEASE=v1.1.0
+RELEASE=v2.0.0
 kubectl apply -f https://github.com/packethost/packet-ccm/releases/download/${RELEASE}/deployment.yaml
 ```
 
