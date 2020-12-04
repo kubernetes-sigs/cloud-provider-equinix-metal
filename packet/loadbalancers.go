@@ -427,7 +427,7 @@ func (l *loadBalancers) addService(svc *v1.Service, ips []packngo.IPAddressReser
 			klog.V(2).Infof("failed to update service %s: %v", svcName, err)
 			return fmt.Errorf("failed to update service %s: %v", svcName, err)
 		}
-
+		klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)		
 	}
 	// our default CIDR for each address is 32
 	cidr := 32
