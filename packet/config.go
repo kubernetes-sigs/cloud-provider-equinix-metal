@@ -8,6 +8,7 @@ type Config struct {
 	ProjectID             string  `json:"projectId"`
 	BaseURL               *string `json:"base-url,omitempty"`
 	LoadBalancerConfigMap string  `json:"loadbalancer-configmap"`
+	ConfigMapEnable       bool    `json:"configmap-disable"`
 	Facility              string  `json:"facility,omitempty"`
 	PeerASN               int     `json:"peerASN,omitempty"`
 	LocalASN              int     `json:"localASN,omitempty"`

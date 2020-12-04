@@ -107,21 +107,25 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 
 	loadBalancerConfigMap := os.Getenv(loadBalancerConfigMapName)
 	config.LoadBalancerConfigMap = rawConfig.LoadBalancerConfigMap
+
+	// Configmap behaviour:
+	// If it isn't blank, set it to the input
+	// If it is blank, set it to the default
+	// If it isn't blank but is "disabled" then disable cconfigmap watching
+
 	// rule for processing: any setting in env var overrides setting from file
 	if loadBalancerConfigMap != "" {
 		config.LoadBalancerConfigMap = loadBalancerConfigMap
+		config.ConfigMapEnable = true
 	}
 	// and set for default
 	if config.LoadBalancerConfigMap == "" {
 		config.LoadBalancerConfigMap = defaultLoadBalancerConfigMap
+		config.ConfigMapEnable = true
 	}
-
 	if config.LoadBalancerConfigMap == "disabled" {
-		config.LoadBalancerConfigMap = ""
-	}
-
-	if loadBalancerConfigMap == "none" {
-		config.LoadBalancerConfigMap = loadBalancerConfigMap
+		config.LoadBalancerConfigMap = "disabled"
+		config.ConfigMapEnable = false
 	}
 
 	facility := os.Getenv(facilityName)

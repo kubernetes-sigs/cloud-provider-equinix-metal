@@ -30,35 +30,33 @@ type loadBalancers struct {
 	project            string
 	configmapnamespace string
 	configmapname      string
+	configmapenable    bool
 	facility           string
 	localASN, peerASN  int
 }
 
-func newLoadBalancers(client *packngo.Client, projectID, facility string, configmap string, localASN, peerASN int) *loadBalancers {
+func newLoadBalancers(client *packngo.Client, projectID, facility, configmap string, configmapenable bool, localASN, peerASN int) *loadBalancers {
 	// parse the configmap - we only accept a full namespace and name, no fallback defaults
 	var configmapnamespace, configmapname string
 	cmparts := strings.SplitN(configmap, ":", 2)
 	if len(cmparts) >= 2 {
 		configmapnamespace, configmapname = cmparts[0], cmparts[1]
 	}
-	if configmap == "none" {
-		configmapname = configmap
-	}
-	return &loadBalancers{client, nil, projectID, configmapnamespace, configmapname, facility, localASN, peerASN}
+	return &loadBalancers{client, nil, projectID, configmapnamespace, configmapname, configmapenable, facility, localASN, peerASN}
 }
 
 func (l *loadBalancers) name() string {
 	return "loadbalancer"
 }
+
 func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 	klog.V(2).Info("loadBalancers.init(): started")
 	l.k8sclient = k8sclient
 
-	if l.configmapname == "" {
-		klog.V(2).Info("loadBalancers disabled, not managing metallb")
-		return nil
+	if !l.configmapenable {
+		klog.V(2).Info("No ConfigMap has been entered to watch, not managing metallb")
 	}
-	// deploy metallb
+
 	klog.V(2).Info("loadBalancers.init(): complete")
 	return nil
 }
@@ -67,18 +65,6 @@ func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 // we do this via metallb, not directly, so none of this works... for now.
 
 func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
-	// If a service has had a loadbalancer address applied via the alternative reconcilliation loop then we can return it as the
-	// loadbalancer status
-	if service.Spec.LoadBalancerIP != "" {
-		return &v1.LoadBalancerStatus{
-			Ingress: []v1.LoadBalancerIngress{
-				{
-					IP: service.Spec.LoadBalancerIP,
-				},
-			},
-		}, true, nil
-	}
-	// this service has no load balancer IP return that the load-balancer doesn't exist
 	return nil, false, nil
 }
 func (l *loadBalancers) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
@@ -97,6 +83,7 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 // utility funcs
 
 func (l *loadBalancers) nodeReconciler() nodeReconciler {
+	// If the configmap is disabled then the nodes can't be reconciled
 	if l.configmapname == "" {
 		klog.V(2).Info("loadBalancers disabled, not enabling nodeReconciler")
 		return nil
@@ -105,7 +92,8 @@ func (l *loadBalancers) nodeReconciler() nodeReconciler {
 }
 
 func (l *loadBalancers) serviceReconciler() serviceReconciler {
-	if l.configmapname == "" {
+	// If the configmap isn't disabled, but we're not watching a configmap then disable the reconciler
+	if l.configmapenable && l.configmapname == "" {
 		klog.V(2).Info("loadBalancers disabled, not enabling serviceReconciler")
 		return nil
 	}
@@ -228,7 +216,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 		return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
 	}
 	var config *metallb.ConfigFile
-	if l.configmapname != "none" {
+	if l.configmapenable {
 
 		// get the configmap
 		cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
@@ -434,19 +422,12 @@ func (l *loadBalancers) addService(svc *v1.Service, ips []packngo.IPAddressReser
 		}
 		existing.Spec.LoadBalancerIP = svcIP
 
-		updatedService, err := intf.Update(existing)
+		_, err = intf.Update(existing)
 		if err != nil {
 			klog.V(2).Infof("failed to update service %s: %v", svcName, err)
 			return fmt.Errorf("failed to update service %s: %v", svcName, err)
 		}
 
-		updatedService.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: svcIP}}
-		_, err = intf.UpdateStatus(updatedService)
-		if err != nil {
-			klog.V(2).Infof("failed to update service status %s: %v", svcName, err)
-			return fmt.Errorf("failed to update service status %s: %v", svcName, err)
-		}
-		klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
 	}
 	// our default CIDR for each address is 32
 	cidr := 32

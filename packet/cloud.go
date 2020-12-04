@@ -68,7 +68,7 @@ func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interf
 		facility:                    packetConfig.Facility,
 		instances:                   i,
 		zones:                       newZones(client, packetConfig.ProjectID),
-		loadBalancer:                newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.LoadBalancerConfigMap, packetConfig.LocalASN, packetConfig.PeerASN),
+		loadBalancer:                newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.LoadBalancerConfigMap, packetConfig.ConfigMapEnable, packetConfig.LocalASN, packetConfig.PeerASN),
 		bgp:                         newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs),
 		controlPlaneEndpointManager: newControlPlaneEndpointManager(packetConfig.EIPTag, packetConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, packetConfig.APIServerPort),
 	}, nil
