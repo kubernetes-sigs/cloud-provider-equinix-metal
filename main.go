@@ -115,8 +115,13 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 	if config.LoadBalancerConfigMap == "" {
 		config.LoadBalancerConfigMap = defaultLoadBalancerConfigMap
 	}
+
 	if config.LoadBalancerConfigMap == "disabled" {
 		config.LoadBalancerConfigMap = ""
+	}
+
+	if loadBalancerConfigMap == "none" {
+		config.LoadBalancerConfigMap = loadBalancerConfigMap
 	}
 
 	facility := os.Getenv(facilityName)

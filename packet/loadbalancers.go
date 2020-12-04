@@ -41,6 +41,9 @@ func newLoadBalancers(client *packngo.Client, projectID, facility string, config
 	if len(cmparts) >= 2 {
 		configmapnamespace, configmapname = cmparts[0], cmparts[1]
 	}
+	if configmap == "none" {
+		configmapname = configmap
+	}
 	return &loadBalancers{client, nil, projectID, configmapnamespace, configmapname, facility, localASN, peerASN}
 }
 
@@ -50,6 +53,7 @@ func (l *loadBalancers) name() string {
 func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 	klog.V(2).Info("loadBalancers.init(): started")
 	l.k8sclient = k8sclient
+
 	if l.configmapname == "" {
 		klog.V(2).Info("loadBalancers disabled, not managing metallb")
 		return nil
@@ -63,6 +67,18 @@ func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 // we do this via metallb, not directly, so none of this works... for now.
 
 func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
+	// If a service has had a loadbalancer address applied via the alternative reconcilliation loop then we can return it as the
+	// loadbalancer status
+	if service.Spec.LoadBalancerIP != "" {
+		return &v1.LoadBalancerStatus{
+			Ingress: []v1.LoadBalancerIngress{
+				{
+					IP: service.Spec.LoadBalancerIP,
+				},
+			},
+		}, true, nil
+	}
+	// this service has no load balancer IP return that the load-balancer doesn't exist
 	return nil, false, nil
 }
 func (l *loadBalancers) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
@@ -106,6 +122,7 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error 
 		changed      bool
 	)
 	klog.V(2).Infof("loadbalancers.reconcileNodes(): called for nodes %v", nodes)
+
 	// get the configmap
 	cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
 
@@ -210,12 +227,16 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 	if err != nil {
 		return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
 	}
-	// get the configmap
-	cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
+	var config *metallb.ConfigFile
+	if l.configmapname != "none" {
 
-	config, err := getMetalConfigMap(cmInterface, l.configmapname)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
+		// get the configmap
+		cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
+
+		config, err = getMetalConfigMap(cmInterface, l.configmapname)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
+		}
 	}
 
 	validSvcs := []*v1.Service{}
@@ -314,15 +335,16 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 
 		klog.V(2).Infof("loadbalancer.reconcileServices(): sync: valid tags %v", validTags)
 		klog.V(2).Infof("loadbalancer.reconcileServices(): sync: valid svc IPs %v", validIPs)
-
-		// get all IPs registered in the configmap; remove those not in our valid list
-		configIPs := getServiceAddresses(config)
-		klog.V(2).Infof("loadbalancer.reconcileServices(): sync: actual configmap IPs %v", configIPs)
-		for _, ip := range configIPs {
-			if _, ok := validIPs[ip]; !ok {
-				klog.V(2).Infof("loadbalancer.reconcileServices(): sync: removing from configmap ip %s not in valid list", ip)
-				if err = unmapIP(config, ip, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
-					return fmt.Errorf("error removing IP from configmap %s: %v", ip, err)
+		if config != nil {
+			// get all IPs registered in the configmap; remove those not in our valid list
+			configIPs := getServiceAddresses(config)
+			klog.V(2).Infof("loadbalancer.reconcileServices(): sync: actual configmap IPs %v", configIPs)
+			for _, ip := range configIPs {
+				if _, ok := validIPs[ip]; !ok {
+					klog.V(2).Infof("loadbalancer.reconcileServices(): sync: removing from configmap ip %s not in valid list", ip)
+					if err = unmapIP(config, ip, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
+						return fmt.Errorf("error removing IP from configmap %s: %v", ip, err)
+					}
 				}
 			}
 		}
@@ -412,10 +434,17 @@ func (l *loadBalancers) addService(svc *v1.Service, ips []packngo.IPAddressReser
 		}
 		existing.Spec.LoadBalancerIP = svcIP
 
-		_, err = intf.Update(existing)
+		updatedService, err := intf.Update(existing)
 		if err != nil {
 			klog.V(2).Infof("failed to update service %s: %v", svcName, err)
 			return fmt.Errorf("failed to update service %s: %v", svcName, err)
+		}
+
+		updatedService.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: svcIP}}
+		_, err = intf.UpdateStatus(updatedService)
+		if err != nil {
+			klog.V(2).Infof("failed to update service status %s: %v", svcName, err)
+			return fmt.Errorf("failed to update service status %s: %v", svcName, err)
 		}
 		klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
 	}
@@ -425,9 +454,11 @@ func (l *loadBalancers) addService(svc *v1.Service, ips []packngo.IPAddressReser
 		cidr = ipReservation.CIDR
 	}
 	svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
-	// Update the service and configmap and save them
-	if err = mapIP(config, svcIPCidr, svcName, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
-		return fmt.Errorf("error mapping IP %s: %v", svcName, err)
+	if config != nil {
+		// Update the service and configmap and save them
+		if err = mapIP(config, svcIPCidr, svcName, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
+			return fmt.Errorf("error mapping IP %s: %v", svcName, err)
+		}
 	}
 	return nil
 }
