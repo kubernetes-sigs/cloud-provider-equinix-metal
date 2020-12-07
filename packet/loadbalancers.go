@@ -98,7 +98,7 @@ func (l *loadBalancers) serviceReconciler() serviceReconciler {
 
 // reconcileNodes given a node, update the metallb load balancer by
 // by adding it to or removing it from the known metallb configmap
-func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error {
+func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
 	var (
 		peers        []string
 		err          error
@@ -110,7 +110,7 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error 
 	cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
 
 	klog.V(2).Infof("loadbalancers.reconcileNodes(): getting configmap %s/%s", l.configmapnamespace, l.configmapname)
-	config, err := getMetalConfigMap(cmInterface, l.configmapname)
+	config, err := getMetalConfigMap(ctx, cmInterface, l.configmapname)
 	if err != nil {
 		return fmt.Errorf("failed to get metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
 	}
@@ -192,7 +192,7 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error 
 		return nil
 	}
 	klog.V(2).Infof("loadbalancers.reconcileNodes(): config changed, updating to %#v", config)
-	return saveUpdatedConfigMap(cmInterface, l.configmapname, config)
+	return saveUpdatedConfigMap(ctx, cmInterface, l.configmapname, config)
 }
 
 // reconcileServices add or remove services to have loadbalancers. If it adds a
@@ -200,7 +200,7 @@ func (l *loadBalancers) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error 
 // cannot create the IP reservation immediately, then it fails, rather than
 // waiting for human support. It tags the IP reservation so it can find it later.
 // Before trying to create one, it tries to find an IP reservation with the right tags.
-func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) error {
+func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Service, mode UpdateMode) error {
 	klog.V(2).Infof("loadbalancer.reconcileServices(): %v starting", mode)
 	klog.V(5).Infof("loadbalancer.reconcileServices(): services %#v", svcs)
 
@@ -213,7 +213,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 	// get the configmap
 	cmInterface := l.k8sclient.CoreV1().ConfigMaps(l.configmapnamespace)
 
-	config, err := getMetalConfigMap(cmInterface, l.configmapname)
+	config, err := getMetalConfigMap(ctx, cmInterface, l.configmapname)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configmapnamespace, l.configmapname, err)
 	}
@@ -232,7 +232,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 		// ADDITION
 		for _, svc := range validSvcs {
 			klog.V(2).Infof("loadbalancer.reconcileServices(): add: service %s", svc.Name)
-			if err := l.addService(svc, ips, config); err != nil {
+			if err := l.addService(ctx, svc, ips, config); err != nil {
 				return err
 			}
 		}
@@ -262,7 +262,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 			// remove it from the configmap
 			svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
 			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: for %s configmap entry %s", svcName, svcIPCidr)
-			if err = unmapIP(config, svcIPCidr, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
+			if err = unmapIP(ctx, config, svcIPCidr, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
 				return fmt.Errorf("error removing IP from configmap for %s: %v", svcName, err)
 			}
 			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: removed service from configmap %s", svcName)
@@ -277,7 +277,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 		// add each service that is in the known list
 		for _, svc := range validSvcs {
 			klog.V(2).Infof("loadbalancer.reconcileServices(): sync: service %s", svc.Name)
-			if err := l.addService(svc, ips, config); err != nil {
+			if err := l.addService(ctx, svc, ips, config); err != nil {
 				return err
 			}
 		}
@@ -321,7 +321,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 		for _, ip := range configIPs {
 			if _, ok := validIPs[ip]; !ok {
 				klog.V(2).Infof("loadbalancer.reconcileServices(): sync: removing from configmap ip %s not in valid list", ip)
-				if err = unmapIP(config, ip, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
+				if err = unmapIP(ctx, config, ip, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
 					return fmt.Errorf("error removing IP from configmap %s: %v", ip, err)
 				}
 			}
@@ -351,7 +351,7 @@ func (l *loadBalancers) reconcileServices(svcs []*v1.Service, mode UpdateMode) e
 	return nil
 }
 
-func (l *loadBalancers) addService(svc *v1.Service, ips []packngo.IPAddressReservation, config *metallb.ConfigFile) error {
+func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []packngo.IPAddressReservation, config *metallb.ConfigFile) error {
 	svcName := serviceRep(svc)
 	svcTag := serviceTag(svc)
 	svcIP := svc.Spec.LoadBalancerIP
@@ -405,14 +405,14 @@ func (l *loadBalancers) addService(svc *v1.Service, ips []packngo.IPAddressReser
 		// assign the IP and save it
 		klog.V(2).Infof("assigning IP %s to %s", svcIP, svcName)
 		intf := l.k8sclient.CoreV1().Services(svc.Namespace)
-		existing, err := intf.Get(svc.Name, metav1.GetOptions{})
+		existing, err := intf.Get(ctx, svc.Name, metav1.GetOptions{})
 		if err != nil || existing == nil {
 			klog.V(2).Infof("failed to get latest for service %s: %v", svcName, err)
 			return fmt.Errorf("failed to get latest for service %s: %v", svcName, err)
 		}
 		existing.Spec.LoadBalancerIP = svcIP
 
-		_, err = intf.Update(existing)
+		_, err = intf.Update(ctx, existing, metav1.UpdateOptions{})
 		if err != nil {
 			klog.V(2).Infof("failed to update service %s: %v", svcName, err)
 			return fmt.Errorf("failed to update service %s: %v", svcName, err)
@@ -426,7 +426,7 @@ func (l *loadBalancers) addService(svc *v1.Service, ips []packngo.IPAddressReser
 	}
 	svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
 	// Update the service and configmap and save them
-	if err = mapIP(config, svcIPCidr, svcName, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
+	if err = mapIP(ctx, config, svcIPCidr, svcName, l.configmapnamespace, l.configmapname, l.k8sclient); err != nil {
 		return fmt.Errorf("error mapping IP %s: %v", svcName, err)
 	}
 	return nil
@@ -495,8 +495,8 @@ func removeNodePeer(config *metallb.ConfigFile, nodeName string) (*metallb.Confi
 	return config, changed
 }
 
-func getMetalConfigMap(getter typedv1.ConfigMapInterface, name string) (*metallb.ConfigFile, error) {
-	cm, err := getter.Get(name, metav1.GetOptions{})
+func getMetalConfigMap(ctx context.Context, getter typedv1.ConfigMapInterface, name string) (*metallb.ConfigFile, error) {
+	cm, err := getter.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("unable to get metallb configmap %s: %v", name, err)
 	}
@@ -510,7 +510,7 @@ func getMetalConfigMap(getter typedv1.ConfigMapInterface, name string) (*metallb
 	return metallb.ParseConfig([]byte(configData))
 }
 
-func saveUpdatedConfigMap(cmi typedv1.ConfigMapInterface, name string, cfg *metallb.ConfigFile) error {
+func saveUpdatedConfigMap(ctx context.Context, cmi typedv1.ConfigMapInterface, name string, cfg *metallb.ConfigFile) error {
 	b, err := cfg.Bytes()
 	if err != nil {
 		return fmt.Errorf("error converting configfile data to bytes: %v", err)
@@ -524,7 +524,7 @@ func saveUpdatedConfigMap(cmi typedv1.ConfigMapInterface, name string, cfg *meta
 
 	klog.V(2).Infof("patching configmap:\n%s", mergePatch)
 	// save to k8s
-	_, err = cmi.Patch(name, k8stypes.MergePatchType, mergePatch)
+	_, err = cmi.Patch(ctx, name, k8stypes.MergePatchType, mergePatch, metav1.PatchOptions{})
 
 	return err
 }
@@ -545,17 +545,17 @@ func serviceTag(svc *v1.Service) string {
 }
 
 // unmapIP remove a given IP address from the metalllb config map
-func unmapIP(config *metallb.ConfigFile, addr, configmapnamespace, configmapname string, k8sclient kubernetes.Interface) error {
+func unmapIP(ctx context.Context, config *metallb.ConfigFile, addr, configmapnamespace, configmapname string, k8sclient kubernetes.Interface) error {
 	klog.V(2).Infof("unmapping IP %s", addr)
-	return updateMapIP(config, addr, "", configmapnamespace, configmapname, k8sclient, false)
+	return updateMapIP(ctx, config, addr, "", configmapnamespace, configmapname, k8sclient, false)
 }
 
 // mapIP add a given ip address to the metallb configmap
-func mapIP(config *metallb.ConfigFile, addr, svcName, configmapnamespace, configmapname string, k8sclient kubernetes.Interface) error {
+func mapIP(ctx context.Context, config *metallb.ConfigFile, addr, svcName, configmapnamespace, configmapname string, k8sclient kubernetes.Interface) error {
 	klog.V(2).Infof("mapping IP %s", addr)
-	return updateMapIP(config, addr, svcName, configmapnamespace, configmapname, k8sclient, true)
+	return updateMapIP(ctx, config, addr, svcName, configmapnamespace, configmapname, k8sclient, true)
 }
-func updateMapIP(config *metallb.ConfigFile, addr, svcName, configmapnamespace, configmapname string, k8sclient kubernetes.Interface, add bool) error {
+func updateMapIP(ctx context.Context, config *metallb.ConfigFile, addr, svcName, configmapnamespace, configmapname string, k8sclient kubernetes.Interface, add bool) error {
 	if config == nil {
 		klog.V(2).Info("config unchanged, not updating")
 		return nil
@@ -576,7 +576,7 @@ func updateMapIP(config *metallb.ConfigFile, addr, svcName, configmapnamespace, 
 		config.RemoveAddressPoolByAddress(addr)
 	}
 	klog.V(2).Info("config changed, updating")
-	if err := saveUpdatedConfigMap(k8sclient.CoreV1().ConfigMaps(configmapnamespace), configmapname, config); err != nil {
+	if err := saveUpdatedConfigMap(ctx, k8sclient.CoreV1().ConfigMaps(configmapnamespace), configmapname, config); err != nil {
 		klog.V(2).Infof("error updating configmap: %v", err)
 		return fmt.Errorf("failed to update configmap: %v", err)
 	}

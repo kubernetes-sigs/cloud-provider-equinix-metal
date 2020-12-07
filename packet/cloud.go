@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -25,8 +26,8 @@ const (
 	checkLoopTimerSeconds        = 60
 )
 
-type nodeReconciler func(nodes []*v1.Node, mode UpdateMode) error
-type serviceReconciler func(services []*v1.Service, mode UpdateMode) error
+type nodeReconciler func(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error
+type serviceReconciler func(ctx context.Context, services []*v1.Service, mode UpdateMode) error
 
 // cloudService an internal service that can be initialize and report a name
 type cloudService interface {
@@ -119,13 +120,19 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 		}
 	}
 
-	if err := startNodesWatcher(sharedInformer, nodeReconcilers, stop); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-stop
+		cancel()
+	}()
+
+	if err := startNodesWatcher(ctx, sharedInformer, nodeReconcilers); err != nil {
 		klog.Errorf("nodes watcher initialization failed: %v", err)
 	}
-	if err := startServicesWatcher(sharedInformer, serviceReconcilers, stop); err != nil {
+	if err := startServicesWatcher(ctx, sharedInformer, serviceReconcilers); err != nil {
 		klog.Errorf("services watcher initialization failed: %v", err)
 	}
-	go timerLoop(sharedInformer, nodeReconcilers, serviceReconcilers, stop)
+	go timerLoop(ctx, sharedInformer, nodeReconcilers, serviceReconcilers)
 	klog.V(5).Info("Initialize complete")
 }
 
@@ -140,6 +147,12 @@ func (c *cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 func (c *cloud) Instances() (cloudprovider.Instances, bool) {
 	klog.V(5).Info("called Instances")
 	return c.instances, true
+}
+
+// InstancesV2 returns an implementation of cloudprovider.InstancesV2.
+func (c *cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
+	klog.Warning("The Packet cloud provider does not support InstancesV2")
+	return nil, false
 }
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.
@@ -173,7 +186,7 @@ func (c *cloud) HasClusterID() bool {
 }
 
 // startNodesWatcher start a goroutine that watches k8s for nodes and calls any handlers
-func startNodesWatcher(informer informers.SharedInformerFactory, handlers []nodeReconciler, stop <-chan struct{}) error {
+func startNodesWatcher(ctx context.Context, informer informers.SharedInformerFactory, handlers []nodeReconciler) error {
 	klog.V(5).Info("called startNodesWatcher")
 	if len(handlers) == 0 {
 		klog.V(5).Info("no node handlers to process")
@@ -187,7 +200,7 @@ func startNodesWatcher(informer informers.SharedInformerFactory, handlers []node
 		AddFunc: func(obj interface{}) {
 			n := obj.(*v1.Node)
 			for _, h := range handlers {
-				if err := h([]*v1.Node{n}, ModeAdd); err != nil {
+				if err := h(ctx, []*v1.Node{n}, ModeAdd); err != nil {
 					klog.Errorf("failed to update and sync node for add %s for handler: %v", n.Name, err)
 				}
 			}
@@ -195,7 +208,7 @@ func startNodesWatcher(informer informers.SharedInformerFactory, handlers []node
 		DeleteFunc: func(obj interface{}) {
 			n := obj.(*v1.Node)
 			for _, h := range handlers {
-				if err := h([]*v1.Node{n}, ModeRemove); err != nil {
+				if err := h(ctx, []*v1.Node{n}, ModeRemove); err != nil {
 					klog.Errorf("failed to update and sync node for remove %s for handler: %v", n.Name, err)
 				}
 			}
@@ -216,12 +229,12 @@ func startNodesWatcher(informer informers.SharedInformerFactory, handlers []node
 	//
 	// for a good overview of controllers and their lifecycle, see https://engineering.bitnami.com/articles/a-deep-dive-into-kubernetes-controllers.html
 	klog.V(5).Info("startNodesWatcher(): nodesInformer.Run()")
-	go nodesInformer.Run(stop)
+	go nodesInformer.Run(ctx.Done())
 	syncFuncs := []cache.InformerSynced{
 		nodesInformer.HasSynced,
 	}
 	klog.V(4).Infof("startNodesWatcher(): waiting for caches to sync")
-	if !cache.WaitForCacheSync(stop, syncFuncs...) {
+	if !cache.WaitForCacheSync(ctx.Done(), syncFuncs...) {
 		return fmt.Errorf("syncing caches failed")
 	}
 	klog.Info("nodes watcher started")
@@ -230,7 +243,7 @@ func startNodesWatcher(informer informers.SharedInformerFactory, handlers []node
 
 // startServicesWatcher start a goroutine that watches k8s for services and calls
 // any handlers
-func startServicesWatcher(informer informers.SharedInformerFactory, handlers []serviceReconciler, stop <-chan struct{}) error {
+func startServicesWatcher(ctx context.Context, informer informers.SharedInformerFactory, handlers []serviceReconciler) error {
 	klog.V(5).Info("called startServicesWatcher")
 	if len(handlers) == 0 {
 		klog.V(5).Info("no service handlers to process")
@@ -243,7 +256,7 @@ func startServicesWatcher(informer informers.SharedInformerFactory, handlers []s
 		AddFunc: func(obj interface{}) {
 			svc := obj.(*v1.Service)
 			for _, h := range handlers {
-				if err := h([]*v1.Service{svc}, ModeAdd); err != nil {
+				if err := h(ctx, []*v1.Service{svc}, ModeAdd); err != nil {
 					klog.Errorf("failed to update and sync service for add %s/%s: %v", svc.Namespace, svc.Name, err)
 				}
 			}
@@ -251,7 +264,7 @@ func startServicesWatcher(informer informers.SharedInformerFactory, handlers []s
 		DeleteFunc: func(obj interface{}) {
 			svc := obj.(*v1.Service)
 			for _, h := range handlers {
-				if err := h([]*v1.Service{svc}, ModeRemove); err != nil {
+				if err := h(ctx, []*v1.Service{svc}, ModeRemove); err != nil {
 					klog.Errorf("failed to update and sync service for remove %s/%s: %v", svc.Namespace, svc.Name, err)
 				}
 			}
@@ -271,12 +284,12 @@ func startServicesWatcher(informer informers.SharedInformerFactory, handlers []s
 	//
 	// for a good overview of controllers and their lifecycle, see https://engineering.bitnami.com/articles/a-deep-dive-into-kubernetes-controllers.html
 	klog.V(5).Info("startServicesWatcher(): servicesInformer.Run()")
-	go servicesInformer.Run(stop)
+	go servicesInformer.Run(ctx.Done())
 	syncFuncs := []cache.InformerSynced{
 		servicesInformer.HasSynced,
 	}
 	klog.V(4).Infof("startServicesWatcher(): waiting for caches to sync")
-	if !cache.WaitForCacheSync(stop, syncFuncs...) {
+	if !cache.WaitForCacheSync(ctx.Done(), syncFuncs...) {
 		return fmt.Errorf("syncing caches failed")
 	}
 	klog.Info("services watcher started")
@@ -284,7 +297,7 @@ func startServicesWatcher(informer informers.SharedInformerFactory, handlers []s
 	return nil
 }
 
-func timerLoop(informer informers.SharedInformerFactory, nodesHandlers []nodeReconciler, servicesHandlers []serviceReconciler, stop <-chan struct{}) {
+func timerLoop(ctx context.Context, informer informers.SharedInformerFactory, nodesHandlers []nodeReconciler, servicesHandlers []serviceReconciler) {
 	servicesLister := informer.Core().V1().Services().Lister()
 	nodesLister := informer.Core().V1().Nodes().Lister()
 	for {
@@ -295,7 +308,7 @@ func timerLoop(informer informers.SharedInformerFactory, nodesHandlers []nodeRec
 				klog.Errorf("timed reservations watcher: failed to list services: %v", err)
 			}
 			for _, h := range servicesHandlers {
-				if err := h(servicesList, ModeSync); err != nil {
+				if err := h(ctx, servicesList, ModeSync); err != nil {
 					klog.Errorf("failed to update and sync services: %v", err)
 				}
 			}
@@ -304,11 +317,11 @@ func timerLoop(informer informers.SharedInformerFactory, nodesHandlers []nodeRec
 				klog.Errorf("timed reservations watcher: failed to list nodes: %v", err)
 			}
 			for _, h := range nodesHandlers {
-				if err := h(nodesList, ModeSync); err != nil {
+				if err := h(ctx, nodesList, ModeSync); err != nil {
 					klog.Errorf("failed to update and sync nodes: %v", err)
 				}
 			}
-		case <-stop:
+		case <-ctx.Done():
 			return
 		}
 	}

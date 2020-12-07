@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
@@ -60,7 +62,7 @@ func (b *bgp) serviceReconciler() serviceReconciler {
 // and ASN. MetalLB currently does not use this, although it is in process, see
 // http://github.com/metallb/metallb/pull/593 . Once that is in, we will not
 // need to update the configmap.
-func (b *bgp) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error {
+func (b *bgp) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
 	nodeNames := []string{}
 	for _, node := range nodes {
 		nodeNames = append(nodeNames, node.Name)
@@ -123,7 +125,7 @@ func (b *bgp) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error {
 						},
 					})
 
-					if err := patchUpdatedNode(node.Name, mergePatch, b.k8sclient); err != nil {
+					if err := patchUpdatedNode(ctx, node.Name, mergePatch, b.k8sclient); err != nil {
 						klog.Errorf("bgp.reconcileNodes(): failed to save updated node with annotations %s: %v", node.Name, err)
 					} else {
 						klog.V(2).Infof("bgp.reconcileNodes(): annotations set on node %s", node.Name)
@@ -212,8 +214,8 @@ func getNodePeerAddress(providerID string, client *packngo.Client) (address []st
 }
 
 // patchUpdatedNode apply a patch to the node
-func patchUpdatedNode(name string, patch []byte, client kubernetes.Interface) error {
-	if _, err := client.CoreV1().Nodes().Patch(name, k8stypes.MergePatchType, patch); err != nil {
+func patchUpdatedNode(ctx context.Context, name string, patch []byte, client kubernetes.Interface) error {
+	if _, err := client.CoreV1().Nodes().Patch(ctx, name, k8stypes.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("Failed to patch node %s: %v", name, err)
 	}
 	return nil

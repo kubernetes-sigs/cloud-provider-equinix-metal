@@ -72,7 +72,7 @@ func (m *controlPlaneEndpointManager) serviceReconciler() serviceReconciler {
 	return m.reconcileServices
 }
 
-func (m *controlPlaneEndpointManager) reconcileNodes(nodes []*v1.Node, mode UpdateMode) error {
+func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
 	klog.V(2).Info("controlPlaneEndpoint.reconcile: new reconciliation")
 	if m.inProcess {
 		klog.V(2).Info("controlPlaneEndpoint.reconcileNodes: already in process, not starting a new one")
@@ -118,7 +118,7 @@ func (m *controlPlaneEndpointManager) reconcileNodes(nodes []*v1.Node, mode Upda
 				klog.V(2).Infof("adding control plane node %s", n.Name)
 			}
 		}
-		if err := m.reassign(context.Background(), cpNodes, controlPlaneEndpoint); err != nil {
+		if err := m.reassign(ctx, cpNodes, controlPlaneEndpoint); err != nil {
 			klog.Errorf("error reassigning control plane endpoint to a different device. err \"%s\"", err)
 			return err
 		}
@@ -200,7 +200,7 @@ func newControlPlaneEndpointManager(eipTag, projectID string, deviceIPSrv packng
 
 // reconcileServices ensure that our Elastic IP is assigned as `externalIPs` for
 // the `default/kubernetes` service
-func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, mode UpdateMode) error {
+func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svcs []*v1.Service, mode UpdateMode) error {
 	if m.eipTag == "" {
 		return errors.New("elastic ip tag is empty. Nothing to do")
 	}
@@ -234,7 +234,7 @@ func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, mode
 
 		// get the endpoints for this service
 		eps := m.k8sclient.CoreV1().Endpoints(svc.Namespace)
-		ep, err := eps.Get(svc.Name, metav1.GetOptions{})
+		ep, err := eps.Get(ctx, svc.Name, metav1.GetOptions{})
 		if err != nil {
 			klog.V(2).Infof("failed to get endpoints %s: %v", svc.Name, err)
 			return fmt.Errorf("failed to get endpoints %s: %v", svc.Name, err)
@@ -244,7 +244,7 @@ func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, mode
 		// - our endpoints does not exist: create it
 		epExisted := true
 		myeps := m.k8sclient.CoreV1().Endpoints(externalServiceNamespace)
-		myep, err := myeps.Get(externalServiceName, metav1.GetOptions{})
+		myep, err := myeps.Get(ctx, externalServiceName, metav1.GetOptions{})
 		if err != nil {
 			klog.Infof("endpoint %s/%s did not yet exist, creating", externalServiceNamespace, externalServiceName)
 			myep = &v1.Endpoints{
@@ -264,12 +264,12 @@ func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, mode
 
 		// save the endpoints
 		if epExisted {
-			if _, err := myeps.Update(myep); err != nil {
+			if _, err := myeps.Update(ctx, myep, metav1.UpdateOptions{}); err != nil {
 				klog.Errorf("failed to update my endpoints: %v", err)
 				return fmt.Errorf("failed to update my endpoints: %v", err)
 			}
 		} else {
-			if _, err := myeps.Create(myep); err != nil {
+			if _, err := myeps.Create(ctx, myep, metav1.CreateOptions{}); err != nil {
 				klog.Errorf("failed to create my endpoints: %v", err)
 				return fmt.Errorf("failed to create my endpoints: %v", err)
 			}
@@ -277,7 +277,7 @@ func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, mode
 
 		// now for my service
 		svcIntf := m.k8sclient.CoreV1().Services(externalServiceNamespace)
-		if _, err := svcIntf.Get(externalServiceName, metav1.GetOptions{}); err == nil {
+		if _, err := svcIntf.Get(ctx, externalServiceName, metav1.GetOptions{}); err == nil {
 			klog.V(2).Infof("service %s already exists, nothing left to do", externalServiceName)
 			return nil
 		}
@@ -309,7 +309,7 @@ func (m *controlPlaneEndpointManager) reconcileServices(svcs []*v1.Service, mode
 				},
 			},
 		}
-		if _, err := svcIntf.Create(&externalService); err != nil {
+		if _, err := svcIntf.Create(ctx, &externalService, metav1.CreateOptions{}); err != nil {
 			klog.Errorf("failed to create my service: %v", err)
 			return fmt.Errorf("failed to create my service: %v", err)
 		}
