@@ -46,12 +46,6 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
-IMAGENAME ?= $(BUILD_IMAGE):$(IMAGETAG)-$(ARCH)
-
-# Manifest tool, until `docker manifest` is fully ready. As of this writing, it remains experimental
-MANIFEST_VERSION ?= 1.0.0
-MANIFEST_URL = https://github.com/estesp/manifest-tool/releases/download/v$(MANIFEST_VERSION)/manifest-tool-$(BUILDOS)-$(BUILDARCH)
-
 # these macros create a list of valid architectures for pushing manifests
 space :=
 space +=
@@ -75,7 +69,6 @@ endif
 
 GOBIN ?= $(shell go env GOPATH)/bin
 LINTER ?= $(GOBIN)/golangci-lint
-MANIFEST_TOOL ?= $(GOBIN)/manifest-tool
 
 pkgs:
 ifndef PKG_LIST
@@ -87,23 +80,20 @@ endif
 $(DIST_DIR):
 	mkdir -p $@
 
-## report the git tag that would be used for the images
-tag:
+tag: ## Report the git tag that would be used for the images
 	@echo $(GIT_VERSION)
 
-## report the version that would be put in the binary
-version:
+version: ## Report the version that would be put in the binary
 	@echo $(VERSION)
 
 
-## Check the file format
-fmt-check:
+fmt-check: ## Check all source code formatting
 	@if [ -n "$(shell $(BUILD_CMD) gofmt -l ${GO_FILES})" ]; then \
 	  $(BUILD_CMD) gofmt -s -e -d ${GO_FILES}; \
 	  exit 1; \
 	fi
 
-fmt:
+fmt:   ## Format all source code files
 	$(BUILD_CMD) gofmt -w -s ${GO_FILES}
 
 golangci-lint: $(LINTER)
@@ -115,16 +105,13 @@ ifeq (, $(shell which golint))
 	go get -u golang.org/x/lint/golint
 endif
 
-## Lint the files
-lint: pkgs golangci-lint
+lint: pkgs golangci-lint ## Lint the files
 	@$(BUILD_CMD) $(LINTER) run --disable-all --enable=golint ./ ./packet
 
-## Run unittests
-test: pkgs
+test: pkgs ## Run unit tests
 	@$(BUILD_CMD) go test -short ${PKG_LIST}
 
-## Vet the files
-vet: pkgs
+vet: pkgs ## Vet the files
 	@$(BUILD_CMD) go vet ${PKG_LIST}
 
 ## Read about data race https://golang.org/doc/articles/race_detector.html
@@ -133,8 +120,10 @@ vet: pkgs
 race: pkgs
 	@$(BUILD_CMD) go test -race -short ${PKG_LIST}
 
-## Display this help screen
-help:
+help: ## Display this help screen
+	@printf "\033[36m%s\n" "For all commands that can be used with one or more OS architecture, set the target architecture with ARCH= and the OS with OS="
+	@printf "\033[36m%s\n" "Supported OS and ARCH are those for GOOS and GOARCH"
+	@echo
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 ## Delete the ccm
@@ -147,15 +136,13 @@ deploy:
 
 
 
-.PHONY: build build-all image push deploy ci cd dep manifest-tool
+.PHONY: build build-all image deploy ci
 
-## Build the binaries for all supported ARCH
-build-all: $(addprefix sub-build-, $(ARCHES))
+build-all: $(addprefix sub-build-, $(ARCHES)) ## Build the binaries for all supported ARCH
 sub-build-%:
 	@$(MAKE) ARCH=$* build
 
-## Build the binary for a single ARCH
-build: $(DIST_BINARY)
+build: $(DIST_BINARY) ## Build the binary for a single ARCH
 $(DIST_BINARY): $(DIST_DIR)
 	$(BUILD_CMD) go build -v -o $@ $(LDFLAGS) ./
 
@@ -169,19 +156,12 @@ endif
 $(GOBIN):
 	mkdir -p $(GOBIN)
 
-manifest-tool: $(MANIFEST_TOOL)
-$(MANIFEST_TOOL): $(GOBIN)
-	curl -L -o $@ $(MANIFEST_URL)
-	chmod +x $@
-
-## make the images for all supported ARCH
-image-all: $(addprefix sub-image-, $(ARCHES))
+image-all: $(addprefix sub-image-, $(ARCHES)) ## make the images for all supported ARCH
 sub-image-%:
 	@$(MAKE) ARCH=$* image
 
-## make the image for a single ARCH
-image:
-	docker buildx build --load -t $(BUILD_IMAGE):latest-$(ARCH) -f Dockerfile --build-arg ARCH=$(ARCH) --platform $(OS)/$(ARCH) .
+image: ## make the image for a single ARCH
+	docker buildx build --load -t $(BUILD_IMAGE):latest-$(ARCH) -f Dockerfile --platform $(OS)/$(ARCH) .
 	echo "Done. image is at $(BUILD_IMAGE):latest-$(ARCH)"
 
 # Targets used when cross building.
@@ -192,79 +172,18 @@ register:
 	docker pull $(QEMU_IMAGE)
 	docker run --rm --privileged $(QEMU_IMAGE) --reset -p yes || true
 
-## push the multi-arch manifest
-push-manifest: manifest-tool imagetag
-	# path to credentials based on manifest-tool's requirements here https://github.com/estesp/manifest-tool#sample-usage
-	$(GOBIN)/manifest-tool push from-args --platforms $(call join_platforms,$(ARCHES)) --template $(BUILD_IMAGE):$(IMAGETAG)-ARCH --target $(BUILD_IMAGE):$(IMAGETAG)
-
-## push the images for all supported ARCH
-push-all: imagetag $(addprefix sub-push-, $(ARCHES))
-sub-push-%:
-	@$(MAKE) ARCH=$* push IMAGETAG=$(IMAGETAG)
-
-push: imagetag
-	docker push $(IMAGENAME)
-
-# ensure we have a real imagetag
-imagetag:
-ifndef IMAGETAG
-	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
-endif
-
-## tag the images for all supported ARCH
-tag-images-all: $(addprefix sub-tag-image-, $(ARCHES))
-sub-tag-image-%:
-	@$(MAKE) ARCH=$* IMAGETAG=$(IMAGETAG) tag-images
-
-tag-images: imagetag
-	docker tag $(BUILD_IMAGE):$(FROMTAG)-$(ARCH) $(IMAGENAME)
-
-## ensure that a particular tagged image exists across all support archs
-pull-images-all: $(addprefix sub-pull-image-, $(ARCHES))
-sub-pull-image-%:
-	@$(MAKE) ARCH=$* IMAGETAG=$(IMAGETAG) pull-images
-
-## ensure that a particular tagged image exists locally; if not, pull it
-pull-images: imagetag
-	@if [ "$$(docker image ls -q $(IMAGENAME))" = "" ]; then \
-	docker pull $(IMAGENAME); \
-	fi
-
-## clean up all artifacts
-clean:
+clean: ## clean up all artifacts
 	$(eval IMAGE_TAGS := $(shell docker image ls | awk "/^$(subst /,\/,$(BUILD_IMAGE))\s/"' {print $$2}' ))
 	docker image rm $(addprefix $(BUILD_IMAGE):,$(IMAGE_TAGS))
 	rm -rf dist/
 
 ###############################################################################
-# CI/CD
+# CI
 ###############################################################################
-.PHONY: ci cd build deploy push release confirm pull-images
+.PHONY: ci build deploy
 ## Run what CI runs
 # race has an issue with alpine, see https://github.com/golang/go/issues/14481
 # image-all removed so can run ci locally
 ci: build-all fmt-check lint test vet # image-all race
-
-confirm:
-ifndef CONFIRM
-	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
-endif
-
-cd: confirm
-ifndef BRANCH_NAME
-	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
-endif
-	$(MAKE) tag-images-all push-all push-manifest IMAGETAG=${BRANCH_NAME}
-	$(MAKE) tag-images-all push-all push-manifest IMAGETAG=${GIT_VERSION}
-
-## cut a release by using the latest git tag should only be run for an image that already exists and was pushed out
-release: confirm
-ifeq (,$(RELEASE_TAG))
-	$(error RELEASE_TAG is undefined - this means we are trying to do a release at a commit which does not have a release tag)
-endif
-	$(MAKE) pull-images-all IMAGETAG=${GIT_VERSION} # ensure we have the image with the tag ${GIT_VERSION} or pull it
-	$(MAKE) tag-images-all FROMTAG=${GIT_VERSION} IMAGETAG=${RELEASE_TAG}  # tag the pulled image
-	$(MAKE) push-all push-manifest IMAGETAG=${RELEASE_TAG}        # push it
-
 
 ccm: build deploy ## Build and deploy the ccm
