@@ -32,6 +32,7 @@ type loadBalancers struct {
 	configmapname      string
 	facility           string
 	localASN, peerASN  int
+	clusterID          string
 }
 
 func newLoadBalancers(client *packngo.Client, projectID, facility string, configmap string, localASN, peerASN int) *loadBalancers {
@@ -41,7 +42,7 @@ func newLoadBalancers(client *packngo.Client, projectID, facility string, config
 	if len(cmparts) >= 2 {
 		configmapnamespace, configmapname = cmparts[0], cmparts[1]
 	}
-	return &loadBalancers{client, nil, projectID, configmapnamespace, configmapname, facility, localASN, peerASN}
+	return &loadBalancers{client, nil, projectID, configmapnamespace, configmapname, facility, localASN, peerASN, ""}
 }
 
 func (l *loadBalancers) name() string {
@@ -50,11 +51,18 @@ func (l *loadBalancers) name() string {
 func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 	klog.V(2).Info("loadBalancers.init(): started")
 	l.k8sclient = k8sclient
-	if l.configmapname == "" {
-		klog.V(2).Info("loadBalancers disabled, not managing metallb")
-		return nil
+	if l.configmapname != "" {
+		klog.V(2).Info("configmap provided, managing metallb")
 	}
-	// deploy metallb
+	// get the UID of the kube-system namespace
+	systemNamespace, err := k8sclient.CoreV1().Namespaces().Get(context.Background(), "kube-system", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get kube-system namespace: %v", err)
+	}
+	if systemNamespace == nil {
+		return fmt.Errorf("kube-system namespace is missing unexplainably")
+	}
+	l.clusterID = string(systemNamespace.UID)
 	klog.V(2).Info("loadBalancers.init(): complete")
 	return nil
 }
@@ -242,10 +250,11 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 		for _, svc := range validSvcs {
 			svcName := serviceRep(svc)
 			svcTag := serviceTag(svc)
+			clsTag := clusterTag(l.clusterID)
 			svcIP := svc.Spec.LoadBalancerIP
 
 			var svcIPCidr string
-			ipReservation := ipReservationByAllTags([]string{svcTag, packetTag}, ips)
+			ipReservation := ipReservationByAllTags([]string{svcTag, packetTag, clsTag}, ips)
 
 			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: %s with existing IP assignment %s", svcName, svcIP)
 
@@ -291,8 +300,8 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 		if err != nil {
 			return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
 		}
-		// get all EIP that have the packet tag
-		ipReservations := ipReservationsByAnyTags([]string{packetTag}, ips)
+		// get all EIP that have the packet tag and are allocated to this cluster
+		ipReservations := ipReservationsByAllTags([]string{packetTag, clusterTag(l.clusterID)}, ips)
 		// create a map of EIP to svcIP so we can get the CIDR
 		ipCidr := map[string]int{}
 		for _, ipr := range ipReservations {
@@ -355,13 +364,14 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []packngo.IPAddressReservation, config *metallb.ConfigFile) error {
 	svcName := serviceRep(svc)
 	svcTag := serviceTag(svc)
+	clsTag := clusterTag(l.clusterID)
 	svcIP := svc.Spec.LoadBalancerIP
 
 	var (
 		svcIPCidr string
 		err       error
 	)
-	ipReservation := ipReservationByAllTags([]string{svcTag, packetTag}, ips)
+	ipReservation := ipReservationByAllTags([]string{svcTag, packetTag, clsTag}, ips)
 
 	klog.V(2).Infof("processing %s with existing IP assignment %s", svcName, svcIP)
 	// if it already has an IP, no need to get it one
@@ -383,6 +393,7 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 				Tags: []string{
 					packetTag,
 					svcTag,
+					clsTag,
 				},
 				FailOnApprovalRequired: true,
 			}
@@ -543,6 +554,9 @@ func serviceTag(svc *v1.Service) string {
 	}
 	hash := sha256.Sum256([]byte(serviceRep(svc)))
 	return fmt.Sprintf("service=%s", base64.StdEncoding.EncodeToString(hash[:]))
+}
+func clusterTag(clusterID string) string {
+	return fmt.Sprintf("cluster=%s", clusterID)
 }
 
 // unmapIP remove a given IP address from the metalllb config map

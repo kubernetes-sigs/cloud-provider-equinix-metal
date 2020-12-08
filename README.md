@@ -227,7 +227,7 @@ For each, CCM's behaviour is as follows:
 Environment variable overrides setting in kubernetes secret; the secret will be checked only if
 the environment variable is unset. Only if _both_ are unset will it default.
 
-If the `ConfigMap` is not disabled, then upon start, CCM does the following:
+If the `ConfigMap` is not disabled, then upon start, CCM does the following. EIP tag descriptions follow this list.
 
 1. Get the appropriate namespace and name of the `ConfigMap`, based on the rules above.
 1. If the `ConfigMap` does not exist, do nothing more.
@@ -239,12 +239,12 @@ If the `ConfigMap` is not disabled, then upon start, CCM does the following:
    * Node deletion: remove the node from the metallb `ConfigMap`
 1. List all of the services in the cluster using a kubernetes service lister; for each:
    * If the service is not of `type=LoadBalancer`, ignore it
-   * If a facility-specific `/32` IP address reservation tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"` exists, and it already has that IP address affiliated with it, it is ready; ignore
+   * If a facility-specific `/32` IP address reservation tagged with the appropriate tags exists, and it already has that IP address affiliated with it, it is ready; ignore
    * If the service does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure it is in the pools of the metallb `ConfigMap` with `auto-assign: false`
 1. Start a kubernetes informer for service changes, responding to service addition and removals
-   * Service addition: create a facility-specific `/32` IP address reservation tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"`; if it is ready immediately, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`
+   * Service addition: create a facility-specific `/32` IP address reservation tagged with appropriate tags; if it is ready immediately, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`
    * Service deletion: find the `/32` IP address on the service spec and remove it; remove from the `ConfigMap`
-1. Start an independent loop that checks every 30 seconds (configurable) for IP address reservations that are tagged with `usage="packet-ccm-auto"` and `service="<service-hash>"` but not on any services. If it finds one:
+1. Start an independent loop that checks every 30 seconds (configurable) for IP address reservations that are tagged with appropriate tags but not on any services. If it finds one:
    * If a service exists that matches the `<service-hash>`, that is an indication that an IP address reservation request was made, not completed at request time, and now is available. Add the IP to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`
    * If no service exists that is missing an IP, or none with a matching hash, delete the IP reservation
 
@@ -252,9 +252,13 @@ At **no** point does CCM itself deploy the load-balancer or any part of it, incl
 modifies an existing `ConfigMap`. This can be deployed by the administrator separately, using the manifest
 provided in the releases page, or by any other manner.
 
-In all cases of tagging the IP address reservation, we tag the IP reservation with `usage="packet-ccm-auto"` and `service="<service-hash>"` where `<service-hash>` is the sha256 hash of `<namespace>.<service-name>`. We do this so that the name of the service does not leak out to Equinix Metal itself.
+In all cases of tagging the IP address reservation, we tag the IP reservation with the following tags:
 
-IP addresses always are created `/32`, and are tagged as `"packet-ccm-auto"`
+* `usage="packet-ccm-auto"`
+* `service="<service-hash>"` where `<service-hash>` is the sha256 hash of `<namespace>/<service-name>`. We do this so that the name of the service does not leak out to Equinix Metal itself.
+* `cluster=<clusterID>` where `<clusterID>` is the UID of the immutable `kube-system` namespace. We do this so that if someone runs two clusters in the same project, and there is one `Service` in each cluster with the same namespace and name, then the two EIPs will not conflict.
+
+IP addresses always are created `/32`.
 
 ### Language
 
