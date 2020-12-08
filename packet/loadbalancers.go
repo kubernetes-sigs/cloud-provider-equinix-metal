@@ -102,6 +102,7 @@ func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mo
 	var (
 		peers        []string
 		err          error
+		srcIP        string
 		changedNodes bool
 		changed      bool
 	)
@@ -136,11 +137,11 @@ func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mo
 			if id == "" {
 				return fmt.Errorf("no provider ID given for node %s", node.Name)
 			}
-			if peers, err = getNodePeerAddress(id, l.client); err != nil || len(peers) < 1 {
+			if peers, srcIP, err = getNodeBGPConfig(id, l.client); err != nil || len(peers) < 1 {
 				klog.Errorf("loadbalancers.reconcileNodes(): could not add metallb node peer address for node %s: %v", node.Name, err)
 				continue
 			}
-			config, changed = addNodePeer(config, node.Name, l.localASN, l.peerASN, peers...)
+			config, changed = addNodePeer(config, node.Name, l.localASN, l.peerASN, srcIP, peers...)
 			if !changed {
 				klog.V(2).Infof("loadbalancers.reconcileNodes(): config unchanged for add %s", node.Name)
 			} else {
@@ -177,11 +178,11 @@ func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mo
 				if id == "" {
 					return fmt.Errorf("no provider ID given for node %s", node.Name)
 				}
-				if peers, err = getNodePeerAddress(id, l.client); err != nil || len(peers) < 1 {
+				if peers, srcIP, err = getNodeBGPConfig(id, l.client); err != nil || len(peers) < 1 {
 					klog.Errorf("loadbalancers.reconcileNodes(): could not get node peer address for node %s: %v", node.Name, err)
 					continue
 				}
-				config, _ = addNodePeer(config, node.Name, l.localASN, l.peerASN, peers...)
+				config, _ = addNodePeer(config, node.Name, l.localASN, l.peerASN, srcIP, peers...)
 				// we do not need to check if it is changed; we know it is
 				changedNodes = true
 			}
@@ -459,7 +460,7 @@ func getServiceAddresses(config *metallb.ConfigFile) []string {
 }
 
 // addNodePeer update the configmap to ensure that the given node has the given peer
-func addNodePeer(config *metallb.ConfigFile, nodeName string, localASN, peerASN int, peers ...string) (*metallb.ConfigFile, bool) {
+func addNodePeer(config *metallb.ConfigFile, nodeName string, localASN, peerASN int, srcIP string, peers ...string) (*metallb.ConfigFile, bool) {
 	ns := metallb.NodeSelector{
 		MatchLabels: map[string]string{
 			hostnameKey: nodeName,

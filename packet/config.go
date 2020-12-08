@@ -14,6 +14,7 @@ type Config struct {
 	AnnotationLocalASN    string  `json:"annotationLocalASN,omitEmpty"`
 	AnnotationPeerASNs    string  `json:"annotationPeerASNs,omitEmpty"`
 	AnnotationPeerIPs     string  `json:"annotationPeerIPs,omitEmpty"`
+	AnnotationSrcIP       string  `json:"annotationSrcIP,omitEmpty"`
 	EIPTag                string  `json:"eipTag,omitEmpty"`
 	APIServerPort         int     `json:"apiServerPort,omitEmpty"`
 	BGPNodeSelector       string  `json:"bgpNodeSelector,omitEmpty"`
