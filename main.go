@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"k8s.io/apimachinery/pkg/labels"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // for client metric registration
@@ -33,6 +34,7 @@ const (
 	envVarAnnotationPeerIPs      = "PACKET_ANNOTATION_PEER_IPS"
 	envVarEIPTag                 = "PACKET_EIP_TAG"
 	envVarAPIServerPort          = "PACKET_API_SERVER_PORT"
+	envVarBGPNodeSelector        = "PACKET_BGP_NODE_SELECTOR"
 	defaultLoadBalancerConfigMap = "metallb-system:config"
 )
 
@@ -209,6 +211,15 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 		config.APIServerPort = rawConfig.APIServerPort
 	default:
 		config.APIServerPort = packet.DefaultAPIServerPort
+	}
+
+	config.BGPNodeSelector = rawConfig.BGPNodeSelector
+	if v := os.Getenv(envVarBGPNodeSelector); v != "" {
+		config.BGPNodeSelector = v
+	}
+
+	if _, err := labels.Parse(config.BGPNodeSelector); err != nil {
+		return config, fmt.Errorf("BGP Node Selector must be valid Kubernetes selector: %w", err)
 	}
 
 	return config, nil
