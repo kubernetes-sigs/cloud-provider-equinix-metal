@@ -70,7 +70,7 @@ func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interf
 		instances:                   i,
 		zones:                       newZones(client, packetConfig.ProjectID),
 		loadBalancer:                newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.LoadBalancerConfigMap, packetConfig.LocalASN, packetConfig.PeerASN),
-		bgp:                         newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs, packetConfig.BGPNodeSelector),
+		bgp:                         newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs, packetConfig.AnnotationSrcIP, packetConfig.BGPNodeSelector),
 		controlPlaneEndpointManager: newControlPlaneEndpointManager(packetConfig.EIPTag, packetConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, packetConfig.APIServerPort),
 	}, nil
 }
