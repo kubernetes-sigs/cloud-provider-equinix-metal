@@ -4,6 +4,10 @@ on:
     tags:
     - 'v*'
 
+env:
+  SOURCE_TAG: "${GITHUB_REF#refs/tags/}"
+
+
 jobs:
   images: # create images in docker hub
     name: Images
@@ -11,13 +15,19 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
-    - name: release tag
-      id: release_tag
-      run: echo ::set-output name=SOURCE_TAG::${GITHUB_REF#refs/tags/}
-    - name: hub login
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-    - name: release images
-      run: make release CONFIRM=true
+    - name: Set up QEMU for cross-building
+      uses: docker/setup-qemu-action@v1
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Build
+      id: docker_build
+      uses: docker/build-push-action@v2
+      with:
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ${{env.IMAGE_NAME}}:${{ env.SOURCE_TAG }}
+          ${{env.IMAGE_NAME}}:latest
 
   release: # create a github actions release with necessary artifacts
     name: Release
@@ -25,11 +35,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
-    - name: release tag
-      id: release_tag
-      run: echo ::set-output name=SOURCE_TAG::${GITHUB_REF#refs/tags/}
     - name: release template
-      run: cat deploy/template/deployment.yaml | sed 's/RELEASE_TAG/'${{ steps.release_tag.outputs.SOURCE_TAG }}'/g' > /tmp/deployment.yaml
+      run: cat deploy/template/deployment.yaml | sed 's/RELEASE_TAG/'${{ env.SOURCE_TAG }}'/g' > /tmp/deployment.yaml
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
