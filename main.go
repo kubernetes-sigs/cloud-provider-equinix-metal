@@ -26,7 +26,7 @@ const (
 	apiKeyName                   = "PACKET_API_KEY"
 	projectIDName                = "PACKET_PROJECT_ID"
 	facilityName                 = "PACKET_FACILITY_NAME"
-	loadBalancerConfigMapName    = "PACKET_LB_CONFIGMAP"
+	loadBalancerSettingName      = "PACKET_LB"
 	envVarLocalASN               = "PACKET_LOCAL_ASN"
 	envVarPeerASN                = "PACKET_PEER_ASN"
 	envVarAnnotationLocalASN     = "PACKET_ANNOTATION_LOCAL_ASN"
@@ -108,18 +108,15 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 	}
 	config.ProjectID = projectID
 
-	loadBalancerConfigMap := os.Getenv(loadBalancerConfigMapName)
-	config.LoadBalancerConfigMap = rawConfig.LoadBalancerConfigMap
+	loadBalancerSetting := os.Getenv(loadBalancerSettingName)
+	config.LoadBalancerSetting = rawConfig.LoadBalancerSetting
 	// rule for processing: any setting in env var overrides setting from file
-	if loadBalancerConfigMap != "" {
-		config.LoadBalancerConfigMap = loadBalancerConfigMap
+	if loadBalancerSetting != "" {
+		config.LoadBalancerSetting = loadBalancerSetting
 	}
 	// and set for default
-	if config.LoadBalancerConfigMap == "" {
-		config.LoadBalancerConfigMap = defaultLoadBalancerConfigMap
-	}
-	if config.LoadBalancerConfigMap == "disabled" {
-		config.LoadBalancerConfigMap = ""
+	if config.LoadBalancerSetting == "" {
+		config.LoadBalancerSetting = defaultLoadBalancerConfigMap
 	}
 
 	facility := os.Getenv(facilityName)

@@ -35,6 +35,7 @@ spec:
       containers:
       - image: packethost/packet-ccm:RELEASE_TAG
         name: packet-cloud-controller-manager
+        imagePullPolicy: Always
         command:
           - "./packet-cloud-controller-manager"
           - "--cloud-provider=packet"
@@ -68,6 +69,13 @@ metadata:
     rbac.authorization.kubernetes.io/autoupdate: "true"
   name: system:cloud-controller-manager
 rules:
+- apiGroups:
+  # reason: so ccm can read the information about the kube-system namespace
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
 - apiGroups:
   # reason: so ccm can monitor and update endpoints, used for control plane loadbalancer
   - ""

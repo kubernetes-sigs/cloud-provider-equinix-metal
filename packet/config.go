@@ -4,20 +4,20 @@ import "fmt"
 
 // Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different packet API endpoint
 type Config struct {
-	AuthToken             string  `json:"apiKey"`
-	ProjectID             string  `json:"projectId"`
-	BaseURL               *string `json:"base-url,omitempty"`
-	LoadBalancerConfigMap string  `json:"loadbalancer-configmap"`
-	Facility              string  `json:"facility,omitempty"`
-	PeerASN               int     `json:"peerASN,omitempty"`
-	LocalASN              int     `json:"localASN,omitempty"`
-	AnnotationLocalASN    string  `json:"annotationLocalASN,omitEmpty"`
-	AnnotationPeerASNs    string  `json:"annotationPeerASNs,omitEmpty"`
-	AnnotationPeerIPs     string  `json:"annotationPeerIPs,omitEmpty"`
-	AnnotationSrcIP       string  `json:"annotationSrcIP,omitEmpty"`
-	EIPTag                string  `json:"eipTag,omitEmpty"`
-	APIServerPort         int     `json:"apiServerPort,omitEmpty"`
-	BGPNodeSelector       string  `json:"bgpNodeSelector,omitEmpty"`
+	AuthToken           string  `json:"apiKey"`
+	ProjectID           string  `json:"projectId"`
+	BaseURL             *string `json:"base-url,omitempty"`
+	LoadBalancerSetting string  `json:"loadbalancer"`
+	Facility            string  `json:"facility,omitempty"`
+	PeerASN             int     `json:"peerASN,omitempty"`
+	LocalASN            int     `json:"localASN,omitempty"`
+	AnnotationLocalASN  string  `json:"annotationLocalASN,omitEmpty"`
+	AnnotationPeerASNs  string  `json:"annotationPeerASNs,omitEmpty"`
+	AnnotationPeerIPs   string  `json:"annotationPeerIPs,omitEmpty"`
+	AnnotationSrcIP     string  `json:"annotationSrcIP,omitEmpty"`
+	EIPTag              string  `json:"eipTag,omitEmpty"`
+	APIServerPort       int     `json:"apiServerPort,omitEmpty"`
+	BGPNodeSelector     string  `json:"bgpNodeSelector,omitEmpty"`
 }
 
 // String converts the Config structure to a string, while masking hidden fields.
@@ -31,10 +31,10 @@ func (c Config) Strings() []string {
 		ret = append(ret, "authToken: ''")
 	}
 	ret = append(ret, fmt.Sprintf("projectID: '%s'", c.ProjectID))
-	if c.LoadBalancerConfigMap == "" {
+	if c.LoadBalancerSetting == "" {
 		ret = append(ret, "loadbalancer config: disabled")
 	} else {
-		ret = append(ret, "load balancer config: ''%s", c.LoadBalancerConfigMap)
+		ret = append(ret, "load balancer config: ''%s", c.LoadBalancerSetting)
 	}
 	ret = append(ret, fmt.Sprintf("facility: '%s'", c.Facility))
 	ret = append(ret, fmt.Sprintf("peer ASN: '%d'", c.PeerASN))
