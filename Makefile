@@ -10,7 +10,7 @@ ifneq (,$(RELEASE_TAG))
 VERSION := $(RELEASE_TAG)-$(VERSION)
 endif
 GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
-FROMTAG ?= latest
+BUILD_TAG ?= latest
 LDFLAGS ?= -ldflags '-extldflags "-static" -X "$(PACKAGE_NAME)/version.VERSION=$(VERSION)"'
 
 # which arches can we support
@@ -161,8 +161,8 @@ sub-image-%:
 	@$(MAKE) ARCH=$* image
 
 image: ## make the image for a single ARCH
-	docker buildx build --load -t $(BUILD_IMAGE):latest-$(ARCH) -f Dockerfile --platform $(OS)/$(ARCH) .
-	echo "Done. image is at $(BUILD_IMAGE):latest-$(ARCH)"
+	docker buildx build --load -t $(BUILD_IMAGE):$(BUILD_TAG)-$(ARCH) -f Dockerfile --platform $(OS)/$(ARCH) .
+	echo "Done. image is at $(BUILD_IMAGE):$(BUILD_TAG)-$(ARCH)"
 
 # Targets used when cross building.
 .PHONY: register
