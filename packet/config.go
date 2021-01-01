@@ -25,7 +25,7 @@ type Config struct {
 // and masks sensitive data
 func (c Config) Strings() []string {
 	ret := []string{}
-	if c.AuthToken == "" {
+	if c.AuthToken != "" {
 		ret = append(ret, "authToken: '<masked>'")
 	} else {
 		ret = append(ret, "authToken: ''")
