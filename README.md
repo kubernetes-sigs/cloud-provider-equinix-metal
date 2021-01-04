@@ -61,7 +61,7 @@ profile in the upper right then "API keys".
 To get your project ID click into the project that your cluster is under and select "project settings" from the header.
 Under General you will see "Project ID". Once you have this information you will be able to fill in the config needed for the CCM.
 
-#### Deploy Project and API
+### Deploy Project and API
 
 Copy [deploy/template/secret.yaml](./deploy/template/secret.yaml) to someplace useful:
 
@@ -100,7 +100,7 @@ NAME                  TYPE                                  DATA      AGE
 packet-cloud-config   Opaque                                1         2m
 ````
 
-#### Deploy CCM
+### Deploy CCM
 
 To apply the CCM itself, select your release and apply the manifest:
 
@@ -111,22 +111,9 @@ kubectl apply -f https://github.com/packethost/packet-ccm/releases/download/${RE
 
 #### Deploy Load Balancer
 
-If you want load balancing to work as well, deploy the load balancer manifest:
+If you want load balancing to work as well, deploy a supported load-balancer.
 
-```
-kubectl apply -f https://github.com/packethost/packet-ccm/releases/download/${RELEASE}/loadbalancer.yaml
-```
-
-As of this writing, the load balancer is metallb. CCM provides the correct logic to manage the load balancer
-config.
-
-You can deploy metallb on your own, and simply direct CCM to control a different configuration map, or
-none at all. If load balancing support is enabled, then on startup and on each create or delete of a
-`Service` that is of `type=LoadBalancer`, CCM checks for the existence of a `ConfigMap` in the correct namespace.
-
-* if loadbalancer management is disabled, do nothing
-* if it finds no configmap, do nothing
-* if it finds a configmap, configure it
+CCM provides the correct logic, if necessary, to manage load balancer configs for supported load-balancers.
 
 See further in this document under loadbalancing, for details.
 
@@ -195,7 +182,11 @@ The value of the loadbalancing configuration is `<type>://<detail>` where:
 
 For loadbalancing for Kubernetes `Service` of `type=LoadBalancer`, the following implementations are supported:
 
-* [metallb](https://metallb.universe.tf)
+* [metallb](#metallb)
+* [empty](#empty)
+
+CCM does **not** deploy _any_ load balancers for you. It limits itself to managing the Equinix Metal-specific
+API calls to support a load balancer, and providing configuration for supported load balancers.
 
 ##### metallb
 
@@ -244,7 +235,7 @@ provided in the releases page, or in any other manner.
 
 ##### empty
 
-When is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
+When the `empty` option is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
 the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for each such
 `Service`, and adds annotations to the nodes. It does not integrate directly with any load balancer.
 This is useful if you have your own implementation, but want to leverage Equinix Metal CCM's
