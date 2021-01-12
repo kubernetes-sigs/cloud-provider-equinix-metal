@@ -9,6 +9,7 @@ import (
 
 	"github.com/packethost/packet-ccm/packet/loadbalancers"
 	"github.com/packethost/packet-ccm/packet/loadbalancers/empty"
+	"github.com/packethost/packet-ccm/packet/loadbalancers/kubevip"
 	"github.com/packethost/packet-ccm/packet/loadbalancers/metallb"
 	"github.com/packethost/packngo"
 
@@ -65,6 +66,9 @@ func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 	config := u.Path
 	var impl loadbalancers.LB
 	switch u.Scheme {
+	case "kuve-vip":
+		klog.V(2).Info("loadbalancer implementation enabled: kube-vip")
+		impl = kubevip.NewLB(k8sclient, config)
 	case "metallb":
 		klog.V(2).Info("loadbalancer implementation enabled: metallb")
 		impl = metallb.NewLB(k8sclient, config)

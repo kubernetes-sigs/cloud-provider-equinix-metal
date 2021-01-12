@@ -182,11 +182,42 @@ The value of the loadbalancing configuration is `<type>://<detail>` where:
 
 For loadbalancing for Kubernetes `Service` of `type=LoadBalancer`, the following implementations are supported:
 
+* [kube-vip](#kube-vip)
 * [metallb](#metallb)
 * [empty](#empty)
 
 CCM does **not** deploy _any_ load balancers for you. It limits itself to managing the Equinix Metal-specific
 API calls to support a load balancer, and providing configuration for supported load balancers.
+
+##### kube-vip
+
+When the [kube-vip](https://kube-vip.io) option is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
+the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for each such
+`Service`, and adds annotations to the nodes. These annotations are configured to be consumable
+by kube-vip.
+
+To enable it, set the configuration `PACKET_LB` or config `packetLB` to:
+
+```
+kube-vip://
+```
+
+Directions on using configuring kube-vip in this method are available at the kube-vip [site](https://kube-vip.io/hybrid/daemonset/#equinix-metal-overview-(using-the-%5Bequinix-metal-ccm%5D(https://github.com/packethost/packet-ccm)))
+
+If `kube-vip` management is enabled, then CCM does the following.
+
+1. Enable BGP on the Equinix Metal project
+1. For each node currently in the cluster or added:
+   * retrieve the node's Equinix Metal ID via the node provider ID
+   * retrieve the device's BGP configuration: node ASN, peer ASN, peer IPs, source IP
+   * add the information to appropriate annotations on the node
+1. For each service of `type=LoadBalancer` currently in the cluster or added:
+   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` already has that IP address affiliated with it, it is ready; ignore
+   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core)
+   * if an Elastic IP address reservation with the appropriate tags does not exist, create it and add it to the services spec
+1. For each service of `type=LoadBalancer` deleted from the cluster:
+   * find the Elastic IP address from the service spec and remove it
+   * delete the Elastic IP reservation from Equinix Metal
 
 ##### metallb
 
@@ -274,11 +305,28 @@ In order to ease understanding, we use several different terms for an IP address
 From Equinix Metal's perspective, the IP reservation is either Requested or Reserved, but not both. For the
 load balancer to work, the IP address needs to be all of: Reserved, Assigned, Mapped.
 
-## Elastic IP as Control Plane Endpoint
+## Control Plane Load Balancing
+
+CCM implements an optional control plane load balancer using an Equinix Metal Elastic IP (EIP) and the Equinix Metal API's
+ability to assign that EIP to different devices.
+
+You have several options for control plane load-balancing:
+
+* CCM managed
+* kube-vip managed
+* No control plane load-balancing (or at least, none known to CCM)
+
+### CCM Managed
 
 It is a common procedure to use Elastic IP as Control Plane endpoint in order to
 have a static endpoint that you can use from the outside, or when configuring
 the advertise address for the kubelet.
+
+To enable CCM to manage the control plane EIP:
+
+1. Create an Elastic IP, using the Equinix Metal API, Web UI or CLI
+1. Put an arbitrary but unique tag on the EIP
+1. When starting the CCM, set the env var `PACKET_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
 
 In [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet) we
 create one for every cluster for example. Equinix Metal does not provide an as a
@@ -308,7 +356,7 @@ The logic will circle over all the available control planes looking for an
 active api server. As soon as it can find one the Elastic IP will be unassigned
 and reassigned to the working node.
 
-### How the Elastic IP Traffic is Routed
+#### How the Elastic IP Traffic is Routed
 
 Of course, even if the router sends traffic for your Elastic IP (EIP) to a given control
 plane node, that node needs to know to process the traffic. Rather than require you to
@@ -334,6 +382,13 @@ This has the following effect:
 
 Note that we _wanted_ to just set `externalIPs` on the original `default/kubernetes`, but that would prevent traffic
 from being routed to it from the control nodes, due to iptables rules. LoadBalancer types allow local traffic.
+
+### kube-vip Managed
+
+kube-vip has the ability to manage the Elastic IP and control plane load-balancing. To enable it:
+
+1. Disable CCM control-plane load-balancing, by ensuring the EIP tag setting is empty via `PACKET_EIP_TAG=""`
+1. Enable kube-vip control plane load-balancing by following the instructions [here](https://kube-vip.io/hybrid/static/#bgp-with-equinix-metal)
 
 ## Core Control Loop
 
