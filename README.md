@@ -1,15 +1,15 @@
 # Kubernetes Cloud Controller Manager for Equinix Metal
 
-[![GitHub release](https://img.shields.io/github/release/packethost/metal-ccm/all.svg?style=flat-square)](https://github.com/packethost/metal-ccm/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/packethost/metal-ccm)](https://goreportcard.com/report/github.com/packethost/metal-ccm)
-![Continuous Integration](https://github.com/packethost/metal-ccm/workflows/Continuous%20Integration/badge.svg)
-[![Docker Pulls](https://img.shields.io/docker/pulls/packethost/metal-ccm.svg)](https://hub.docker.com/r/packethost/metal-ccm/)
+[![GitHub release](https://img.shields.io/github/release/packethost/packet-ccm/all.svg?style=flat-square)](https://github.com/packethost/packet-ccm/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/packethost/packet-ccm)](https://goreportcard.com/report/github.com/packethost/packet-ccm)
+![Continuous Integration](https://github.com/packethost/packet-ccm/workflows/Continuous%20Integration/badge.svg)
+[![Docker Pulls](https://img.shields.io/docker/pulls/packethost/packet-ccm.svg)](https://hub.docker.com/r/packethost/packet-ccm/)
 [![Slack](https://slack.equinixmetal.com/badge.svg)](https://slack.equinixmetal.com/)
 [![Twitter Follow](https://img.shields.io/twitter/follow/equinixmetal.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=equinixmetal&user_id=788180534543339520)
 ![Equinix Metal Maintained](https://img.shields.io/badge/stability-maintained-green.svg)
 
 
-`metal-ccm` is the Kubernetes CCM implementation for Equinix Metal. Read more about the CCM in [the official Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/).
+`packet-ccm` is the Kubernetes CCM implementation for Equinix Metal. Read more about the CCM in [the official Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/).
 
 This repository is [Maintained](https://github.com/packethost/standards/blob/master/maintained-statement.md)!
 
@@ -20,7 +20,6 @@ Please read through the requirements carefully as they are critical to running t
 
 ### Version
 Recommended versions of Equinix Metal CCM based on your Kubernetes version:
-
 * Equinix Metal CCM version v0.0.4 supports Kubernetes version >=v1.10
 * Equinix Metal CCM version v1.0.0+ supports Kubernetes version >=1.15.0
 
@@ -56,8 +55,8 @@ It is important that the Kubernetes node name matches the device name.
 
 ### Get Equinix Metal Project ID and API Token
 
-To run `metal-ccm`, you need your Equinix Metal project ID and secret API key ID that your cluster is running in.
-If you are already logged into the [Equinix Metal portal](https://console.equinix.com/), you can create one by clicking on your
+To run `packet-ccm`, you need your Equinix Metal project ID and secret API key ID that your cluster is running in.
+If you are already logged into the [Equinix Metal portal](ttps://console.equinix.com/), you can create one by clicking on your
 profile in the upper right then "API keys".
 To get your project ID click into the project that your cluster is under and select "project settings" from the header.
 Under General you will see "Project ID". Once you have this information you will be able to fill in the config needed for the CCM.
@@ -76,7 +75,7 @@ Replace the placeholder in the copy with your token. When you're done, the `yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: metal-cloud-config
+  name: packet-cloud-config
   namespace: kube-system
 stringData:
   cloud-sa.json: |
@@ -96,9 +95,9 @@ kubectl apply -f /tmp/secret.yaml`
 You can confirm that the secret was created with the following:
 
 ````bash
-$ kubectl -n kube-system get secrets metal-cloud-config
+$ kubectl -n kube-system get secrets packet-cloud-config
 NAME                  TYPE                                  DATA      AGE
-metal-cloud-config   Opaque                                1         2m
+packet-cloud-config   Opaque                                1         2m
 ````
 
 ### Deploy CCM
@@ -107,7 +106,7 @@ To apply the CCM itself, select your release and apply the manifest:
 
 ```
 RELEASE=v2.0.0
-kubectl apply -f https://github.com/packethost/metal-ccm/releases/download/${RELEASE}/deployment.yaml
+kubectl apply -f https://github.com/packethost/packet-ccm/releases/download/${RELEASE}/deployment.yaml
 ```
 
 #### Deploy Load Balancer
@@ -139,7 +138,7 @@ The Kubernetes CCM for Equinix Metal deploys as a `Deployment` into your cluster
 
 The Equinix Metal CCM works in one facility at a time. You can control which facility it works with as follows:
 
-1. If the environment variable `METAL_FACILITY_NAME` is set, use that value. Else..
+1. If the environment variable `PACKET_FACILITY_NAME` is set, use that value. Else..
 1. If the config file has a field named `facility`, use that value. Else..
 1. Read the facility from the Equinix Metal metadata of the host where the CCM is running. Else..
 1. Fail.
@@ -172,8 +171,8 @@ load-balancer, see [this section](#Elastic_IP_as_Control_Plane_Endpoint).
 
 Loadbalancing is enabled as follows.
 
-1. If the environment variable `METAL_LB` is set, read that. Else...
-1. If the config file has a key named `metalLB`, read that. Else...
+1. If the environment variable `PACKET_LB` is set, read that. Else...
+1. If the config file has a key named `packetLB`, read that. Else...
 1. Load balancing is disabled.
 
 The value of the loadbalancing configuration is `<type>://<detail>` where:
@@ -197,13 +196,13 @@ the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for e
 `Service`, and adds annotations to the nodes. These annotations are configured to be consumable
 by kube-vip.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `PACKET_LB` or config `packetLB` to:
 
 ```
 kube-vip://
 ```
 
-Directions on using configuring kube-vip in this method are available at the kube-vip [site](https://kube-vip.io/hybrid/daemonset/#equinix-metal-overview-(using-the-%5Bequinix-metal-ccm%5D(https://github.com/packethost/metal-ccm)))
+Directions on using configuring kube-vip in this method are available at the kube-vip [site](https://kube-vip.io/hybrid/daemonset/#equinix-metal-overview-(using-the-%5Bequinix-metal-ccm%5D(https://github.com/packethost/packet-ccm)))
 
 If `kube-vip` management is enabled, then CCM does the following.
 
@@ -227,7 +226,7 @@ the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancin
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `PACKET_LB` or config `packetLB` to:
 
 ```
 metallb://<configMapNamespace>:<configMapName>
@@ -273,7 +272,7 @@ the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for e
 This is useful if you have your own implementation, but want to leverage Equinix Metal CCM's
 management of BGP and EIPs.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `PACKET_LB` or config `packetLB` to:
 
 ```
 empty://
@@ -327,7 +326,7 @@ To enable CCM to manage the control plane EIP:
 
 1. Create an Elastic IP, using the Equinix Metal API, Web UI or CLI
 1. Put an arbitrary but unique tag on the EIP
-1. When starting the CCM, set the env var `METAL_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
+1. When starting the CCM, set the env var `PACKET_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
 
 In [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet) we
 create one for every cluster for example. Equinix Metal does not provide an as a
@@ -368,8 +367,8 @@ The structure relies on the already existing `default/kubernetes` service, which
 creates an `Endpoints` structure that includes all of the functioning control plane
 nodes. The CCM does the following on each loop:
 
-1. Finds all of the endpoints for `default/kubernetes` and creates or updates parallel endpoints in `kube-system/metal-ccm-kubernetes-external`
-1. Creates a service named `kube-system/metal-ccm-kubernetes-external` with the following settings:
+1. Finds all of the endpoints for `default/kubernetes` and creates or updates parallel endpoints in `kube-system/packet-ccm-kubernetes-external`
+1. Creates a service named `kube-system/packet-ccm-kubernetes-external` with the following settings:
    * `type=LoadBalancer`
    * `spec.loadBalancerIP=<eip>`
    * `status.loadBalancer.ingress[0].ip=<eip>`
@@ -388,7 +387,7 @@ from being routed to it from the control nodes, due to iptables rules. LoadBalan
 
 kube-vip has the ability to manage the Elastic IP and control plane load-balancing. To enable it:
 
-1. Disable CCM control-plane load-balancing, by ensuring the EIP tag setting is empty via `METAL_EIP_TAG=""`
+1. Disable CCM control-plane load-balancing, by ensuring the EIP tag setting is empty via `PACKET_EIP_TAG=""`
 1. Enable kube-vip control plane load-balancing by following the instructions [here](https://kube-vip.io/hybrid/static/#bgp-with-equinix-metal)
 
 ## Core Control Loop
@@ -420,12 +419,12 @@ on all nodes as they come up. It sets the ASNs as follows:
 These are the settings per Equinix Metal's BGP config, see [here](https://github.com/packet-labs/kubernetes-bgp). It is
 _not_ recommended to override them. However, the settings are set as follows:
 
-1. If the environment variables `METAL_LOCAL_ASN` and `METAL_PEER_ASN` are set. Else...
+1. If the environment variables `PACKET_LOCAL_ASN` and `PACKET_PEER_ASN` are set. Else...
 1. If the config file has fields named `localASN` and `peerASN`. Else...
 1. Use the above defaults.
 
 Set of servers on which BGP will be enabled can be filtered using the following settings:
-1. If the environment variable `METAL_BGP_NODE_SELECTOR` is set. Else...
+1. If the environment variable `PACKET_BGP_NODE_SELECTOR` is set. Else...
 1. If the config file has field named `bgpNodeSelector` set. Else...
 1. Select all nodes.
 
@@ -434,14 +433,14 @@ Value for node selector should be a valid Kubernetes label selector (e.g. key1=v
 In addition to enabling BGP and setting ASNs, the Equinix Metal CCM sets Kubernetes annotations on the nodes. It sets the
 following information:
 
-* `metal.equinix.com/node-asn` - Node, or local, ASN
-* `metal.equinix.com/peer-asns` - Peer ASNs, comma-separated if multiple
-* `metal.equinix.com/peer-ips` - Peer IPs, comma-separated if multiple
-* `metal.equinix.com/src-ip` - Source IP to use
+* `packet.com/node-asn` - Node, or local, ASN
+* `packet.com/peer-asns` - Peer ASNs, comma-separated if multiple
+* `packet.com/peer-ips` - Peer IPs, comma-separated if multiple
+* `packet.com/src-ip` - Source IP to use
 
 These annotation names can be overridden, if you so choose. The settings are as follows:
 
-1. If the environment variables `METAL_ANNOTATION_LOCAL_ASN`, `METAL_ANNOTATION_PEER_ASNS`, `METAL_ANNOTATION_PEER_IPS`, `METAL_ANNOTATION_SRC_IP` are set. Else...
+1. If the environment variables `PACKET_ANNOTATION_LOCAL_ASN`, `PACKET_ANNOTATION_PEER_ASNS`, `PACKET_ANNOTATION_PEER_IPS`, `PACKET_ANNOTATION_SRC_IP` are set. Else...
 1. If the config file has files named `annotationLocalASN`, `annotationPeerASNs`, `annotationPeerIPs`, `annotationSrcIP`. Else...
 1. Use the above defaults.
 
@@ -450,7 +449,7 @@ These annotation names can be overridden, if you so choose. The settings are as 
 If a loadbalancer is enabled, CCM creates an Equinix Metal Elastic IP (EIP) reservation for each `Service` of
 `type=LoadBalancer`. It tags the Reservation with the following tags:
 
-* `usage="metal-ccm-auto"`
+* `usage="packet-ccm-auto"`
 * `service="<service-hash>"` where `<service-hash>` is the sha256 hash of `<namespace>/<service-name>`. We do this so that the name of the service does not leak out to Equinix Metal itself.
 * `cluster=<clusterID>` where `<clusterID>` is the UID of the immutable `kube-system` namespace. We do this so that if someone runs two clusters in the same project, and there is one `Service` in each cluster with the same namespace and name, then the two EIPs will not conflict.
 
@@ -464,14 +463,14 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Build it for your local platform `make build`
 1. Set the environment variable `CCM_SECRET` to a file with the secret contents as a json, i.e. the content of the secret's `stringData`, e.g. `CCM_SECRET=ccm-secret.yaml`
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
-1. Set the environment variable `METAL_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `METAL_FACILITY_NAME=ewr1`
+1. Set the environment variable `PACKET_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `PACKET_FACILITY_NAME=ewr1`
 1. If you want to run the loadbalancer, and it is not yet deployed, run `kubectl apply -f deploy/loadbalancer.yaml`
-1. Enable the loadbalancer by setting the environment variable `METAL_LB=metallb://`
-1. If you want to use a managed Elastic IP for the control plane, create one using the Equinix Metal API or Web UI, tag it uniquely, and set the environment variable `METAL_EIP_TAG=<tag>`
+1. Enable the loadbalancer by setting the environment variable `PACKET_LB=metallb://`
+1. If you want to use a managed Elastic IP for the control plane, create one using the Equinix Metal API or Web UI, tag it uniquely, and set the environment variable `PACKET_EIP_TAG=<tag>`
 1. Run the command, e.g.:
 
 ```
-METAL_FACILITY_NAME=${METAL_FACILITY_NAME} METAL_LB=metallb:// dist/bin/metal-cloud-controller-manager-darwin-amd64 --cloud-provider=metal --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
+PACKET_FACILITY_NAME=${PACKET_FACILITY_NAME} PACKET_LB=metallb:// dist/bin/packet-cloud-controller-manager-darwin-amd64 --cloud-provider=packet --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
 ```
 
 For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.
