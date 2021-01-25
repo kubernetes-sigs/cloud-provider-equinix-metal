@@ -1,4 +1,4 @@
-package packet
+package metal
 
 import (
 	"net/http/httptest"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
-	packetServer "github.com/packethost/packet-api-server/pkg/server"
+	emServer "github.com/packethost/packet-api-server/pkg/server"
 	"github.com/packethost/packet-api-server/pkg/store"
 	"github.com/packethost/packngo"
 
@@ -44,7 +44,7 @@ func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
 	}
 	// mock endpoint so our client can handle it
 	backend = store.NewMemory()
-	fake := packetServer.PacketServer{
+	fake := emServer.PacketServer{
 		Store: backend,
 		ErrorHandler: &apiServerError{
 			t: t,
@@ -159,7 +159,7 @@ func TestHasClusterID(t *testing.T) {
 
 }
 
-// builds a packet client
+// builds an Equinix Metal client
 func constructClient(authToken string, baseURL *string) *packngo.Client {
 	/*
 		tr := &http.Transport{
@@ -170,7 +170,7 @@ func constructClient(authToken string, baseURL *string) *packngo.Client {
 	*/
 	client := retryablehttp.NewClient()
 
-	// client.Transport = logging.NewTransport("Packet", client.Transport)
+	// client.Transport = logging.NewTransport("EquinixMetal", client.Transport)
 	if baseURL != nil {
 		// really should handle error, but packngo does not distinguish now or handle errors, so ignoring for now
 		client, _ := packngo.NewClientWithBaseURL(ConsumerToken, authToken, client, *baseURL)

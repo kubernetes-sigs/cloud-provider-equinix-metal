@@ -1,8 +1,8 @@
-package packet
+package metal
 
 import "fmt"
 
-// Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different packet API endpoint
+// Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different Equinix Metal API endpoint
 type Config struct {
 	AuthToken           string  `json:"apiKey"`
 	ProjectID           string  `json:"projectId"`

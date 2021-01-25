@@ -19,7 +19,7 @@ RUN make build
 # Create Docker image of just the binary
 FROM scratch as runner
 
-ARG BINARY=packet-cloud-controller-manager
+ARG BINARY=cloud-provider-equinix-metal
 ARG TARGETARCH
 ARG OS=linux
 
@@ -27,4 +27,4 @@ COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=build /go/src/app/dist/bin/${BINARY}-${OS}-${TARGETARCH} ${BINARY}
 
 # because you cannot use ARG or ENV in CMD when in [] mode, and with "FROM scratch", we have no shell
-ENTRYPOINT ["./packet-cloud-controller-manager"]
+ENTRYPOINT ["./cloud-provider-equinix-metal"]

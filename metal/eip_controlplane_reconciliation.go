@@ -1,4 +1,4 @@
-package packet
+package metal
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 
 const (
 	controlPlaneLabel        = "node-role.kubernetes.io/master"
-	externalServiceName      = "packet-ccm-kubernetes-external"
+	externalServiceName      = "cloud-provider-equinix-metal-kubernetes-external"
 	externalServiceNamespace = "kube-system"
 	metallbAnnotation        = "metallb.universe.tf/address-pool"
 	metallbDisabledtag       = "disabled-metallb-do-not-use-any-address-pool"
@@ -31,7 +31,7 @@ const (
  attached to a healthy control plane.
 
  The general steps are:
- 1. Check if the passed ElasticIP tags returns a valid Elastic IP via Packet API.
+ 1. Check if the passed ElasticIP tags returns a valid Elastic IP via Equinix Metal API.
  2. If there is NOT an ElasticIP with those tags just end the reconciliation
  3. If there is an ElasticIP use the kubernetes client-go to check if it
  returns a valid response

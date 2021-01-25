@@ -1,10 +1,10 @@
-// empty loadbalancer that does nothing, but exists to enable bgp functionality
-package empty
+// kubevip loadbalancer that does nothing, but exists to enable bgp functionality
+package kubevip
 
 import (
 	"context"
 
-	"github.com/packethost/packet-ccm/packet/loadbalancers"
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"k8s.io/client-go/kubernetes"
 )
 

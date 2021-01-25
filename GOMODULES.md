@@ -9,7 +9,7 @@ The section below is the base path that was used to move this to go modules.
 1. Create `go.mod` with the following contents
 
 ```go
-module github.com/packethost/packet-ccm
+module github.com/equinix/cloud-provider-equinix-metal
 
 go 1.13
 
@@ -55,4 +55,3 @@ When upgrading to a new version of kubernetes:
 1. Run `go mod download`
 1. Loop through for any errors on mismatched versions, and add `replace` dependencies. These are almost entirely due to `k8s.io/kubernetes`
 1. PRAY
-

@@ -1,4 +1,4 @@
-package packet
+package metal
 
 import (
 	"context"
@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/packethost/packet-ccm/packet/loadbalancers"
-	"github.com/packethost/packet-ccm/packet/loadbalancers/empty"
-	"github.com/packethost/packet-ccm/packet/loadbalancers/kubevip"
-	"github.com/packethost/packet-ccm/packet/loadbalancers/metallb"
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/empty"
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/kubevip"
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/metallb"
 	"github.com/packethost/packngo"
 
 	v1 "k8s.io/api/core/v1"
@@ -231,7 +231,7 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 			svcIP := svc.Spec.LoadBalancerIP
 
 			var svcIPCidr string
-			ipReservation := ipReservationByAllTags([]string{svcTag, packetTag, clsTag}, ips)
+			ipReservation := ipReservationByAllTags([]string{svcTag, emTag, clsTag}, ips)
 
 			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: %s with existing IP assignment %s", svcName, svcIP)
 
@@ -277,8 +277,8 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 		if err != nil {
 			return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
 		}
-		// get all EIP that have the packet tag and are allocated to this cluster
-		ipReservations := ipReservationsByAllTags([]string{packetTag, clusterTag(l.clusterID)}, ips)
+		// get all EIP that have the equinix metal tag and are allocated to this cluster
+		ipReservations := ipReservationsByAllTags([]string{emTag, clusterTag(l.clusterID)}, ips)
 		// create a map of EIP to svcIP so we can get the CIDR
 		ipCidr := map[string]int{}
 		for _, ipr := range ipReservations {
@@ -308,7 +308,7 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 
 		// remove any EIPs that do not have a reservation
 
-		klog.V(5).Infof("loadbalancer.reconcileServices(): sync: all reservations with packetTag %#v", ipReservations)
+		klog.V(5).Infof("loadbalancer.reconcileServices(): sync: all reservations with emTag %#v", ipReservations)
 		for _, ipReservation := range ipReservations {
 			var foundTag bool
 			for _, tag := range ipReservation.Tags {
@@ -341,7 +341,7 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 		svcIPCidr string
 		err       error
 	)
-	ipReservation := ipReservationByAllTags([]string{svcTag, packetTag, clsTag}, ips)
+	ipReservation := ipReservationByAllTags([]string{svcTag, emTag, clsTag}, ips)
 
 	klog.V(2).Infof("processing %s with existing IP assignment %s", svcName, svcIP)
 	// if it already has an IP, no need to get it one
@@ -361,7 +361,7 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 				Description: ccmIPDescription,
 				Facility:    &facility,
 				Tags: []string{
-					packetTag,
+					emTag,
 					svcTag,
 					clsTag,
 				},

@@ -7,7 +7,7 @@ on:
     - master
 
 env:
-  IMAGE_NAME: "packethost/packet-ccm"
+  IMAGE_NAME: "equinix/cloud-provider-equinix-metal"
 
 jobs:
   report:

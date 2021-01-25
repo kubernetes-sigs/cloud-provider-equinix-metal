@@ -1,4 +1,4 @@
-module github.com/packethost/packet-ccm
+module github.com/equinix/cloud-provider-equinix-metal
 
 go 1.15
 
