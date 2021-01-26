@@ -24,10 +24,10 @@ All public functions and variables should include at least a short description
 of the functionality they provide. Comments should be formatted according to
 <https://golang.org/doc/effective_go.html#commentary>.
 
-Documentation at <https://godoc.org/github.com/packethost/packet-ccm> will be
+Documentation at <https://godoc.org/github.com/equinix/cloud-provider-equinix-metal> will be
 generated from these comments.
 
-Although the Packet CCM is intended more as a standalone runtime container than
+Although the Equinix Metal CCM is intended more as a standalone runtime container than
 a library, following the generally accepted golang standards will make it
 easier to maintain this project, and easier for others to contribute.
 
@@ -66,4 +66,3 @@ PACKNGO_DEBUG=1 make test
 ### Automation (CI/CD)
 
 All CI/CD is performed via github actions, see the files in [.github/workflows/](./.github/workflows).
-

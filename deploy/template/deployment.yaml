@@ -2,19 +2,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: packet-cloud-controller-manager
+  name: cloud-provider-equinix-metal
   namespace: kube-system
   labels:
-    app: packet-cloud-controller-manager
+    app: cloud-provider-equinix-metal
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: packet-cloud-controller-manager
+      app: cloud-provider-equinix-metal
   template:
     metadata:
       labels:
-        app: packet-cloud-controller-manager
+        app: cloud-provider-equinix-metal
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
@@ -23,7 +23,7 @@ spec:
       serviceAccountName: cloud-controller-manager
       tolerations:
         # this taint is set by all kubelets running `--cloud-provider=external`
-        # so we should tolerate it to schedule the packet ccm
+        # so we should tolerate it to schedule the Equinix Metal ccm
         - key: "node.cloudprovider.kubernetes.io/uninitialized"
           value: "true"
           effect: "NoSchedule"
@@ -33,12 +33,12 @@ spec:
         - key: "node-role.kubernetes.io/master"
           effect: NoSchedule
       containers:
-      - image: packethost/packet-ccm:RELEASE_TAG
-        name: packet-cloud-controller-manager
+      - image: equinix/cloud-provider-equinix-metal:RELEASE_TAG
+        name: cloud-provider-equinix-metal
         imagePullPolicy: Always
         command:
-          - "./packet-cloud-controller-manager"
-          - "--cloud-provider=packet"
+          - "./cloud-provider-equinix-metal"
+          - "--cloud-provider=equinixmetal"
           - "--leader-elect=false"
           - "--authentication-skip-lookup=true"
           - "--provider-config=/etc/cloud-sa/cloud-sa.json"
@@ -53,7 +53,7 @@ spec:
       volumes:
         - name: cloud-sa-volume
           secret:
-            secretName: packet-cloud-config
+            secretName: metal-cloud-config
 
 ---
 apiVersion: v1

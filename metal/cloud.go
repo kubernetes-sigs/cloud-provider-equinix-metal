@@ -1,4 +1,4 @@
-package packet
+package metal
 
 import (
 	"context"
@@ -18,11 +18,9 @@ import (
 )
 
 const (
-	packetAuthTokenEnvVar string = "PACKET_AUTH_TOKEN"
-	packetProjectIDEnvVar string = "PACKET_PROJECT_ID"
-	providerName          string = "packet"
-	// ConsumerToken token for packet consumer
-	ConsumerToken         string = "packet-ccm"
+	providerName string = "equinixmetal"
+	// ConsumerToken token for metal consumer
+	ConsumerToken         string = "cloud-provider-equinix-metal"
 	checkLoopTimerSeconds        = 60
 )
 
@@ -62,24 +60,24 @@ type cloud struct {
 	bgp *bgp
 }
 
-func newCloud(packetConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
-	i := newInstances(client, packetConfig.ProjectID)
+func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
+	i := newInstances(client, metalConfig.ProjectID)
 	return &cloud{
 		client:                      client,
-		facility:                    packetConfig.Facility,
+		facility:                    metalConfig.Facility,
 		instances:                   i,
-		zones:                       newZones(client, packetConfig.ProjectID),
-		loadBalancer:                newLoadBalancers(client, packetConfig.ProjectID, packetConfig.Facility, packetConfig.LoadBalancerSetting, packetConfig.LocalASN, packetConfig.PeerASN),
-		bgp:                         newBGP(client, packetConfig.ProjectID, packetConfig.LocalASN, packetConfig.PeerASN, packetConfig.AnnotationLocalASN, packetConfig.AnnotationPeerASNs, packetConfig.AnnotationPeerIPs, packetConfig.AnnotationSrcIP, packetConfig.BGPNodeSelector),
-		controlPlaneEndpointManager: newControlPlaneEndpointManager(packetConfig.EIPTag, packetConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, packetConfig.APIServerPort),
+		zones:                       newZones(client, metalConfig.ProjectID),
+		loadBalancer:                newLoadBalancers(client, metalConfig.ProjectID, metalConfig.Facility, metalConfig.LoadBalancerSetting, metalConfig.LocalASN, metalConfig.PeerASN),
+		bgp:                         newBGP(client, metalConfig.ProjectID, metalConfig.LocalASN, metalConfig.PeerASN, metalConfig.AnnotationLocalASN, metalConfig.AnnotationPeerASNs, metalConfig.AnnotationPeerIPs, metalConfig.AnnotationSrcIP, metalConfig.BGPNodeSelector),
+		controlPlaneEndpointManager: newControlPlaneEndpointManager(metalConfig.EIPTag, metalConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, metalConfig.APIServerPort),
 	}, nil
 }
 
-func InitializeProvider(packetConfig Config) error {
+func InitializeProvider(metalConfig Config) error {
 	// set up our client and create the cloud interface
-	client := packngo.NewClientWithAuth("", packetConfig.AuthToken, nil)
-	client.UserAgent = fmt.Sprintf("packet-ccm/%s %s", VERSION, client.UserAgent)
-	cloud, err := newCloud(packetConfig, client)
+	client := packngo.NewClientWithAuth("", metalConfig.AuthToken, nil)
+	client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", VERSION, client.UserAgent)
+	cloud, err := newCloud(metalConfig, client)
 	if err != nil {
 		return fmt.Errorf("failed to create new cloud handler: %v", err)
 	}
@@ -102,7 +100,7 @@ func (c *cloud) services() []cloudService {
 // to perform housekeeping activities within the cloud provider.
 func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
 	klog.V(5).Info("called Initialize")
-	clientset := clientBuilder.ClientOrDie("packet-shared-informers")
+	clientset := clientBuilder.ClientOrDie("cloud-provider-equinix-metal-shared-informers")
 	sharedInformer := informers.NewSharedInformerFactory(clientset, 0)
 	// if we have services that want to reconcile, we will start node loop
 	nodeReconcilers := []nodeReconciler{}
@@ -151,7 +149,7 @@ func (c *cloud) Instances() (cloudprovider.Instances, bool) {
 
 // InstancesV2 returns an implementation of cloudprovider.InstancesV2.
 func (c *cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
-	klog.Warning("The Packet cloud provider does not support InstancesV2")
+	klog.Warning("The Equinix Metal cloud provider does not support InstancesV2")
 	return nil, false
 }
 

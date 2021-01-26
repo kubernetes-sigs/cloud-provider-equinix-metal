@@ -10,7 +10,7 @@ See the [packethost/standards glossary] for more details about this file.
 
 ## Maintainers
 
-[Packet]: https://packet.com
+[Equinix Metal]: https://metal.equinix.com
 [Packet CLI]: https://github.com/packethost/packet-cli
 [SUPPORT.md]: SUPPORT.md
 [packethost/standards

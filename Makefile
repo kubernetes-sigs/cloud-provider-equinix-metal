@@ -1,8 +1,8 @@
 SHELL=/bin/sh
-BINARY ?= packet-cloud-controller-manager
-BUILD_IMAGE?=packethost/packet-ccm
-BUILDER_IMAGE?=packethost/go-build
-PACKAGE_NAME?=github.com/packethost/packet-ccm
+BINARY ?= cloud-provider-equinix-metal
+BUILD_IMAGE?=equinix/cloud-provider-equinix-metal
+BUILDER_IMAGE?=equinix/go-build
+PACKAGE_NAME?=github.com/equinix/cloud-provider-equinix-metal
 GIT_VERSION?=$(shell git log -1 --format="%h")
 VERSION?=$(GIT_VERSION)
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
@@ -106,7 +106,7 @@ ifeq (, $(shell which golint))
 endif
 
 lint: pkgs golangci-lint ## Lint the files
-	@$(BUILD_CMD) $(LINTER) run --disable-all --enable=golint ./ ./packet
+	@$(BUILD_CMD) $(LINTER) run --disable-all --enable=golint ./ ./metal
 
 test: pkgs ## Run unit tests
 	@$(BUILD_CMD) go test -short ${PKG_LIST}

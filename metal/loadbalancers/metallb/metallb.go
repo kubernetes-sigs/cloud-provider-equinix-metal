@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/packethost/packet-ccm/packet/loadbalancers"
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"

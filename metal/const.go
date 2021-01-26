@@ -1,4 +1,4 @@
-package packet
+package metal
 
 type UpdateMode int
 

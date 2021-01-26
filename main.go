@@ -18,24 +18,24 @@ import (
 	"k8s.io/klog"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
 
-	"github.com/packethost/packet-ccm/packet"
+	"github.com/equinix/cloud-provider-equinix-metal/metal"
 	"github.com/spf13/pflag"
 )
 
 const (
-	apiKeyName                   = "PACKET_API_KEY"
-	projectIDName                = "PACKET_PROJECT_ID"
-	facilityName                 = "PACKET_FACILITY_NAME"
-	loadBalancerSettingName      = "PACKET_LB"
-	envVarLocalASN               = "PACKET_LOCAL_ASN"
-	envVarPeerASN                = "PACKET_PEER_ASN"
-	envVarAnnotationLocalASN     = "PACKET_ANNOTATION_LOCAL_ASN"
-	envVarAnnotationPeerASNs     = "PACKET_ANNOTATION_PEER_ASNS"
-	envVarAnnotationPeerIPs      = "PACKET_ANNOTATION_PEER_IPS"
-	envVarAnnotationSrcIP        = "PACKET_ANNOTATION_SRC_IP"
-	envVarEIPTag                 = "PACKET_EIP_TAG"
-	envVarAPIServerPort          = "PACKET_API_SERVER_PORT"
-	envVarBGPNodeSelector        = "PACKET_BGP_NODE_SELECTOR"
+	apiKeyName                   = "METAL_API_KEY"
+	projectIDName                = "METAL_PROJECT_ID"
+	facilityName                 = "METAL_FACILITY_NAME"
+	loadBalancerSettingName      = "METAL_LB"
+	envVarLocalASN               = "METAL_LOCAL_ASN"
+	envVarPeerASN                = "METAL_PEER_ASN"
+	envVarAnnotationLocalASN     = "METAL_ANNOTATION_LOCAL_ASN"
+	envVarAnnotationPeerASNs     = "METAL_ANNOTATION_PEER_ASNS"
+	envVarAnnotationPeerIPs      = "METAL_ANNOTATION_PEER_IPS"
+	envVarAnnotationSrcIP        = "METAL_ANNOTATION_SRC_IP"
+	envVarEIPTag                 = "METAL_EIP_TAG"
+	envVarAPIServerPort          = "METAL_API_SERVER_PORT"
+	envVarBGPNodeSelector        = "METAL_BGP_NODE_SELECTOR"
 	defaultLoadBalancerConfigMap = "metallb-system:config"
 )
 
@@ -61,16 +61,16 @@ func main() {
 	command.ParseFlags(os.Args[1:])
 
 	// register the provider
-	config, err := getPacketConfig(providerConfig)
+	config, err := getMetalConfig(providerConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "provider config error: %v\n", err)
 		os.Exit(1)
 	}
 	// report the config
-	printPacketConfig(config)
+	printMetalConfig(config)
 
 	// register the provider
-	if err := packet.InitializeProvider(config); err != nil {
+	if err := metal.InitializeProvider(config); err != nil {
 		fmt.Fprintf(os.Stderr, "provider initialization error: %v\n", err)
 		os.Exit(1)
 	}
@@ -81,9 +81,9 @@ func main() {
 	}
 }
 
-func getPacketConfig(providerConfig string) (packet.Config, error) {
+func getMetalConfig(providerConfig string) (metal.Config, error) {
 	// get our token and project
-	var config, rawConfig packet.Config
+	var config, rawConfig metal.Config
 	if providerConfig != "" {
 		configBytes, err := ioutil.ReadFile(providerConfig)
 		if err != nil {
@@ -134,7 +134,7 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 
 	// if facility was not defined, retrieve it from our metadata
 	if facility == "" {
-		metadata, err := packet.GetAndParseMetadata("")
+		metadata, err := metal.GetAndParseMetadata("")
 		if err != nil {
 			return config, fmt.Errorf("facility not set in environment variable %q or config file, and error reading metadata: %v", facilityName, err)
 		}
@@ -154,7 +154,7 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 	case rawConfig.LocalASN != 0:
 		config.LocalASN = rawConfig.LocalASN
 	default:
-		config.LocalASN = packet.DefaultLocalASN
+		config.LocalASN = metal.DefaultLocalASN
 	}
 
 	// get the peer ASN
@@ -169,26 +169,26 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 	case rawConfig.PeerASN != 0:
 		config.PeerASN = rawConfig.PeerASN
 	default:
-		config.PeerASN = packet.DefaultPeerASN
+		config.PeerASN = metal.DefaultPeerASN
 	}
 
 	// set the annotations
-	config.AnnotationLocalASN = packet.DefaultAnnotationNodeASN
+	config.AnnotationLocalASN = metal.DefaultAnnotationNodeASN
 	annotationLocalASN := os.Getenv(envVarAnnotationLocalASN)
 	if annotationLocalASN != "" {
 		config.AnnotationLocalASN = annotationLocalASN
 	}
-	config.AnnotationPeerASNs = packet.DefaultAnnotationPeerASNs
+	config.AnnotationPeerASNs = metal.DefaultAnnotationPeerASNs
 	annotationPeerASNs := os.Getenv(envVarAnnotationPeerASNs)
 	if annotationPeerASNs != "" {
 		config.AnnotationPeerASNs = annotationPeerASNs
 	}
-	config.AnnotationPeerIPs = packet.DefaultAnnotationPeerIPs
+	config.AnnotationPeerIPs = metal.DefaultAnnotationPeerIPs
 	annotationPeerIPs := os.Getenv(envVarAnnotationPeerIPs)
 	if annotationPeerIPs != "" {
 		config.AnnotationPeerIPs = annotationPeerIPs
 	}
-	config.AnnotationSrcIP = packet.DefaultAnnotationSrcIP
+	config.AnnotationSrcIP = metal.DefaultAnnotationSrcIP
 	annotationSrcIP := os.Getenv(envVarAnnotationSrcIP)
 	if annotationSrcIP != "" {
 		config.AnnotationSrcIP = annotationSrcIP
@@ -213,7 +213,7 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 	case rawConfig.APIServerPort != 0:
 		config.APIServerPort = rawConfig.APIServerPort
 	default:
-		config.APIServerPort = packet.DefaultAPIServerPort
+		config.APIServerPort = metal.DefaultAPIServerPort
 	}
 
 	config.BGPNodeSelector = rawConfig.BGPNodeSelector
@@ -228,8 +228,8 @@ func getPacketConfig(providerConfig string) (packet.Config, error) {
 	return config, nil
 }
 
-// printPacketConfig report the config to startup logs
-func printPacketConfig(config packet.Config) {
+// printMetalConfig report the config to startup logs
+func printMetalConfig(config metal.Config) {
 	lines := config.Strings()
 	for _, l := range lines {
 		klog.Infof(l)

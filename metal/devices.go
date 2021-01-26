@@ -1,4 +1,4 @@
-package packet
+package metal
 
 import (
 	"context"
@@ -104,7 +104,7 @@ func (i *instances) InstanceID(_ context.Context, nodeName types.NodeName) (stri
 		return "", err
 	}
 
-	// safely handle if it already is structured as packet://<id>
+	// safely handle if it already is structured as equinixmetal://<id>
 	split := strings.Split(device.ID, "://")
 	var devID string
 	switch len(split) {
@@ -216,7 +216,7 @@ func deviceByName(client *packngo.Client, projectID string, nodeName types.NodeN
 // deviceIDFromProviderID returns a device's ID from providerID.
 //
 // The providerID spec should be retrievable from the Kubernetes
-// node object. The expected format is: packet://device-id or just device-id
+// node object. The expected format is: equinixmetal://device-id or just device-id
 func deviceIDFromProviderID(providerID string) (string, error) {
 	klog.V(2).Infof("called deviceIDFromProviderID with providerID %s", providerID)
 	if providerID == "" {
@@ -234,7 +234,7 @@ func deviceIDFromProviderID(providerID string) (string, error) {
 	case 1:
 		deviceID = providerID
 	default:
-		return "", errors.Errorf("unexpected providerID format: %s, format should be: 'device-id' or 'packet://device-id'", providerID)
+		return "", errors.Errorf("unexpected providerID format: %s, format should be: 'device-id' or 'equinixmetal://device-id'", providerID)
 	}
 
 	return deviceID, nil
