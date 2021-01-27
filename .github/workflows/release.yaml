@@ -5,8 +5,7 @@ on:
     - 'v*'
 
 env:
-  SOURCE_TAG: "${GITHUB_REF#refs/tags/}"
-
+  IMAGE_NAME: "equinix/cloud-provider-equinix-metal"
 
 jobs:
   images: # create images in docker hub
@@ -15,6 +14,11 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: tagname
+      id: tagname
+      run: |
+        echo releasing ${GITHUB_REF#refs\/tags/}
+        echo ::set-output name=tag::${GITHUB_REF#refs\/tags/}
     - name: Set up QEMU for cross-building
       uses: docker/setup-qemu-action@v1
     - name: Set up Docker Buildx
@@ -26,8 +30,8 @@ jobs:
         platforms: linux/amd64,linux/arm64
         push: true
         tags: |
-          ${{env.IMAGE_NAME}}:${{ env.SOURCE_TAG }}
-          ${{env.IMAGE_NAME}}:latest
+          ${{ format('{0}:{1}', env.IMAGE_NAME, steps.tagname.outputs.tag) }}
+          ${{ format('{0}:{1}', env.IMAGE_NAME, 'latest') }}
 
   release: # create a github actions release with necessary artifacts
     name: Release
@@ -35,8 +39,13 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: tagname
+      id: tagname
+      run: |
+        echo releasing ${GITHUB_REF#refs\/tags/}
+        echo ::set-output name=tag::${GITHUB_REF#refs\/tags/}
     - name: release template
-      run: cat deploy/template/deployment.yaml | sed 's/RELEASE_TAG/'${{ env.SOURCE_TAG }}'/g' > /tmp/deployment.yaml
+      run: cat deploy/template/deployment.yaml | sed 's/RELEASE_TAG/'${{ steps.tagname.outputs.tag }}'/g' > /tmp/deployment.yaml
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
