@@ -107,8 +107,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	serviceReconcilers := []serviceReconciler{}
 	for _, elm := range c.services() {
 		if err := elm.init(clientset); err != nil {
-			klog.Errorf("could not initialize %s: %v", elm.name(), err)
-			return
+			klog.Fatalf("could not initialize %s: %v", elm.name(), err)
 		}
 		if n := elm.nodeReconciler(); n != nil {
 			nodeReconcilers = append(nodeReconcilers, n)
