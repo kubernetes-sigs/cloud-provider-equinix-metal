@@ -66,16 +66,17 @@ func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 	config := u.Path
 	var impl loadbalancers.LB
 	switch u.Scheme {
-	case "kuve-vip":
-		klog.V(2).Info("loadbalancer implementation enabled: kube-vip")
+	case "kube-vip":
+		klog.Info("loadbalancer implementation enabled: kube-vip")
 		impl = kubevip.NewLB(k8sclient, config)
 	case "metallb":
-		klog.V(2).Info("loadbalancer implementation enabled: metallb")
+		klog.Info("loadbalancer implementation enabled: metallb")
 		impl = metallb.NewLB(k8sclient, config)
 	case "empty":
-		klog.V(2).Info("loadbalancer implementation enabled: empty, bgp only")
+		klog.Info("loadbalancer implementation enabled: empty, bgp only")
 		impl = empty.NewLB(k8sclient, config)
 	default:
+		klog.Info("loadbalancer implementation disabled")
 		impl = nil
 	}
 
