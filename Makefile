@@ -10,7 +10,9 @@ ifneq (,$(RELEASE_TAG))
 VERSION := $(RELEASE_TAG)-$(VERSION)
 endif
 GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
-FROMTAG ?= latest
+BUILD_TAG ?= latest
+TAGGED_IMAGE ?= $(BUILD_IMAGE):$(BUILD_TAG)
+TAGGED_ARCH_IMAGE ?= $(TAGGED_IMAGE)-$(ARCH)
 LDFLAGS ?= -ldflags '-extldflags "-static" -X "$(PACKAGE_NAME)/version.VERSION=$(VERSION)"'
 
 # which arches can we support
@@ -161,8 +163,28 @@ sub-image-%:
 	@$(MAKE) ARCH=$* image
 
 image: ## make the image for a single ARCH
-	docker buildx build --load -t $(BUILD_IMAGE):latest-$(ARCH) -f Dockerfile --platform $(OS)/$(ARCH) .
-	echo "Done. image is at $(BUILD_IMAGE):latest-$(ARCH)"
+	docker buildx build --load -t $(TAGGED_ARCH_IMAGE) -f Dockerfile --platform $(OS)/$(ARCH) .
+	echo "Done. image is at $(TAGGED_ARCH_IMAGE)"
+
+push-all: $(addprefix push-arch-, $(ARCHES)) ## Push all built images.
+push-arch-%:
+	@$(MAKE) ARCH=$* push
+
+push: image ## Push image to registry for a single ARCH.
+	docker push $(TAGGED_ARCH_IMAGE)
+
+manifest-push: manifest-all ## Make single image manifest for all supported ARCH and push it to registry.
+	docker manifest push $(TAGGED_IMAGE)
+
+manifest-all: manifest-create $(addprefix manifest-annotate-arch-, $(ARCHES)) ## Annotate docker manifest with all supported ARCH.
+manifest-annotate-arch-%:
+	@$(MAKE) ARCH=$* manifest-annotate
+
+manifest-annotate:
+	docker manifest annotate $(TAGGED_IMAGE) $(TAGGED_ARCH_IMAGE) --arch=$(ARCH) --os=$(OS)
+
+manifest-create: push-all ## Creates Docker manifest for all created images.
+	docker manifest create $(TAGGED_IMAGE) $(addprefix --amend $(TAGGED_IMAGE)-, $(ARCHES))
 
 # Targets used when cross building.
 .PHONY: register
