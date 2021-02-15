@@ -1,9 +1,9 @@
-FROM alpine:3.11 as certs
+FROM alpine:3.13 as certs
 
 RUN apk --update add ca-certificates
 
 # builder
-FROM golang:1.15.6-alpine3.12 as build
+FROM golang:1.15.8-alpine3.13 as build
 
 WORKDIR /go/src/app
 RUN apk --update add make git
