@@ -3,7 +3,6 @@ package metallb
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -182,13 +181,8 @@ func (l *LB) getConfigMap(ctx context.Context) (*ConfigFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to get metallb configmap %s: %v", l.configMapName, err)
 	}
-	var (
-		configData string
-		ok         bool
-	)
-	if configData, ok = cm.Data["config"]; !ok {
-		return nil, errors.New("configmap data has no property 'config'")
-	}
+	// ignore checking if it exists; if not, it gives a blank string, which ParseConfig can handle anyways
+	configData := cm.Data["config"]
 	return ParseConfig([]byte(configData))
 }
 
