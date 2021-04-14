@@ -19,6 +19,11 @@ import (
 
 const (
 	providerName string = "equinixmetal"
+
+	// deprecatedProviderName is used to provide backward compatibility support
+	// with previous versions
+	deprecatedProviderName string = "packet"
+
 	// ConsumerToken token for metal consumer
 	ConsumerToken         string = "cloud-provider-equinix-metal"
 	checkLoopTimerSeconds        = 60

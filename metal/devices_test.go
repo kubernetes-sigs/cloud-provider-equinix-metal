@@ -91,6 +91,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 		{"aws://abcdef5667", nil, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
 		{"equinixmetal://acbdef-56788", nil, fmt.Errorf("instance not found")},                        // unknown ID
 		{fmt.Sprintf("equinixmetal://%s", dev.ID), validAddresses, nil},                               // valid
+		{fmt.Sprintf("packet://%s", dev.ID), validAddresses, nil},                                     // valid
 		{dev.ID, validAddresses, nil},                                                                 // valid
 	}
 
@@ -181,6 +182,7 @@ func TestInstanceTypeByProviderID(t *testing.T) {
 		{"aws://abcdef5667", "", fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetalk
 		{"equinixmetal://acbdef-56788", "", fmt.Errorf("instance not found")},                        // unknown ID
 		{fmt.Sprintf("equinixmetal://%s", dev.ID), dev.Plan.Name, nil},                               // valid
+		{fmt.Sprintf("packet://%s", dev.ID), dev.Plan.Name, nil},                                     // valid
 	}
 
 	for i, tt := range tests {
@@ -238,6 +240,7 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 		{"aws://abcdef5667", false, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
 		{"equinixmetal://acbdef-56788", false, nil},                                                     // unknown ID
 		{fmt.Sprintf("equinixmetal://%s", dev.ID), true, nil},                                           // valid
+		{fmt.Sprintf("packet://%s", dev.ID), true, nil},                                                 // valid
 		{dev.ID, true, nil}, // valid
 	}
 
@@ -276,9 +279,11 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 		{"aws://abcdef5667", false, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
 		{"equinixmetal://acbdef-56788", false, fmt.Errorf("instance not found")},                        // unknown ID
 		{fmt.Sprintf("equinixmetal://%s", devActive.ID), false, nil},                                    // valid
-		{devActive.ID, false, nil},                                    // valid
-		{fmt.Sprintf("equinixmetal://%s", devInactive.ID), true, nil}, // valid
-		{devInactive.ID, true, nil},                                   // valid
+		{fmt.Sprintf("packet://%s", devActive.ID), false, nil},                                          // valid
+		{devActive.ID, false, nil},                                                                      // valid
+		{fmt.Sprintf("equinixmetal://%s", devInactive.ID), true, nil},                                   // valid
+		{fmt.Sprintf("packet://%s", devInactive.ID), true, nil},                                         // valid
+		{devInactive.ID, true, nil},                                                                     // valid
 	}
 
 	for i, tt := range tests {
