@@ -176,7 +176,7 @@ Loadbalancing is enabled as follows.
 1. If the config file has a key named `metalLB`, read that. Else...
 1. Load balancing is disabled.
 
-The value of the loadbalancing configuration is `<type>://<detail>` where:
+The value of the loadbalancing configuration is `<type>:///<detail>` where:
 
 * `<type>` is the named supported type, of one of those listed below
 * `<detail>` is any additional detail needed to configure the implementation, details in the description below
@@ -230,14 +230,16 @@ to route traffic for your services at the Elastic IP to the correct host.
 To enable it, set the configuration `METAL_LB` or config `metalLB` to:
 
 ```
-metallb://<configMapNamespace>:<configMapName>
+metallb:///<configMapNamespace>/<configMapName>
 ```
 
 For example:
 
-* `metallb://metallb-system:config` - enable `metallb` management and update the configmap `config` in the namespace `metallb-system`
-* `metallb://foonamespace:myconfig` -  - enable `metallb` management and update the configmap `myconfig` in the namespace `foonamespae`
-* `metallb://` - enable `metallb` management and update the default configmap, i.e. `config` in the namespace `metallb-system`
+* `metallb:///metallb-system/config` - enable `metallb` management and update the configmap `config` in the namespace `metallb-system`
+* `metallb:///foonamespace/myconfig` -  - enable `metallb` management and update the configmap `myconfig` in the namespace `foonamespae`
+* `metallb:///` - enable `metallb` management and update the default configmap, i.e. `config` in the namespace `metallb-system`
+
+Notice the **three* slashes. In the URL, the namespace and the configmap are in the path.
 
 When enabled, CCM controls the loadbalancer by updating the provided `ConfigMap`.
 
