@@ -30,7 +30,7 @@ Recommended versions of Equinix Metal CCM based on your Kubernetes version:
 
 1. Set kubernetes binary arguments correctly
 1. Get your Equinix Metal project and secret API token
-1. Deploy your Equinix Metal project and secret API token to your cluster
+1. Deploy your Equinix Metal project and secret API token to your cluster in a [Secret](https://kubernetes.io/docs/concepts/configuration/secret/)
 1. Deploy the CCM
 1. Deploy the load balancer (optional)
 
@@ -87,7 +87,7 @@ stringData:
 ```
 
 
-Then apply the file via `kubectl`, e.g.:
+Then apply the secret, e.g.:
 
 ```bash
 kubectl apply -f /tmp/secret.yaml`
@@ -110,6 +110,8 @@ RELEASE=v2.0.0
 kubectl apply -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${RELEASE}/deployment.yaml
 ```
 
+The CCM uses multiple configuration options. See the [configuration][#Configuration] section for all of the options.
+
 #### Deploy Load Balancer
 
 If you want load balancing to work as well, deploy a supported load-balancer.
@@ -127,6 +129,37 @@ optional additional logging levels via the `--v=<level>` flag. In general:
 * `--v=3`: log additional data when logging returned values, usually entire go structs
 * `--v=5`: log every function call, including those called very frequently
 
+## Configuration
+
+The Equinix Metal CCM has multiple configuration options. These include three different ways to set most of them, for your convenience.
+
+1. Command-line flags, e.g. `--option value` or `--option=value`; if not set, then
+1. Environment variables, e.g. `CCM_OPTION=value`; if not set, then
+1. Field in the configuration [Secret](https://kubernetes.io/docs/concepts/configuration/secret/); if not set, then
+1. Default, if available; if not available, then an error
+
+This section lists each configuration option, and whether it can be set by each method.
+
+| Purpose | CLI Flag | Env Var | Secret Field | Default |
+| --- | --- | --- | --- | --- |
+| Path to config secret |    |    | `provider-config` | error |
+| API Key |    | `METAL_API_KEY` | `apiKey` | error |
+| Project ID |    | `METAL_PROJECT_ID` | `projectID` | error |
+| Facility |    | `METAL_FACILITY_NAME` | `facility` | read metadata on host on which CCM is running, else error |
+| Base URL to Equinix API |    |    | `base-url` | Official Equinix Metal API |
+| Load balancer setting |   | `METAL_LB` | `loadbalancer` | none |
+| BGP ASN for each cluster node |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
+| BGP ASN for upstream peer |   | `METAL_PEER_ASN` | `peerASN` | `65530` |
+| Kubernetes annotation to set node's BGP ASN |   | `METAL_ANNOTATION_LOCAL_ASN` | `annotationLocalASN` | `"metal.equinix.com/node-asn"` |
+| Kubernetes annotation to set BGP peer's ASN |   | `METAL_ANNOTATION_PEER_ASNS` | `annotationPeerASNs` | `"metal.equinix.com/peer-asn"` |
+| Kubernetes annotation to set BGP peer's IPs |   | `METAL_ANNOTATION_PEER_IPS` | `annotationPeerIPs` | `"metal.equinix.com/peer-ip"` |
+| Kubernetes annotation to set source IP for BGP peering |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/src-ip"` |
+| Kubernetes annotation to set source IP for BGP peering |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/src-ip"` |
+| Tag for control plane Elastic IP |    | `METAL_EIP_TAG` | `eipTag` | No control plane Elastic IP |
+| Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | `6443` |
+| Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | `6443` |
+| Filter for cluster nodes on which to enable BGP |    | `METAL_BGP_NODE_SELECTOR` | `bgpNodeSelector` | All nodes |
+
 ## How It Works
 
 The Kubernetes CCM for Equinix Metal deploys as a `Deployment` into your cluster with a replica of `1`. It provides the following services:
@@ -137,12 +170,11 @@ The Kubernetes CCM for Equinix Metal deploys as a `Deployment` into your cluster
 
 ### Facility
 
-The Equinix Metal CCM works in one facility at a time. You can control which facility it works with as follows:
+The Equinix Metal CCM works in one facility at a time. You can control which facility it works using the facility option
+in [Configuration][Configuration].
 
-1. If the environment variable `METAL_FACILITY_NAME` is set, use that value. Else..
-1. If the config file has a field named `facility`, use that value. Else..
-1. Read the facility from the Equinix Metal metadata of the host where the CCM is running. Else..
-1. Fail.
+If no facility is provided, it attempts to find the facility using metadata of the node on which it is running. If it cannot
+determine the metadata, for example if the CCM is running on a non-Equinix-Metal node, it will error and exit.
 
 The overrides of environment variable and config file are provided so that you can run the CCM
 on a node in a different facility, or even outside of Equinix Metal entirely.
@@ -329,7 +361,7 @@ To enable CCM to manage the control plane EIP:
 
 1. Create an Elastic IP, using the Equinix Metal API, Web UI or CLI
 1. Put an arbitrary but unique tag on the EIP
-1. When starting the CCM, set the env var `METAL_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
+1. When starting the CCM, set the [configuration][Configuration] for the control plane EIP tag, e.g. env var `METAL_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
 
 In [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet) we
 create one for every cluster for example. Equinix Metal does not provide an as a
@@ -416,36 +448,24 @@ On startup, the CCM executes the following core control loop:
 If a loadbalancer is enabled, the CCM enables BGP for the project and enables it by default
 on all nodes as they come up. It sets the ASNs as follows:
 
-* Node, a.k.a. local, ASN: 65000
-* Peer Router ASN: 65530
+* Node, a.k.a. local, ASN: `65000`
+* Peer Router ASN: `65530`
 
 These are the settings per Equinix Metal's BGP config, see [here](https://github.com/packet-labs/kubernetes-bgp). It is
-_not_ recommended to override them. However, the settings are set as follows:
+_not_ recommended to override them. However, you can do so, using the options in [Configuration][Configuration].
 
-1. If the environment variables `METAL_LOCAL_ASN` and `METAL_PEER_ASN` are set. Else...
-1. If the config file has fields named `localASN` and `peerASN`. Else...
-1. Use the above defaults.
-
-Set of servers on which BGP will be enabled can be filtered using the following settings:
-1. If the environment variable `METAL_BGP_NODE_SELECTOR` is set. Else...
-1. If the config file has field named `bgpNodeSelector` set. Else...
-1. Select all nodes.
-
+Set of servers on which BGP will be enabled can be filtered as well, using the the options in [Configuration][Configuration].
 Value for node selector should be a valid Kubernetes label selector (e.g. key1=value1,key2=value2).
 
-In addition to enabling BGP and setting ASNs, the Equinix Metal CCM sets Kubernetes annotations on the nodes. It sets the
-following information:
+In addition to enabling BGP and setting ASNs, the Equinix Metal CCM sets Kubernetes annotations on each cluster node.
+It sets annotations for:
 
-* `metal.equinix.com/node-asn` - Node, or local, ASN
-* `metal.equinix.com/peer-asns` - Peer ASNs, comma-separated if multiple
-* `metal.equinix.com/peer-ips` - Peer IPs, comma-separated if multiple
-* `metal.equinix.com/src-ip` - Source IP to use
+* Node, or local, ASN, default annotation `metal.equinix.com/node-asn`
+* Peer ASNs, comma-separated if multiple, default annotation `metal.equinix.com/peer-asns`
+* Peer IPs, comma-separated if multiple, default annotation `metal.equinix.com/peer-ips`
+* Source IP to use when communicating with upstream peers, default annotation `metal.equinix.com/src-ip`
 
-These annotation names can be overridden, if you so choose. The settings are as follows:
-
-1. If the environment variables `METAL_ANNOTATION_LOCAL_ASN`, `METAL_ANNOTATION_PEER_ASNS`, `METAL_ANNOTATION_PEER_IPS`, `METAL_ANNOTATION_SRC_IP` are set. Else...
-1. If the config file has files named `annotationLocalASN`, `annotationPeerASNs`, `annotationPeerIPs`, `annotationSrcIP`. Else...
-1. Use the above defaults.
+These annotation names can be overridden, if you so choose, using the options in [Configuration][Configuration].
 
 ## Elastic IP Configuration
 
