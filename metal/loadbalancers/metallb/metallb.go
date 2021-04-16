@@ -28,7 +28,14 @@ type LB struct {
 
 func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	var configmapnamespace, configmapname string
-	cmparts := strings.SplitN(config, ":", 2)
+	// it may have an extra slash at the beginning or end, so get rid of it
+	if strings.HasPrefix(config, "/") {
+		config = config[1:]
+	}
+	if strings.HasSuffix(config, "/") {
+		config = config[:len(config)-1]
+	}
+	cmparts := strings.SplitN(config, "/", 2)
 	if len(cmparts) >= 2 {
 		configmapnamespace, configmapname = cmparts[0], cmparts[1]
 	}
