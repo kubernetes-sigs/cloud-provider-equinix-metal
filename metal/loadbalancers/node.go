@@ -5,5 +5,6 @@ type Node struct {
 	SourceIP string
 	LocalASN int
 	PeerASN  int
+	Password string
 	Peers    []string
 }

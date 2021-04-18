@@ -10,6 +10,7 @@ const (
 	DefaultAnnotationPeerASNs = "metal.equinix.com/peer-asn"
 	DefaultAnnotationPeerIPs  = "metal.equinix.com/peer-ip"
 	DefaultAnnotationSrcIP    = "metal.equinix.com/src-ip"
+	DefaultAnnotationBGPPass  = "metal.equinix.com/bgp-pass"
 	DefaultLocalASN           = 65000
 	DefaultPeerASN            = 65530
 	DefaultAPIServerPort      = 6443

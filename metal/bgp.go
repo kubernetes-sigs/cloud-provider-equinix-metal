@@ -2,6 +2,7 @@ package metal
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -20,15 +21,20 @@ import (
 )
 
 type bgp struct {
-	project                                                                    string
-	client                                                                     *packngo.Client
-	k8sclient                                                                  kubernetes.Interface
-	peerASN, localASN                                                          int
-	annotationLocalASN, annotationPeerASNs, annotationPeerIPs, annotationSrcIP string
-	nodeSelector                                                               labels.Selector
+	project            string
+	client             *packngo.Client
+	k8sclient          kubernetes.Interface
+	localASN           int
+	bgpPass            string
+	annotationLocalASN string
+	annotationPeerASNs string
+	annotationPeerIPs  string
+	annotationSrcIP    string
+	annotationBgpPass  string
+	nodeSelector       labels.Selector
 }
 
-func newBGP(client *packngo.Client, project string, localASN, peerASN int, annotationLocalASN, annotationPeerASNs, annotationPeerIPs, annotationSrcIP string, nodeSelector string) *bgp {
+func newBGP(client *packngo.Client, project string, localASN int, bgpPass string, annotationLocalASN, annotationPeerASNs, annotationPeerIPs, annotationSrcIP, annotationBgpPass string, nodeSelector string) *bgp {
 
 	selector := labels.Everything()
 	if nodeSelector != "" {
@@ -39,11 +45,12 @@ func newBGP(client *packngo.Client, project string, localASN, peerASN int, annot
 		project:            project,
 		client:             client,
 		localASN:           localASN,
-		peerASN:            peerASN,
+		bgpPass:            bgpPass,
 		annotationLocalASN: annotationLocalASN,
 		annotationPeerASNs: annotationPeerASNs,
 		annotationPeerIPs:  annotationPeerIPs,
 		annotationSrcIP:    annotationSrcIP,
+		annotationBgpPass:  annotationBgpPass,
 		nodeSelector:       selector,
 	}
 }
@@ -106,12 +113,12 @@ func (b *bgp) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateM
 			// add annotations for bgp
 			klog.V(2).Infof("bgp.reconcileNodes(): setting annotations on node %s", node.Name)
 			// get the bgp info
-			peers, srcIP, err := getNodeBGPConfig(id, b.client)
-			if err != nil || len(peers) < 1 {
+			peer, err := getNodeBGPConfig(id, b.client)
+			if err != nil || peer == nil {
 				klog.Errorf("bgp.reconcileNodes(): could not get BGP info for node %s: %v", node.Name, err)
 			} else {
-				localASN := strconv.Itoa(b.localASN)
-				peerASNs := strconv.Itoa(b.peerASN)
+				localASN := strconv.Itoa(peer.CustomerAs)
+				peerASN := strconv.Itoa(peer.PeerAs)
 				newAnnotations := make(map[string]string)
 				oldAnnotations := node.Annotations
 				if oldAnnotations == nil {
@@ -123,21 +130,28 @@ func (b *bgp) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateM
 				}
 
 				val, ok = oldAnnotations[b.annotationPeerASNs]
-				if !ok || val != peerASNs {
-					newAnnotations[b.annotationPeerASNs] = peerASNs
+				if !ok || val != peerASN {
+					newAnnotations[b.annotationPeerASNs] = peerASN
 				}
 
 				// we always set the peer IPs as a sorted list, comma-separated
-				sort.Strings(peers)
-				peerList := strings.Join(peers, ",")
+				pips := peer.PeerIps
+				sort.Strings(pips)
+				peerList := strings.Join(pips, ",")
 				val, ok = oldAnnotations[b.annotationPeerIPs]
 				if !ok || val != peerList {
 					newAnnotations[b.annotationPeerIPs] = peerList
 				}
 
 				val, ok = oldAnnotations[b.annotationSrcIP]
-				if !ok || val != srcIP {
-					newAnnotations[b.annotationSrcIP] = srcIP
+				if !ok || val != peer.CustomerIP {
+					newAnnotations[b.annotationSrcIP] = peer.CustomerIP
+				}
+
+				val, ok = oldAnnotations[b.annotationBgpPass]
+				newVal := base64.StdEncoding.EncodeToString([]byte(peer.Md5Password))
+				if !ok || val != newVal {
+					newAnnotations[b.annotationBgpPass] = newVal
 				}
 
 				// patch the node with the new annotations
@@ -184,6 +198,7 @@ func (b *bgp) enableBGP() error {
 	// we did not have a valid one, so create it
 	req := packngo.CreateBGPConfigRequest{
 		Asn:            b.localASN,
+		Md5:            b.bgpPass,
 		DeploymentType: "local",
 		UseCase:        "kubernetes-load-balancer",
 	}
@@ -212,29 +227,22 @@ func ensureNodeBGPEnabled(id string, client *packngo.Client) error {
 }
 
 // getNodeBGPConfig get the BGP config for a specific node
-func getNodeBGPConfig(providerID string, client *packngo.Client) (peers []string, src string, err error) {
+func getNodeBGPConfig(providerID string, client *packngo.Client) (peer *packngo.BGPNeighbor, err error) {
 	id, err := deviceIDFromProviderID(providerID)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	neighbours, _, err := client.Devices.ListBGPNeighbors(id, nil)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get device neighbours for device %s: %v", id, err)
+		return nil, fmt.Errorf("failed to get device neighbours for device %s: %v", id, err)
 	}
 	// we need the ipv4 neighbour
 	for _, n := range neighbours {
-		if n.AddressFamily != 4 {
-			continue
+		if n.AddressFamily == 4 {
+			return &n, nil
 		}
-		peers = n.PeerIps
-		src = n.CustomerIP
-
-		break
 	}
-	if len(peers) == 0 {
-		return peers, src, errors.New("no matching ipv4 neighbour found")
-	}
-	return peers, src, nil
+	return nil, errors.New("no matching ipv4 neighbour found")
 }
 
 // patchUpdatedNode apply a patch to the node

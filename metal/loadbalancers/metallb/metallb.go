@@ -96,7 +96,7 @@ func (l *LB) SyncServices(ctx context.Context, ips map[string]bool) error {
 }
 
 // AddNode add a node with the provided name, srcIP, and bgp information
-func (l *LB) AddNode(ctx context.Context, nodeName string, localASN, peerASN int, srcIP string, peers ...string) error {
+func (l *LB) AddNode(ctx context.Context, nodeName string, localASN, peerASN int, password, srcIP string, peers ...string) error {
 	config, err := l.getConfigMap(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
@@ -112,6 +112,7 @@ func (l *LB) AddNode(ctx context.Context, nodeName string, localASN, peerASN int
 		p := Peer{
 			MyASN:         uint32(localASN),
 			ASN:           uint32(peerASN),
+			Password:      password,
 			Addr:          peer,
 			NodeSelectors: []NodeSelector{ns},
 		}
@@ -174,7 +175,7 @@ func (l *LB) SyncNodes(ctx context.Context, nodes map[string]loadbalancers.Node)
 	}
 	for _, node := range nodes {
 		if _, ok := configMap[node.Name]; !ok {
-			if err := l.AddNode(ctx, node.Name, node.LocalASN, node.PeerASN, node.SourceIP, node.Peers...); err != nil {
+			if err := l.AddNode(ctx, node.Name, node.LocalASN, node.PeerASN, node.Password, node.SourceIP, node.Peers...); err != nil {
 				klog.V(2).Infof("loadbalancers.reconcileNodes(): error adding node %s: %v", node.Name, err)
 				continue
 			}

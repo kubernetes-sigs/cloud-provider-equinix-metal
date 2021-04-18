@@ -148,17 +148,23 @@ This section lists each configuration option, and whether it can be set by each 
 | Facility |    | `METAL_FACILITY_NAME` | `facility` | read metadata on host on which CCM is running, else error |
 | Base URL to Equinix API |    |    | `base-url` | Official Equinix Metal API |
 | Load balancer setting |   | `METAL_LB` | `loadbalancer` | none |
-| BGP ASN for each cluster node |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
-| BGP ASN for upstream peer |   | `METAL_PEER_ASN` | `peerASN` | `65530` |
+| BGP ASN for cluster nodes when enabling BGP on the project |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
+| BGP passphrase to use when enabling BGP on the project |   | `METAL_BGP_PASS` | `bgpPass` | `""` |
 | Kubernetes annotation to set node's BGP ASN |   | `METAL_ANNOTATION_LOCAL_ASN` | `annotationLocalASN` | `"metal.equinix.com/node-asn"` |
 | Kubernetes annotation to set BGP peer's ASN |   | `METAL_ANNOTATION_PEER_ASNS` | `annotationPeerASNs` | `"metal.equinix.com/peer-asn"` |
 | Kubernetes annotation to set BGP peer's IPs |   | `METAL_ANNOTATION_PEER_IPS` | `annotationPeerIPs` | `"metal.equinix.com/peer-ip"` |
 | Kubernetes annotation to set source IP for BGP peering |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/src-ip"` |
-| Kubernetes annotation to set source IP for BGP peering |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/src-ip"` |
+| Kubernetes annotation to set BGP MD5 password, base64-encoded (see security warning below) |   | `METAL_ANNOTATION_BGP_PASS` | `annotationBGPPass` | `"metal.equinix.com/bgp-pass"` |
 | Tag for control plane Elastic IP |    | `METAL_EIP_TAG` | `eipTag` | No control plane Elastic IP |
 | Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | `6443` |
-| Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | `6443` |
 | Filter for cluster nodes on which to enable BGP |    | `METAL_BGP_NODE_SELECTOR` | `bgpNodeSelector` | All nodes |
+
+<u>Security Warning</u>
+Including your project's BGP password, even base64-encoded, may have security implications. Because Equinix Metal
+only allows communication to the BGP peer from the actual node, and not from outside, and because that password already is available
+form metadata on the host, this risk may be limited. We further recommend using Kubernetes
+[Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) to restrict access to BGP peers solely
+to system pods that have reasonable need to access them.
 
 ## How It Works
 

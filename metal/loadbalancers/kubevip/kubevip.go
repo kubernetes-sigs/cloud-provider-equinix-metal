@@ -28,7 +28,7 @@ func (l *LB) SyncServices(ctx context.Context, ips map[string]bool) error {
 }
 
 // AddNode add a node with the provided name, srcIP, and bgp information
-func (l *LB) AddNode(ctx context.Context, nodeName string, localASN, peerASN int, srcIP string, peers ...string) error {
+func (l *LB) AddNode(ctx context.Context, nodeName string, localASN, peerASN int, password, srcIP string, peers ...string) error {
 	return nil
 }
 
