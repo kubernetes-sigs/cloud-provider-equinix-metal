@@ -28,11 +28,12 @@ const (
 	facilityName                 = "METAL_FACILITY_NAME"
 	loadBalancerSettingName      = "METAL_LB"
 	envVarLocalASN               = "METAL_LOCAL_ASN"
-	envVarPeerASN                = "METAL_PEER_ASN"
+	envVarBGPPass                = "METAL_BGP_PASS"
 	envVarAnnotationLocalASN     = "METAL_ANNOTATION_LOCAL_ASN"
 	envVarAnnotationPeerASNs     = "METAL_ANNOTATION_PEER_ASNS"
 	envVarAnnotationPeerIPs      = "METAL_ANNOTATION_PEER_IPS"
 	envVarAnnotationSrcIP        = "METAL_ANNOTATION_SRC_IP"
+	envVarAnnotationBGPPass      = "METAL_ANNOTATION_BGP_PASS"
 	envVarEIPTag                 = "METAL_EIP_TAG"
 	envVarAPIServerPort          = "METAL_API_SERVER_PORT"
 	envVarBGPNodeSelector        = "METAL_BGP_NODE_SELECTOR"
@@ -157,19 +158,9 @@ func getMetalConfig(providerConfig string) (metal.Config, error) {
 		config.LocalASN = metal.DefaultLocalASN
 	}
 
-	// get the peer ASN
-	peerASN := os.Getenv(envVarPeerASN)
-	switch {
-	case peerASN != "":
-		peerASNNo, err := strconv.Atoi(peerASN)
-		if err != nil {
-			return config, fmt.Errorf("env var %s must be a number, was %s: %v", envVarPeerASN, peerASN, err)
-		}
-		config.PeerASN = peerASNNo
-	case rawConfig.PeerASN != 0:
-		config.PeerASN = rawConfig.PeerASN
-	default:
-		config.PeerASN = metal.DefaultPeerASN
+	bgpPass := os.Getenv(envVarBGPPass)
+	if bgpPass != "" {
+		config.BGPPass = bgpPass
 	}
 
 	// set the annotations
@@ -192,6 +183,12 @@ func getMetalConfig(providerConfig string) (metal.Config, error) {
 	annotationSrcIP := os.Getenv(envVarAnnotationSrcIP)
 	if annotationSrcIP != "" {
 		config.AnnotationSrcIP = annotationSrcIP
+	}
+
+	config.AnnotationBGPPass = metal.DefaultAnnotationBGPPass
+	annotationBGPPass := os.Getenv(envVarAnnotationBGPPass)
+	if annotationBGPPass != "" {
+		config.AnnotationBGPPass = annotationBGPPass
 	}
 
 	if rawConfig.EIPTag != "" {

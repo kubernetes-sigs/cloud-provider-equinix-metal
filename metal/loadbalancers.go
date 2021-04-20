@@ -28,14 +28,13 @@ type loadBalancers struct {
 	k8sclient         kubernetes.Interface
 	project           string
 	facility          string
-	localASN, peerASN int
 	clusterID         string
 	implementor       loadbalancers.LB
 	implementorConfig string
 }
 
-func newLoadBalancers(client *packngo.Client, projectID, facility string, config string, localASN, peerASN int) *loadBalancers {
-	return &loadBalancers{client, nil, projectID, facility, localASN, peerASN, "", nil, config}
+func newLoadBalancers(client *packngo.Client, projectID, facility string, config string) *loadBalancers {
+	return &loadBalancers{client, nil, projectID, facility, "", nil, config}
 }
 
 func (l *loadBalancers) name() string {
@@ -127,9 +126,8 @@ func (l *loadBalancers) serviceReconciler() serviceReconciler {
 // by adding it to or removing it from the known metallb configmap
 func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
 	var (
-		peers []string
-		srcIP string
-		err   error
+		peer *packngo.BGPNeighbor
+		err  error
 	)
 	klog.V(2).Infof("loadbalancers.reconcileNodes(): called for nodes %v", nodes)
 
@@ -151,11 +149,11 @@ func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mo
 			if id == "" {
 				return fmt.Errorf("no provider ID given for node %s", node.Name)
 			}
-			if peers, srcIP, err = getNodeBGPConfig(id, l.client); err != nil || len(peers) < 1 {
+			if peer, err = getNodeBGPConfig(id, l.client); err != nil || peer == nil {
 				klog.Errorf("loadbalancers.reconcileNodes(): could not add metallb node peer address for node %s: %v", node.Name, err)
 				continue
 			}
-			if err := l.implementor.AddNode(ctx, node.Name, l.localASN, l.peerASN, srcIP, peers...); err != nil {
+			if err := l.implementor.AddNode(ctx, node.Name, peer.CustomerAs, peer.PeerAs, peer.Md5Password, peer.CustomerIP, peer.PeerIps...); err != nil {
 				klog.V(2).Infof("loadbalancers.reconcileNodes(): error adding node %s: %v", node.Name, err)
 				continue
 			}
@@ -169,16 +167,17 @@ func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mo
 			if id == "" {
 				return fmt.Errorf("no provider ID given for node %s", node.Name)
 			}
-			if peers, srcIP, err = getNodeBGPConfig(id, l.client); err != nil || len(peers) < 1 {
+			if peer, err = getNodeBGPConfig(id, l.client); err != nil || peer == nil {
 				klog.Errorf("loadbalancers.reconcileNodes(): could not get node peer address for node %s: %v", node.Name, err)
 				continue
 			}
 			goodMap[node.Name] = loadbalancers.Node{
 				Name:     node.Name,
-				LocalASN: l.localASN,
-				PeerASN:  l.peerASN,
-				SourceIP: srcIP,
-				Peers:    peers,
+				LocalASN: peer.CustomerAs,
+				PeerASN:  peer.PeerAs,
+				SourceIP: peer.CustomerIP,
+				Peers:    peer.PeerIps,
+				Password: peer.Md5Password,
 			}
 		}
 		if err := l.implementor.SyncNodes(ctx, goodMap); err != nil {

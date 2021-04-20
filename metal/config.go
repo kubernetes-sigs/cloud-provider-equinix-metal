@@ -9,12 +9,13 @@ type Config struct {
 	BaseURL             *string `json:"base-url,omitempty"`
 	LoadBalancerSetting string  `json:"loadbalancer"`
 	Facility            string  `json:"facility,omitempty"`
-	PeerASN             int     `json:"peerASN,omitempty"`
 	LocalASN            int     `json:"localASN,omitempty"`
+	BGPPass             string  `json:"bgpPass,omitempty"`
 	AnnotationLocalASN  string  `json:"annotationLocalASN,omitEmpty"`
 	AnnotationPeerASNs  string  `json:"annotationPeerASNs,omitEmpty"`
 	AnnotationPeerIPs   string  `json:"annotationPeerIPs,omitEmpty"`
 	AnnotationSrcIP     string  `json:"annotationSrcIP,omitEmpty"`
+	AnnotationBGPPass   string  `json:"annotationBGPPass,omitEmpty"`
 	EIPTag              string  `json:"eipTag,omitEmpty"`
 	APIServerPort       int     `json:"apiServerPort,omitEmpty"`
 	BGPNodeSelector     string  `json:"bgpNodeSelector,omitEmpty"`
@@ -37,7 +38,6 @@ func (c Config) Strings() []string {
 		ret = append(ret, "load balancer config: ''%s", c.LoadBalancerSetting)
 	}
 	ret = append(ret, fmt.Sprintf("facility: '%s'", c.Facility))
-	ret = append(ret, fmt.Sprintf("peer ASN: '%d'", c.PeerASN))
 	ret = append(ret, fmt.Sprintf("local ASN: '%d'", c.LocalASN))
 	ret = append(ret, fmt.Sprintf("Elastic IP Tag: '%s'", c.EIPTag))
 	ret = append(ret, fmt.Sprintf("API Server Port: '%d'", c.APIServerPort))

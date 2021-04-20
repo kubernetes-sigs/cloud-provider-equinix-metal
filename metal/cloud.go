@@ -72,8 +72,8 @@ func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interfa
 		facility:                    metalConfig.Facility,
 		instances:                   i,
 		zones:                       newZones(client, metalConfig.ProjectID),
-		loadBalancer:                newLoadBalancers(client, metalConfig.ProjectID, metalConfig.Facility, metalConfig.LoadBalancerSetting, metalConfig.LocalASN, metalConfig.PeerASN),
-		bgp:                         newBGP(client, metalConfig.ProjectID, metalConfig.LocalASN, metalConfig.PeerASN, metalConfig.AnnotationLocalASN, metalConfig.AnnotationPeerASNs, metalConfig.AnnotationPeerIPs, metalConfig.AnnotationSrcIP, metalConfig.BGPNodeSelector),
+		loadBalancer:                newLoadBalancers(client, metalConfig.ProjectID, metalConfig.Facility, metalConfig.LoadBalancerSetting),
+		bgp:                         newBGP(client, metalConfig.ProjectID, metalConfig.LocalASN, metalConfig.BGPPass, metalConfig.AnnotationLocalASN, metalConfig.AnnotationPeerASNs, metalConfig.AnnotationPeerIPs, metalConfig.AnnotationSrcIP, metalConfig.AnnotationBGPPass, metalConfig.BGPNodeSelector),
 		controlPlaneEndpointManager: newControlPlaneEndpointManager(metalConfig.EIPTag, metalConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, metalConfig.APIServerPort),
 	}, nil
 }

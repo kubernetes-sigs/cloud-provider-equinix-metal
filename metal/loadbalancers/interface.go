@@ -6,7 +6,7 @@ import (
 
 type LB interface {
 	// AddNode add a node with the provided name, srcIP, and bgp information
-	AddNode(ctx context.Context, nodeName string, localASN, peerASN int, srcIP string, peers ...string) error
+	AddNode(ctx context.Context, nodeName string, localASN, peerASN int, pass string, srcIP string, peers ...string) error
 	// RemoveNode remove a node with the provided name
 	RemoveNode(ctx context.Context, nodeName string) error
 	// SyncNodes ensure that the list of nodes is only those with the matched names
