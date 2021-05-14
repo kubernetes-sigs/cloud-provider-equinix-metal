@@ -83,8 +83,8 @@ jobs:
     - name: tagname
       id: tagname
       run: |
-       echo releasing ${GITHUB_REF#refs\/tags/}
-       echo ::set-output name=tag::${GITHUB_REF#refs\/tags/}
+        echo releasing ${GITHUB_REF#refs\/tags/}
+        echo ::set-output name=tag::${GITHUB_REF#refs\/tags/}
 
     - name: Configure Git
       run: |
@@ -92,11 +92,11 @@ jobs:
         git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
     - name: Install Helm
-       uses: azure/setup-helm@v1
-       with:
-         version: v3.4.0
+      uses: azure/setup-helm@v1
+      with:
+        version: v3.4.0
  
     - name: Run chart-releaser
-       uses: helm/chart-releaser-action@v1.2.1
-       env:
-         CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+      uses: helm/chart-releaser-action@v1.2.1
+      env:
+        CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
