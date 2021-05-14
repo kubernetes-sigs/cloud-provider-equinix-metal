@@ -95,6 +95,9 @@ jobs:
       uses: azure/setup-helm@v1
       with:
         version: v3.4.0
+
+    - name: Set appVersion
+      run: sed -i 's/master/'${{ steps.tagname.outputs.tag }}'/g' deploy/helm/Chart.yaml
  
     - name: Run chart-releaser
       uses: helm/chart-releaser-action@v1.2.1
