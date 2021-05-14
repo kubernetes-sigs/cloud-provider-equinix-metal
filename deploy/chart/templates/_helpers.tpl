@@ -71,3 +71,14 @@ Create the name of the secret containing the config file to use
 {{- default "default" .Values.configSecret.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Create the image version tag
+*/}}
+{{- define "cloud-provider-equinix-metal.imageTag" -}}
+{{- if eq .Chart.AppVersion "master" }}
+{{- default "master" .Values.image.tag }}
+{{- else }}
+{{- default .Values.image.tag }}
+{{- end }}
+{{- end }}

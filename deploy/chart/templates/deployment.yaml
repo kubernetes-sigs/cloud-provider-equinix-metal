@@ -47,7 +47,7 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default (printf "v%s" .Chart.AppVersion) }}"
+          image: "{{ .Values.image.repository }}:{{ include "cloud-provider-equinix-metal.imageTag" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - ./cloud-provider-equinix-metal
