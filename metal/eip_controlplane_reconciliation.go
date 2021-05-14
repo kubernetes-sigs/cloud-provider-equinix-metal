@@ -106,9 +106,13 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 		return err
 	}
 	resp, err := m.httpClient.Do(req)
+	// if there was no error, ensure we close
+	if err == nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil || resp.StatusCode != http.StatusOK {
 		if err != nil {
-			klog.Errorf("http client error during healthcheck. err \"%s\"", err)
+			klog.Errorf("http client error during healthcheck, will try to reassign to a healthy node. err \"%s\"", err)
 		}
 		// filter down to only those nodes that are tagged as control plane
 		cpNodes := []*v1.Node{}
@@ -123,7 +127,6 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 			return err
 		}
 	}
-	defer resp.Body.Close()
 	return nil
 }
 
@@ -174,9 +177,10 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 				}); err != nil {
 					return err
 				}
-				klog.V(2).Infof("control plane endpoint assigned to new device %s", node.Name)
+				klog.Infof("control plane endpoint assigned to new device %s", node.Name)
 				return nil
 			}
+			klog.Infof("will not assign control plane endpoint to new device %s: returned http code %d", node.Name, resp.StatusCode)
 		}
 	}
 	return errors.New("ccm didn't find a good candidate for IP allocation. Cluster is unhealthy")
