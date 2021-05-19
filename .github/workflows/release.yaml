@@ -71,35 +71,3 @@ jobs:
         asset_path: /tmp/deployment.yaml
         asset_name: deployment.yaml
         asset_content_type: application/yaml
-
-  release-helm:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: tagname
-      id: tagname
-      run: |
-        echo releasing ${GITHUB_REF#refs\/tags/}
-        echo ::set-output name=tag::${GITHUB_REF#refs\/tags/}
-
-    - name: Configure Git
-      run: |
-        git config user.name "$GITHUB_ACTOR"
-        git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
-    - name: Install Helm
-      uses: azure/setup-helm@v1
-      with:
-        version: v3.4.0
-
-    - name: Set appVersion
-      run: sed -i 's/master/'${{ steps.tagname.outputs.tag }}'/g' deploy/helm/Chart.yaml
- 
-    - name: Run chart-releaser
-      uses: helm/chart-releaser-action@v1.2.1
-      env:
-        CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
