@@ -206,11 +206,12 @@ func getMetalConfig(providerConfig string) (metal.Config, error) {
 		if err != nil {
 			return config, fmt.Errorf("env var %s must be a number, was %s: %v", envVarAPIServerPort, apiServer, err)
 		}
-		config.APIServerPort = apiServerNo
+		config.APIServerPort = int32(apiServerNo)
 	case rawConfig.APIServerPort != 0:
 		config.APIServerPort = rawConfig.APIServerPort
 	default:
-		config.APIServerPort = metal.DefaultAPIServerPort
+		// if nothing else set it, we set it to 0, to indicate that it should use whatever the kube-apiserver port is
+		config.APIServerPort = 0
 	}
 
 	config.BGPNodeSelector = rawConfig.BGPNodeSelector

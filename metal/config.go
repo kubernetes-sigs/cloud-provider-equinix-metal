@@ -17,7 +17,7 @@ type Config struct {
 	AnnotationSrcIP     string  `json:"annotationSrcIP,omitEmpty"`
 	AnnotationBGPPass   string  `json:"annotationBGPPass,omitEmpty"`
 	EIPTag              string  `json:"eipTag,omitEmpty"`
-	APIServerPort       int     `json:"apiServerPort,omitEmpty"`
+	APIServerPort       int32   `json:"apiServerPort,omitEmpty"`
 	BGPNodeSelector     string  `json:"bgpNodeSelector,omitEmpty"`
 }
 

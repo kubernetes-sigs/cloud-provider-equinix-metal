@@ -13,5 +13,4 @@ const (
 	DefaultAnnotationBGPPass  = "metal.equinix.com/bgp-pass"
 	DefaultLocalASN           = 65000
 	DefaultPeerASN            = 65530
-	DefaultAPIServerPort      = 6443
 )
