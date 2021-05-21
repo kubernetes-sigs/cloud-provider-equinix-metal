@@ -24,6 +24,57 @@ Recommended versions of Equinix Metal CCM based on your Kubernetes version:
 * Equinix Metal CCM version v0.0.4 supports Kubernetes version >=v1.10
 * Equinix Metal CCM version v1.0.0+ supports Kubernetes version >=1.15.0
 
+### BGP
+
+If you plan on using a BGP, for example for a BGP-based load balancer, you _may_ need to set static routes on your hosts.
+
+Details about BGP can be found in [the official Equinix Metal BGP documentation](https://metal.equinix.com/developers/docs/networking/local-global-bgp/#server-host-configuration).
+
+Equinix Metal facilities provide BGP peers at certain addresses, normally `169.254.255.1` and `169.254.255.2`. These are available
+in the host configuration via the Equinix Metal API, as well as the [metadata](https://metal.equinix.com/developers/docs/servers/metadata/)
+on each host.
+
+In order for BGP peering to work, the upstream BGP peers _must_ receive the packets from your device's _private_ IP address.
+If they come from the _public_ address, they will be dropped.
+
+There are two ways to get the packets to have the correct source address:
+
+* use BGP software that knows how to set the source address on a packet
+* set static routes on your host
+
+#### BGP Software
+
+Some implementations of BGP software support setting a source address for BGP peering packets, including
+[bird](https://bird.network.cz) and [kube-vip](https://kube-vip.io).
+
+CCM helps in this regard. It reads the information about the peers and the correct source address for the device from
+the Equinix Metal API, and then sets those as annotations on the host. Software that knows how to read those annotations,
+for example, kube-vip, will do the right thing. There will be no need to set static routes.
+
+#### Static Routes
+
+If your BGP software does not support using a specific source IP, then you must set static routes.
+
+You need to retrieve the following:
+
+* your private IPv4 upstream gateway address
+* your BGP peer addresses
+
+Before you can retrieve the information, you must enable BGP at both the Equinix Metal project level, and for each device.
+You can do this in the Equinix Metal Web UI, API or CLI. CCM ensures these settings on the project and each device. However,
+if you wish to retrieve the information _before_ CCM enables it, for example to run the configuration below, you may need
+to enable it first.
+
+A sample method:
+
+```bash
+GATEWAY_IP=$(curl https://metadata.platformequinix.com/metadata | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
+PEERS=$(curl https://metadata.platformequinix.com/metadata | jq -r '.bgp_neighbors[0].peer_ips[]')
+for i in ${PEERS}; do
+ip route add ${i} via $GATEWAY_IP
+done
+```
+
 ## Deployment
 
 **TL;DR**
