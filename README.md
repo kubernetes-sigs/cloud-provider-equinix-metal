@@ -207,7 +207,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Kubernetes annotation to set source IP for BGP peering |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/src-ip"` |
 | Kubernetes annotation to set BGP MD5 password, base64-encoded (see security warning below) |   | `METAL_ANNOTATION_BGP_PASS` | `annotationBGPPass` | `"metal.equinix.com/bgp-pass"` |
 | Tag for control plane Elastic IP |    | `METAL_EIP_TAG` | `eipTag` | No control plane Elastic IP |
-| Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | `6443` |
+| Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP |    | `METAL_BGP_NODE_SELECTOR` | `bgpNodeSelector` | All nodes |
 
 <u>Security Warning</u>
@@ -418,7 +418,9 @@ To enable CCM to manage the control plane EIP:
 
 1. Create an Elastic IP, using the Equinix Metal API, Web UI or CLI
 1. Put an arbitrary but unique tag on the EIP
-1. When starting the CCM, set the [configuration][Configuration] for the control plane EIP tag, e.g. env var `METAL_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
+1. When starting the CCM
+   * set the [configuration][Configuration] for the control plane EIP tag, e.g. env var `METAL_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
+   * (optional) set the port that the EIP should listen on; by default, or when set to `0`, it will use the same port as the `kube-apiserver` on the control plane nodes. This port can also be specified with `METAL_API_SERVER_PORT=<port>.`
 
 In [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet) we
 create one for every cluster for example. Equinix Metal does not provide an as a
@@ -459,12 +461,17 @@ The structure relies on the already existing `default/kubernetes` service, which
 creates an `Endpoints` structure that includes all of the functioning control plane
 nodes. The CCM does the following on each loop:
 
-1. Finds all of the endpoints for `default/kubernetes` and creates or updates parallel endpoints in `kube-system/cloud-provider-equinix-metal-kubernetes-external`
+1. Reads the Kubernetes-created `default/kubernetes` service to discover:
+   * what port `kube-apiserver` is listening on from `targetPort`
+   * all of the endpoints, i.e. control plane nodes where `kube-apiserver` is running
 1. Creates a service named `kube-system/cloud-provider-equinix-metal-kubernetes-external` with the following settings:
    * `type=LoadBalancer`
    * `spec.loadBalancerIP=<eip>`
    * `status.loadBalancer.ingress[0].ip=<eip>`
    * `metadata.annotations["metallb.universe.tf/address-pool"]=disabled-metallb-do-not-use-any-address-pool`
+   * `spec.ports[0].targetPort=<targetPort>`
+   * `spec.ports[0].port=<targetPort_or_override>`
+1. Updates the service `kube-system/cloud-provider-equinix-metal-kubernetes-external` to have endpoints identical to those in `default/kubernetes`
 
 This has the following effect:
 

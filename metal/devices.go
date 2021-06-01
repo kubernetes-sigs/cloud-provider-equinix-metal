@@ -56,7 +56,7 @@ func (i *instances) NodeAddresses(_ context.Context, name types.NodeName) ([]v1.
 // The instance is specified using the providerID of the node. The
 // ProviderID is a unique identifier of the node. This will not be called
 // from the node whose nodeaddresses are being queried. i.e. local metadata
-// services cannot be used in this method to obtain nodeaddresses
+// services cannot be used in this method to obtain nodeaddresses.
 func (i *instances) NodeAddressesByProviderID(_ context.Context, providerID string) ([]v1.NodeAddress, error) {
 	klog.V(2).Infof("called NodeAddressesByProviderID with providerID %s", providerID)
 	device, err := i.deviceFromProviderID(providerID)
@@ -74,23 +74,25 @@ func nodeAddresses(device *packngo.Device) ([]v1.NodeAddress, error) {
 	var privateIP, publicIP string
 	for _, address := range device.Network {
 		if address.AddressFamily == int(metadata.IPv4) {
+			var addrType v1.NodeAddressType
 			if address.Public {
 				publicIP = address.Address
+				addrType = v1.NodeExternalIP
 			} else {
 				privateIP = address.Address
+				addrType = v1.NodeInternalIP
 			}
+			addresses = append(addresses, v1.NodeAddress{Type: addrType, Address: address.Address})
 		}
 	}
 
 	if privateIP == "" {
-		return nil, errors.New("could not get private ip")
+		return nil, errors.New("could not get at least one private ip")
 	}
-	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: privateIP})
 
 	if publicIP == "" {
-		return nil, errors.New("could not get public ip")
+		return nil, errors.New("could not get at least one public ip")
 	}
-	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalIP, Address: publicIP})
 
 	return addresses, nil
 }

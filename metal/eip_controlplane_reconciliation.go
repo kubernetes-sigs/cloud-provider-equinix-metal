@@ -44,15 +44,16 @@ const (
  reconciliation terminates without changing the current state of the system.
 */
 type controlPlaneEndpointManager struct {
-	inProcess     bool
-	apiServerPort int
-	eipTag        string
-	instances     cloudInstances
-	deviceIPSrv   packngo.DeviceIPService
-	ipResSvr      packngo.ProjectIPService
-	projectID     string
-	httpClient    *http.Client
-	k8sclient     kubernetes.Interface
+	inProcess         bool
+	apiServerPort     int32 // node on which the EIP is listening
+	nodeAPIServerPort int32 // port on which the api server is listening on the control plane nodes
+	eipTag            string
+	instances         cloudInstances
+	deviceIPSrv       packngo.DeviceIPService
+	ipResSvr          packngo.ProjectIPService
+	projectID         string
+	httpClient        *http.Client
+	k8sclient         kubernetes.Interface
 }
 
 func (m *controlPlaneEndpointManager) name() string {
@@ -78,6 +79,10 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 		klog.V(2).Info("controlPlaneEndpoint.reconcileNodes: already in process, not starting a new one")
 		return nil
 	}
+	// must have figured out the node port first, or nothing to do
+	if m.apiServerPort == 0 {
+		return errors.New("control plane apiserver port not provided or determined, cannot check, will try again on next loop")
+	}
 	m.inProcess = true
 	defer func() {
 		m.inProcess = false
@@ -100,8 +105,9 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 	if len(controlPlaneEndpoint.Assignments) > 1 {
 		return fmt.Errorf("the elastic ip %s has more than one node assigned to it and this is currently not supported. Fix it manually unassigning devices", controlPlaneEndpoint.ID)
 	}
-	klog.Infof("healthcheck elastic ip %s", fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort))
-	req, err := http.NewRequest("GET", fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort), nil)
+	healthCheckURL := fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort)
+	klog.Infof("healthcheck elastic ip %s", healthCheckURL)
+	req, err := http.NewRequest("GET", healthCheckURL, nil)
 	if err != nil {
 		return err
 	}
@@ -122,7 +128,7 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 				klog.V(2).Infof("adding control plane node %s", n.Name)
 			}
 		}
-		if err := m.reassign(ctx, cpNodes, controlPlaneEndpoint); err != nil {
+		if err := m.reassign(ctx, cpNodes, controlPlaneEndpoint, healthCheckURL); err != nil {
 			klog.Errorf("error reassigning control plane endpoint to a different device. err \"%s\"", err)
 			return err
 		}
@@ -130,8 +136,12 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 	return nil
 }
 
-func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.Node, ip *packngo.IPAddressReservation) error {
+func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.Node, ip *packngo.IPAddressReservation, eipURL string) error {
 	klog.V(2).Info("controlPlaneEndpoint.reassign")
+	// must have figured out the node port first, or nothing to do
+	if m.nodeAPIServerPort == 0 {
+		return errors.New("control plane node apiserver port not yet determined, cannot reassign, will try again on next loop")
+	}
 	for _, node := range nodes {
 		addresses, err := m.instances.NodeAddresses(ctx, types.NodeName(node.Name))
 		if err != nil {
@@ -142,10 +152,14 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 		// The first one for example is the node name, and if the hostname is not well configured it will never work.
 		for _, a := range addresses {
 			if a.Type == "Hostname" {
-				klog.V(2).Infof("skipping address check of type Hostname: %s", a.Address)
+				klog.V(2).Infof("skipping address check of type %s: %s", a.Type, a.Address)
 				continue
 			}
-			healthCheckAddress := fmt.Sprintf("https://%s:%d/healthz", a.Address, m.apiServerPort)
+			healthCheckAddress := fmt.Sprintf("https://%s:%d/healthz", a.Address, m.nodeAPIServerPort)
+			if healthCheckAddress == eipURL {
+				klog.V(2).Infof("skipping address check for EIP on this node: %s", eipURL)
+				continue
+			}
 			klog.Infof("healthcheck node %s", healthCheckAddress)
 			req, err := http.NewRequest("GET", healthCheckAddress, nil)
 			if err != nil {
@@ -186,7 +200,7 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 	return errors.New("ccm didn't find a good candidate for IP allocation. Cluster is unhealthy")
 }
 
-func newControlPlaneEndpointManager(eipTag, projectID string, deviceIPSrv packngo.DeviceIPService, ipResSvr packngo.ProjectIPService, i cloudInstances, apiServerPort int) *controlPlaneEndpointManager {
+func newControlPlaneEndpointManager(eipTag, projectID string, deviceIPSrv packngo.DeviceIPService, ipResSvr packngo.ProjectIPService, i cloudInstances, apiServerPort int32) *controlPlaneEndpointManager {
 	return &controlPlaneEndpointManager{
 		httpClient: &http.Client{
 			Timeout: time.Second * 5,
@@ -236,6 +250,19 @@ func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svc
 			continue
 		}
 
+		// get the target port
+		existingPorts := svc.Spec.Ports
+		if len(existingPorts) < 1 {
+			return errors.New("default/kubernetes service does not have any ports defined")
+		}
+
+		// track which port the kube-apiserver actually is listening on
+		m.nodeAPIServerPort = existingPorts[0].TargetPort.IntVal
+		// did we set a specific port, or did we request that it just be left as is?
+		if m.apiServerPort == 0 {
+			m.apiServerPort = m.nodeAPIServerPort
+		}
+
 		// get the endpoints for this service
 		eps := m.k8sclient.CoreV1().Endpoints(svc.Namespace)
 		ep, err := eps.Get(ctx, svc.Name, metav1.GetOptions{})
@@ -280,19 +307,15 @@ func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svc
 		}
 
 		// now for my service
-		svcIntf := m.k8sclient.CoreV1().Services(externalServiceNamespace)
-		if _, err := svcIntf.Get(ctx, externalServiceName, metav1.GetOptions{}); err == nil {
-			klog.V(2).Infof("service %s already exists, nothing left to do", externalServiceName)
-			return nil
-		}
-		klog.V(2).Infof("service %s did not exist, creating", externalServiceName)
 		ports := []v1.ServicePort{}
-		for _, p := range svc.Spec.Ports {
+		for _, p := range existingPorts {
 			copiedPort := p.DeepCopy()
 			ports = append(ports, *copiedPort)
 		}
+		// set the port on which to listen
+		ports[0].Port = m.apiServerPort
 
-		externalService := v1.Service{
+		externalService := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: externalServiceName,
 				Annotations: map[string]string{
@@ -305,19 +328,48 @@ func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svc
 				LoadBalancerIP: eip,
 				Ports:          ports,
 			},
-			Status: v1.ServiceStatus{
-				LoadBalancer: v1.LoadBalancerStatus{
-					Ingress: []v1.LoadBalancerIngress{
-						{IP: eip},
-					},
+		}
+
+		// did it already exist? Then update it
+		svcIntf := m.k8sclient.CoreV1().Services(externalServiceNamespace)
+		var updatedService *v1.Service
+		if updatedService, err = svcIntf.Get(ctx, externalServiceName, metav1.GetOptions{}); err == nil {
+			klog.V(2).Infof("service %s already exists, just updating", externalServiceName)
+			// we do not want to override everything, as there is important information we need
+			updatedService.Spec.LoadBalancerIP = externalService.Spec.LoadBalancerIP
+			updatedService.Spec.Ports = externalService.Spec.Ports
+			if _, err := svcIntf.Update(ctx, updatedService, metav1.UpdateOptions{}); err != nil {
+				klog.Errorf("failed to update service: %v", err)
+				return fmt.Errorf("failed to update service: %v", err)
+			}
+		} else {
+			klog.V(2).Infof("service %s did not exist, creating", externalServiceName)
+			if updatedService, err = svcIntf.Create(ctx, externalService, metav1.CreateOptions{}); err != nil {
+				klog.Errorf("failed to create service: %v", err)
+				return fmt.Errorf("failed to create service: %v", err)
+			}
+		}
+		if updatedService, err = svcIntf.Get(ctx, externalServiceName, metav1.GetOptions{}); err != nil {
+			klog.Errorf("could not get service %s for status update: %v", externalServiceName, err)
+			return fmt.Errorf("could not get service %s for status update: %v", externalServiceName, err)
+		}
+		// and finally update status
+		updatedService.Status = v1.ServiceStatus{
+			LoadBalancer: v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{
+					{IP: eip},
 				},
 			},
 		}
-		if _, err := svcIntf.Create(ctx, &externalService, metav1.CreateOptions{}); err != nil {
-			klog.Errorf("failed to create my service: %v", err)
-			return fmt.Errorf("failed to create my service: %v", err)
+		if _, err := svcIntf.UpdateStatus(ctx, updatedService, metav1.UpdateOptions{}); err != nil {
+			klog.Errorf("failed to update service status: %v", err)
+			return fmt.Errorf("failed to update service status: %v", err)
 		}
 		return nil
 	}
-	return fmt.Errorf("Service default/kubernetes not found")
+	// every sync should find default/kubernetes
+	if mode == ModeSync {
+		return fmt.Errorf("Service default/kubernetes not found")
+	}
+	return nil
 }
