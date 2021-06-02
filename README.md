@@ -475,7 +475,8 @@ nodes. The CCM does the following on each loop:
 
 This has the following effect:
 
-* the annotation prevents metallb from trying to manage it
+* the annotation prevents metallb from trying to manage the IP
+* the name prevents CCM from passing it to the loadbalancer provider address mapping, thus preventing any of them from managing it
 * the `spec.loadBalancerIP` and `status.loadBalancer.ingress[0].ip` cause kube-proxy to set up routes on all of the nodes
 * the endpoints cause the traffic to be routed to the control plane nodes
 

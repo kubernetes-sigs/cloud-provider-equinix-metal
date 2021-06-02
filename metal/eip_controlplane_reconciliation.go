@@ -361,10 +361,12 @@ func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svc
 				},
 			},
 		}
-		if _, err := svcIntf.UpdateStatus(ctx, updatedService, metav1.UpdateOptions{}); err != nil {
+		var updatedService2 *v1.Service
+		if updatedService2, err = svcIntf.UpdateStatus(ctx, updatedService, metav1.UpdateOptions{}); err != nil {
 			klog.Errorf("failed to update service status: %v", err)
 			return fmt.Errorf("failed to update service status: %v", err)
 		}
+		klog.V(5).Infof("updated service after status update: %#v", updatedService2)
 		return nil
 	}
 	// every sync should find default/kubernetes
