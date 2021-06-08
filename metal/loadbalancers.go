@@ -207,9 +207,14 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 	validSvcs := []*v1.Service{}
 	for _, svc := range svcs {
 		// filter on type: only take those that are of type=LoadBalancer
-		if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
-			validSvcs = append(validSvcs, svc)
+		if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+			continue
 		}
+		// filter on name: do not try to manage the the service we created for EIP load balancer
+		if svc.ObjectMeta.Name == externalServiceName && svc.ObjectMeta.Namespace == externalServiceNamespace {
+			continue
+		}
+		validSvcs = append(validSvcs, svc)
 	}
 	klog.V(5).Infof("loadbalancer.reconcileServices(): valid services %#v", validSvcs)
 
