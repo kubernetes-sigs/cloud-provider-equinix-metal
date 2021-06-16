@@ -1,3 +1,5 @@
+![Kubernetes Cloud Provider for Equinix Metal](docs/images/github_kubernetes-cloud-provider_share.jpeg))
+
 # Kubernetes Cloud Controller Manager for Equinix Metal
 
 [![GitHub release](https://img.shields.io/github/release/equinix/cloud-provider-equinix-metal/all.svg?style=flat-square)](https://github.com/equinix/cloud-provider-equinix-metal/releases)
