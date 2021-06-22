@@ -135,6 +135,18 @@ rules:
   - watch
   - update
   - patch
+- apiGroups:
+  # reason: so ccm can read and update events
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
+  - patch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
