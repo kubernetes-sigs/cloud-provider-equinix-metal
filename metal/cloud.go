@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	providerName string = "equinixmetal"
+	ProviderName string = "equinixmetal"
 
 	// deprecatedProviderName is used to provide backward compatibility support
 	// with previous versions
@@ -80,22 +80,28 @@ func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interfa
 	}, nil
 }
 
-func InitializeProvider(metalConfig Config) error {
-	// set up our client and create the cloud interface
-	client := packngo.NewClientWithAuth("", metalConfig.AuthToken, nil)
-	client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", VERSION, client.UserAgent)
-	cloud, err := newCloud(metalConfig, client)
-	if err != nil {
-		return fmt.Errorf("failed to create new cloud handler: %v", err)
-	}
-
-	// finally, register
-	cloudprovider.RegisterCloudProvider(providerName, func(config io.Reader) (cloudprovider.Interface, error) {
+func init() {
+	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		// by the time we get here, there is no error, as it would have been handled earlier
+		metalConfig, err := getMetalConfig(config)
+		// register the provider
+		if err != nil {
+			return nil, fmt.Errorf("provider config error: %v", err)
+		}
+
+		// report the config
+		printMetalConfig(metalConfig)
+
+		// set up our client and create the cloud interface
+		client := packngo.NewClientWithAuth("cloud-provider-equinix-metal", metalConfig.AuthToken, nil)
+		client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", VERSION, client.UserAgent)
+		cloud, err := newCloud(metalConfig, client)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new cloud handler: %v", err)
+		}
+
 		return cloud, nil
 	})
-
-	return nil
 }
 
 // services get those elements that are initializable
@@ -179,8 +185,8 @@ func (c *cloud) Routes() (cloudprovider.Routes, bool) {
 
 // ProviderName returns the cloud provider ID.
 func (c *cloud) ProviderName() string {
-	klog.V(2).Infof("called ProviderName, returning %s", providerName)
-	return providerName
+	klog.V(2).Infof("called ProviderName, returning %s", ProviderName)
+	return ProviderName
 }
 
 // HasClusterID returns true if a ClusterID is required and set

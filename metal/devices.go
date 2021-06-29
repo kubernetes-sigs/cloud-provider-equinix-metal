@@ -234,8 +234,8 @@ func deviceIDFromProviderID(providerID string) (string, error) {
 	switch len(split) {
 	case 2:
 		deviceID = split[1]
-		if split[0] != providerName && split[0] != deprecatedProviderName {
-			return "", errors.Errorf("provider name from providerID should be %s, was %s", providerName, split[0])
+		if split[0] != ProviderName && split[0] != deprecatedProviderName {
+			return "", errors.Errorf("provider name from providerID should be %s, was %s", ProviderName, split[0])
 		}
 	case 1:
 		deviceID = providerID

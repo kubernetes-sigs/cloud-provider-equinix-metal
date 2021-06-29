@@ -144,8 +144,8 @@ func TestRoutes(t *testing.T) {
 func TestProviderName(t *testing.T) {
 	vc, _ := testGetValidCloud(t)
 	name := vc.ProviderName()
-	if name != providerName {
-		t.Errorf("returned %s instead of expected %s", name, providerName)
+	if name != ProviderName {
+		t.Errorf("returned %s instead of expected %s", name, ProviderName)
 	}
 }
 
