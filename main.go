@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/cloud-provider/app"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // for client metric registration
 	_ "k8s.io/component-base/metrics/prometheus/version"  // for version metric registration
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal"
 	"github.com/spf13/pflag"
