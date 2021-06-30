@@ -24,8 +24,13 @@ type instances struct {
 	annotationNetwork string
 }
 
-func newInstances(client *packngo.Client, project, annotationNetwork string) *instances {
-	return &instances{client: client, project: project, annotationNetwork: annotationNetwork}
+var (
+	_ cloudprovider.Instances   = (*instances)(nil)
+	_ cloudprovider.InstancesV2 = (*instances)(nil)
+)
+
+func newInstances(client *packngo.Client, projectID, annotationNetwork string) *instances {
+	return &instances{client: client, project: projectID, annotationNetwork: annotationNetwork}
 }
 
 // cloudService implementation
@@ -186,6 +191,36 @@ func (i *instances) InstanceShutdownByProviderID(_ context.Context, providerID s
 	}
 
 	return device.State == "inactive", nil
+}
+
+func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, error) {
+	return i.InstanceShutdownByProviderID(ctx, node.Spec.ProviderID)
+}
+
+func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
+	return i.InstanceExistsByProviderID(ctx, node.Spec.ProviderID)
+}
+
+func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
+	device, err := i.deviceFromProviderID(node.Spec.ProviderID)
+	if err != nil {
+		return nil, err
+	}
+	nodeAddresses, err := nodeAddresses(device)
+	if err != nil {
+		// TODO(displague) we error on missing private and public ip. is that restrictive?
+
+		// TODO(displague) should we return the public addresses DNS name as the Type=Hostname NodeAddress type too?
+		return nil, err
+	}
+
+	return &cloudprovider.InstanceMetadata{
+		ProviderID:    node.Spec.ProviderID,
+		InstanceType:  device.Plan.Name,
+		NodeAddresses: nodeAddresses,
+		Zone:          device.Facility.Name,
+		// Region:        device.Metro.Name,
+	}, nil
 }
 
 func deviceByID(client *packngo.Client, id string) (*packngo.Device, error) {
