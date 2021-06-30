@@ -219,7 +219,7 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 		InstanceType:  device.Plan.Name,
 		NodeAddresses: nodeAddresses,
 		Zone:          device.Facility.Name,
-		// Region:        device.Metro.Name,
+		Region:        device.Metro.Name,
 	}, nil
 }
 
