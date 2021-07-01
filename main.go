@@ -26,7 +26,7 @@ const (
 	apiKeyName                   = "METAL_API_KEY"
 	projectIDName                = "METAL_PROJECT_ID"
 	facilityName                 = "METAL_FACILITY_NAME"
-	loadBalancerSettingName      = "METAL_LB"
+	loadBalancerSettingName      = "METAL_LOAD_BALANCER"
 	envVarLocalASN               = "METAL_LOCAL_ASN"
 	envVarBGPPass                = "METAL_BGP_PASS"
 	envVarAnnotationLocalASN     = "METAL_ANNOTATION_LOCAL_ASN"

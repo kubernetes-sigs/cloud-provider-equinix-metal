@@ -200,7 +200,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Project ID |    | `METAL_PROJECT_ID` | `projectID` | error |
 | Facility |    | `METAL_FACILITY_NAME` | `facility` | read metadata on host on which CCM is running, else error |
 | Base URL to Equinix API |    |    | `base-url` | Official Equinix Metal API |
-| Load balancer setting |   | `METAL_LB` | `loadbalancer` | none |
+| Load balancer setting |   | `METAL_LOAD_BALANCER` | `loadbalancer` | none |
 | BGP ASN for cluster nodes when enabling BGP on the project |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
 | BGP passphrase to use when enabling BGP on the project |   | `METAL_BGP_PASS` | `bgpPass` | `""` |
 | Kubernetes annotation to set node's BGP ASN |   | `METAL_ANNOTATION_LOCAL_ASN` | `annotationLocalASN` | `"metal.equinix.com/node-asn"` |
@@ -263,7 +263,7 @@ load-balancer, see [this section](#Elastic_IP_as_Control_Plane_Endpoint).
 
 Loadbalancing is enabled as follows.
 
-1. If the environment variable `METAL_LB` is set, read that. Else...
+1. If the environment variable `METAL_LOAD_BALANCER` is set, read that. Else...
 1. If the config file has a key named `loadbalancer`, read that. Else...
 1. Load balancing is disabled.
 
@@ -288,7 +288,7 @@ the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for e
 `Service`, and adds annotations to the nodes. These annotations are configured to be consumable
 by kube-vip.
 
-To enable it, set the configuration `METAL_LB` or config `loadbalancer` to:
+To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
 kube-vip://
@@ -318,7 +318,7 @@ the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancin
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
 
-To enable it, set the configuration `METAL_LB` or config `loadbalancer` to:
+To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
 metallb:///<configMapNamespace>/<configMapName>
@@ -366,7 +366,7 @@ the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for e
 This is useful if you have your own implementation, but want to leverage Equinix Metal CCM's
 management of BGP and EIPs.
 
-To enable it, set the configuration `METAL_LB` or config `loadbalancer` to:
+To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
 empty://
@@ -555,12 +555,12 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
 1. Set the environment variable `METAL_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `METAL_FACILITY_NAME=ewr1`
 1. If you want to run the loadbalancer, and it is not yet deployed, run `kubectl apply -f deploy/loadbalancer.yaml`
-1. Enable the loadbalancer by setting the environment variable `METAL_LB=metallb://`
+1. Enable the loadbalancer by setting the environment variable `METAL_LOAD_BALANCER=metallb://`
 1. If you want to use a managed Elastic IP for the control plane, create one using the Equinix Metal API or Web UI, tag it uniquely, and set the environment variable `METAL_EIP_TAG=<tag>`
 1. Run the command, e.g.:
 
 ```
-METAL_FACILITY_NAME=${METAL_FACILITY_NAME} METAL_LB=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
+METAL_FACILITY_NAME=${METAL_FACILITY_NAME} METAL_LOAD_BALANCER=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
 ```
 
 For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.
