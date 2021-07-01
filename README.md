@@ -264,7 +264,7 @@ load-balancer, see [this section](#Elastic_IP_as_Control_Plane_Endpoint).
 Loadbalancing is enabled as follows.
 
 1. If the environment variable `METAL_LB` is set, read that. Else...
-1. If the config file has a key named `metalLB`, read that. Else...
+1. If the config file has a key named `loadbalancer`, read that. Else...
 1. Load balancing is disabled.
 
 The value of the loadbalancing configuration is `<type>:///<detail>` where:
@@ -288,7 +288,7 @@ the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for e
 `Service`, and adds annotations to the nodes. These annotations are configured to be consumable
 by kube-vip.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `METAL_LB` or config `loadbalancer` to:
 
 ```
 kube-vip://
@@ -318,7 +318,7 @@ the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancin
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `METAL_LB` or config `loadbalancer` to:
 
 ```
 metallb:///<configMapNamespace>/<configMapName>
@@ -366,7 +366,7 @@ the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for e
 This is useful if you have your own implementation, but want to leverage Equinix Metal CCM's
 management of BGP and EIPs.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `METAL_LB` or config `loadbalancer` to:
 
 ```
 empty://
