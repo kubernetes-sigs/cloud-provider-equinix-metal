@@ -200,7 +200,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Project ID |    | `METAL_PROJECT_ID` | `projectID` | error |
 | Facility |    | `METAL_FACILITY_NAME` | `facility` | read metadata on host on which CCM is running, else error |
 | Base URL to Equinix API |    |    | `base-url` | Official Equinix Metal API |
-| Load balancer setting |   | `METAL_LB` | `loadbalancer` | none |
+| Load balancer setting |   | `METAL_LOAD_BALANCER` | `loadbalancer` | none |
 | BGP ASN for cluster nodes when enabling BGP on the project |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
 | BGP passphrase to use when enabling BGP on the project |   | `METAL_BGP_PASS` | `bgpPass` | `""` |
 | Kubernetes annotation to set node's BGP ASN |   | `METAL_ANNOTATION_LOCAL_ASN` | `annotationLocalASN` | `"metal.equinix.com/node-asn"` |
@@ -263,8 +263,8 @@ load-balancer, see [this section](#Elastic_IP_as_Control_Plane_Endpoint).
 
 Loadbalancing is enabled as follows.
 
-1. If the environment variable `METAL_LB` is set, read that. Else...
-1. If the config file has a key named `metalLB`, read that. Else...
+1. If the environment variable `METAL_LOAD_BALANCER` is set, read that. Else...
+1. If the config file has a key named `loadbalancer`, read that. Else...
 1. Load balancing is disabled.
 
 The value of the loadbalancing configuration is `<type>:///<detail>` where:
@@ -275,7 +275,7 @@ The value of the loadbalancing configuration is `<type>:///<detail>` where:
 For loadbalancing for Kubernetes `Service` of `type=LoadBalancer`, the following implementations are supported:
 
 * [kube-vip](#kube-vip)
-* [metallb](#metallb)
+* [MetalLB](#metallb)
 * [empty](#empty)
 
 CCM does **not** deploy _any_ load balancers for you. It limits itself to managing the Equinix Metal-specific
@@ -288,7 +288,7 @@ the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for e
 `Service`, and adds annotations to the nodes. These annotations are configured to be consumable
 by kube-vip.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
 kube-vip://
@@ -311,14 +311,14 @@ If `kube-vip` management is enabled, then CCM does the following.
    * find the Elastic IP address from the service spec and remove it
    * delete the Elastic IP reservation from Equinix Metal
 
-##### metallb
+##### MetalLB
 
-When [metallb](https://metallb.universe.tf) is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
+When [MetalLB](https://metallb.universe.tf) is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
 the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancing, without
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
 metallb:///<configMapNamespace>/<configMapName>
@@ -326,15 +326,15 @@ metallb:///<configMapNamespace>/<configMapName>
 
 For example:
 
-* `metallb:///metallb-system/config` - enable `metallb` management and update the configmap `config` in the namespace `metallb-system`
-* `metallb:///foonamespace/myconfig` -  - enable `metallb` management and update the configmap `myconfig` in the namespace `foonamespae`
-* `metallb:///` - enable `metallb` management and update the default configmap, i.e. `config` in the namespace `metallb-system`
+* `metallb:///metallb-system/config` - enable `MetalLB` management and update the configmap `config` in the namespace `metallb-system`
+* `metallb:///foonamespace/myconfig` -  - enable `MetalLB` management and update the configmap `myconfig` in the namespace `foonamespae`
+* `metallb:///` - enable `MetalLB` management and update the default configmap, i.e. `config` in the namespace `metallb-system`
 
 Notice the **three* slashes. In the URL, the namespace and the configmap are in the path.
 
 When enabled, CCM controls the loadbalancer by updating the provided `ConfigMap`.
 
-If `metallb` management is enabled, then CCM does the following.
+If `MetalLB` management is enabled, then CCM does the following.
 
 1. Get the appropriate namespace and name of the `ConfigMap`, based on the rules above.
 1. If the `ConfigMap` does not exist, do the rest of the behaviours, but do not update the `ConfigMap`
@@ -344,10 +344,10 @@ If `metallb` management is enabled, then CCM does the following.
    * retrieve the device's BGP configuration: node ASN, peer ASN, peer IPs, source IP
    * add them to the metallb `ConfigMap` with a kubernetes selector ensuring that the peer is only for this node
 1. For each node deleted from the cluster:
-   * remove the node from the metallb `ConfigMap`
+   * remove the node from the MetalLB `ConfigMap`
 1. For each service of `type=LoadBalancer` currently in the cluster or added:
    * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` already has that IP address affiliated with it, it is ready; ignore
-   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure it is in the pools of the metallb `ConfigMap` with `auto-assign: false`
+   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure it is in the pools of the MetalLB `ConfigMap` with `auto-assign: false`
    * if an Elastic IP address reservation with the appropriate tags does not exist, create it and add it to the services spec, and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`
 1. For each service of `type=LoadBalancer` deleted from the cluster:
    * find the Elastic IP address from the service spec and remove it
@@ -366,7 +366,7 @@ the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for e
 This is useful if you have your own implementation, but want to leverage Equinix Metal CCM's
 management of BGP and EIPs.
 
-To enable it, set the configuration `METAL_LB` or config `metalLB` to:
+To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
 empty://
@@ -555,12 +555,12 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
 1. Set the environment variable `METAL_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `METAL_FACILITY_NAME=ewr1`
 1. If you want to run the loadbalancer, and it is not yet deployed, run `kubectl apply -f deploy/loadbalancer.yaml`
-1. Enable the loadbalancer by setting the environment variable `METAL_LB=metallb://`
+1. Enable the loadbalancer by setting the environment variable `METAL_LOAD_BALANCER=metallb://`
 1. If you want to use a managed Elastic IP for the control plane, create one using the Equinix Metal API or Web UI, tag it uniquely, and set the environment variable `METAL_EIP_TAG=<tag>`
 1. Run the command, e.g.:
 
 ```
-METAL_FACILITY_NAME=${METAL_FACILITY_NAME} METAL_LB=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
+METAL_FACILITY_NAME=${METAL_FACILITY_NAME} METAL_LOAD_BALANCER=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
 ```
 
 For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.
