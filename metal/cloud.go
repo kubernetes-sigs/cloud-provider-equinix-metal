@@ -66,7 +66,7 @@ type cloud struct {
 }
 
 func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
-	i := newInstances(client, metalConfig.ProjectID)
+	i := newInstances(client, metalConfig.ProjectID, metalConfig.AnnotationNetworkIPv4Private)
 	return &cloud{
 		client:                      client,
 		facility:                    metalConfig.Facility,

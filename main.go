@@ -23,21 +23,22 @@ import (
 )
 
 const (
-	apiKeyName                   = "METAL_API_KEY"
-	projectIDName                = "METAL_PROJECT_ID"
-	facilityName                 = "METAL_FACILITY_NAME"
-	loadBalancerSettingName      = "METAL_LOAD_BALANCER"
-	envVarLocalASN               = "METAL_LOCAL_ASN"
-	envVarBGPPass                = "METAL_BGP_PASS"
-	envVarAnnotationLocalASN     = "METAL_ANNOTATION_LOCAL_ASN"
-	envVarAnnotationPeerASNs     = "METAL_ANNOTATION_PEER_ASNS"
-	envVarAnnotationPeerIPs      = "METAL_ANNOTATION_PEER_IPS"
-	envVarAnnotationSrcIP        = "METAL_ANNOTATION_SRC_IP"
-	envVarAnnotationBGPPass      = "METAL_ANNOTATION_BGP_PASS"
-	envVarEIPTag                 = "METAL_EIP_TAG"
-	envVarAPIServerPort          = "METAL_API_SERVER_PORT"
-	envVarBGPNodeSelector        = "METAL_BGP_NODE_SELECTOR"
-	defaultLoadBalancerConfigMap = "metallb-system:config"
+	apiKeyName                         = "METAL_API_KEY"
+	projectIDName                      = "METAL_PROJECT_ID"
+	facilityName                       = "METAL_FACILITY_NAME"
+	loadBalancerSettingName            = "METAL_LOAD_BALANCER"
+	envVarLocalASN                     = "METAL_LOCAL_ASN"
+	envVarBGPPass                      = "METAL_BGP_PASS"
+	envVarAnnotationLocalASN           = "METAL_ANNOTATION_LOCAL_ASN"
+	envVarAnnotationPeerASNs           = "METAL_ANNOTATION_PEER_ASNS"
+	envVarAnnotationPeerIPs            = "METAL_ANNOTATION_PEER_IPS"
+	envVarAnnotationSrcIP              = "METAL_ANNOTATION_SRC_IP"
+	envVarAnnotationBGPPass            = "METAL_ANNOTATION_BGP_PASS"
+	envVarAnnotationNetworkIPv4Private = "METAL_ANNOTATION_NETWORK_IPV4_PRIVATE"
+	envVarEIPTag                       = "METAL_EIP_TAG"
+	envVarAPIServerPort                = "METAL_API_SERVER_PORT"
+	envVarBGPNodeSelector              = "METAL_BGP_NODE_SELECTOR"
+	defaultLoadBalancerConfigMap       = "metallb-system:config"
 )
 
 var (
@@ -189,6 +190,12 @@ func getMetalConfig(providerConfig string) (metal.Config, error) {
 	annotationBGPPass := os.Getenv(envVarAnnotationBGPPass)
 	if annotationBGPPass != "" {
 		config.AnnotationBGPPass = annotationBGPPass
+	}
+
+	config.AnnotationNetworkIPv4Private = metal.DefaultAnnotationNetworkIPv4Private
+	annotationNetworkIPv4Private := os.Getenv(envVarAnnotationNetworkIPv4Private)
+	if annotationNetworkIPv4Private != "" {
+		config.AnnotationNetworkIPv4Private = annotationNetworkIPv4Private
 	}
 
 	if rawConfig.EIPTag != "" {

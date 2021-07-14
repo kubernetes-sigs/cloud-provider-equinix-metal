@@ -119,7 +119,7 @@ configSecret:
   name: ""
 
 # -- Application configuration.
-config: 
+config:
   apiKey: ""
   projectID: ""
   # facility: facility
@@ -132,6 +132,7 @@ config:
   # annotationPeerIPs: "metal.equinix.com/peer-ip"
   # annotationSrcIP: "metal.equinix.com/src-ip"
   # annotationBGPPass: "metal.equinix.com/bgp-pass"
+  # annotationNetworkIPv4Private: `metal.equinix.com/network/4/private`
   # eipTag: ""
   # apiServerPort: 6443
   # bgpNodeSelector: ""

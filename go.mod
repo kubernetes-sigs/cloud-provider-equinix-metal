@@ -6,7 +6,7 @@ require (
 	github.com/hashicorp/go-hclog v0.12.0 // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.6
 	github.com/packethost/packet-api-server v0.0.0-20200706140707-f0f79ef89944
-	github.com/packethost/packngo v0.5.1
+	github.com/packethost/packngo v0.17.0
 	github.com/pallinder/go-randomdata v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.5

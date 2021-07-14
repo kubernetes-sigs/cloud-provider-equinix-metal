@@ -173,8 +173,8 @@ func constructClient(authToken string, baseURL *string) *packngo.Client {
 	// client.Transport = logging.NewTransport("EquinixMetal", client.Transport)
 	if baseURL != nil {
 		// really should handle error, but packngo does not distinguish now or handle errors, so ignoring for now
-		client, _ := packngo.NewClientWithBaseURL(ConsumerToken, authToken, client, *baseURL)
+		client, _ := packngo.NewClientWithBaseURL(ConsumerToken, authToken, client.StandardClient(), *baseURL)
 		return client
 	}
-	return packngo.NewClientWithAuth(ConsumerToken, authToken, client)
+	return packngo.NewClientWithAuth(ConsumerToken, authToken, client.StandardClient())
 }

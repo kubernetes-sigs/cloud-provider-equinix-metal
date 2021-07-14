@@ -474,6 +474,8 @@ github.com/packethost/packngo v0.2.1-0.20200629161839-1810e48469b4 h1:T6L0ioYOSz
 github.com/packethost/packngo v0.2.1-0.20200629161839-1810e48469b4/go.mod h1:erURcsqYzwc9wSb04TX4so+s6F3uZtbXUil0W1LCGHA=
 github.com/packethost/packngo v0.5.1 h1:y+jWcMnyArP3hVZRsBkAXTLhokuqdYg6JUmkshX2SMk=
 github.com/packethost/packngo v0.5.1/go.mod h1:aRxUEV1TprXVcWr35v8tNYgZMjv7FHaInXx224vF2fc=
+github.com/packethost/packngo v0.17.0 h1:fGPlj9NDt6ejOrAMfUgx955oCaR1QBKA9pec14m0L38=
+github.com/packethost/packngo v0.17.0/go.mod h1:YrtUNN9IRjjqN6zK+cy2IYoi3EjHfoWTWxJkI1I1Vk0=
 github.com/pallinder/go-randomdata v1.2.0 h1:EJPxw+sgM1mbMW8RBu5zkG4FbloJpDOCCqPccdWto8A=
 github.com/pallinder/go-randomdata v1.2.0/go.mod h1:p8CasZQiWDLuaKy5ihVvdshqc7LlL6ovmRxAuNXgi3U=
 github.com/pborman/uuid v1.2.0 h1:J7Q5mO4ysT1dv8hyrUGHb9+ooztCXu1D8MY8DZYsu3g=
