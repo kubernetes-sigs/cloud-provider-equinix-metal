@@ -208,6 +208,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Kubernetes annotation to set BGP peer's IPs |   | `METAL_ANNOTATION_PEER_IPS` | `annotationPeerIPs` | `"metal.equinix.com/peer-ip"` |
 | Kubernetes annotation to set source IP for BGP peering |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/src-ip"` |
 | Kubernetes annotation to set BGP MD5 password, base64-encoded (see security warning below) |   | `METAL_ANNOTATION_BGP_PASS` | `annotationBGPPass` | `"metal.equinix.com/bgp-pass"` |
+| Kubernetes annotation to set the CIDR for the network range of the private address |  | `METAL_ANNOTATION_NETWORK_IPV4_ PRIVATE` |  `annotationNetworkIPv4Private` | `metal.equinix.com/network/4/private` |
 | Tag for control plane Elastic IP |    | `METAL_EIP_TAG` | `eipTag` | No control plane Elastic IP |
 | Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP |    | `METAL_BGP_NODE_SELECTOR` | `bgpNodeSelector` | All nodes |
@@ -524,13 +525,15 @@ _not_ recommended to override them. However, you can do so, using the options in
 Set of servers on which BGP will be enabled can be filtered as well, using the the options in [Configuration][Configuration].
 Value for node selector should be a valid Kubernetes label selector (e.g. key1=value1,key2=value2).
 
-In addition to enabling BGP and setting ASNs, the Equinix Metal CCM sets Kubernetes annotations on each cluster node.
-It sets annotations for:
+## Node Annotations
+
+The Equinix Metal CCM sets Kubernetes annotations on each cluster node:
 
 * Node, or local, ASN, default annotation `metal.equinix.com/node-asn`
 * Peer ASNs, comma-separated if multiple, default annotation `metal.equinix.com/peer-asns`
 * Peer IPs, comma-separated if multiple, default annotation `metal.equinix.com/peer-ips`
 * Source IP to use when communicating with upstream peers, default annotation `metal.equinix.com/src-ip`
+* CIDR of the private network range in the project which this node is part of, default annotation `metal.equinix.com/network-ipv4/private`
 
 These annotation names can be overridden, if you so choose, using the options in [Configuration][Configuration].
 

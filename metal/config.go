@@ -4,21 +4,22 @@ import "fmt"
 
 // Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different Equinix Metal API endpoint
 type Config struct {
-	AuthToken           string  `json:"apiKey"`
-	ProjectID           string  `json:"projectId"`
-	BaseURL             *string `json:"base-url,omitempty"`
-	LoadBalancerSetting string  `json:"loadbalancer"`
-	Facility            string  `json:"facility,omitempty"`
-	LocalASN            int     `json:"localASN,omitempty"`
-	BGPPass             string  `json:"bgpPass,omitempty"`
-	AnnotationLocalASN  string  `json:"annotationLocalASN,omitEmpty"`
-	AnnotationPeerASNs  string  `json:"annotationPeerASNs,omitEmpty"`
-	AnnotationPeerIPs   string  `json:"annotationPeerIPs,omitEmpty"`
-	AnnotationSrcIP     string  `json:"annotationSrcIP,omitEmpty"`
-	AnnotationBGPPass   string  `json:"annotationBGPPass,omitEmpty"`
-	EIPTag              string  `json:"eipTag,omitEmpty"`
-	APIServerPort       int32   `json:"apiServerPort,omitEmpty"`
-	BGPNodeSelector     string  `json:"bgpNodeSelector,omitEmpty"`
+	AuthToken                    string  `json:"apiKey"`
+	ProjectID                    string  `json:"projectId"`
+	BaseURL                      *string `json:"base-url,omitempty"`
+	LoadBalancerSetting          string  `json:"loadbalancer"`
+	Facility                     string  `json:"facility,omitempty"`
+	LocalASN                     int     `json:"localASN,omitempty"`
+	BGPPass                      string  `json:"bgpPass,omitempty"`
+	AnnotationLocalASN           string  `json:"annotationLocalASN,omitEmpty"`
+	AnnotationPeerASNs           string  `json:"annotationPeerASNs,omitEmpty"`
+	AnnotationPeerIPs            string  `json:"annotationPeerIPs,omitEmpty"`
+	AnnotationSrcIP              string  `json:"annotationSrcIP,omitEmpty"`
+	AnnotationBGPPass            string  `json:"annotationBGPPass,omitEmpty"`
+	AnnotationNetworkIPv4Private string  `json:"annotationNetworkIPv4Private,omitEmpty"`
+	EIPTag                       string  `json:"eipTag,omitEmpty"`
+	APIServerPort                int32   `json:"apiServerPort,omitEmpty"`
+	BGPNodeSelector              string  `json:"bgpNodeSelector,omitEmpty"`
 }
 
 // String converts the Config structure to a string, while masking hidden fields.
