@@ -270,9 +270,12 @@ func (i *instances) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode U
 		for _, node := range nodes {
 			klog.V(2).Infof("instances.reconcileNodes(): add node %s", node.Name)
 			// get the node provider ID
-			id := node.Spec.ProviderID
-			if id == "" {
+			if node.Spec.ProviderID == "" {
 				return fmt.Errorf("no provider ID given")
+			}
+			id, err := deviceIDFromProviderID(node.Spec.ProviderID)
+			if err != nil {
+				return fmt.Errorf("unable to get device ID from providerID: %v", err)
 			}
 
 			// add annotations
