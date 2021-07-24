@@ -208,7 +208,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Kubernetes annotation to set BGP peer's IPs |   | `METAL_ANNOTATION_PEER_IPS` | `annotationPeerIPs` | `"metal.equinix.com/peer-ip"` |
 | Kubernetes annotation to set source IP for BGP peering |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/src-ip"` |
 | Kubernetes annotation to set BGP MD5 password, base64-encoded (see security warning below) |   | `METAL_ANNOTATION_BGP_PASS` | `annotationBGPPass` | `"metal.equinix.com/bgp-pass"` |
-| Kubernetes annotation to set the CIDR for the network range of the private address |  | `METAL_ANNOTATION_NETWORK_IPV4_ PRIVATE` |  `annotationNetworkIPv4Private` | `metal.equinix.com/network/4/private` |
+| Kubernetes annotation to set the CIDR for the network range of the private address |  | `METAL_ANNOTATION_NETWORK_IPV4_PRIVATE` |  `annotationNetworkIPv4Private` | `metal.equinix.com/network-4-private` |
 | Tag for control plane Elastic IP |    | `METAL_EIP_TAG` | `eipTag` | No control plane Elastic IP |
 | Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP |    | `METAL_BGP_NODE_SELECTOR` | `bgpNodeSelector` | All nodes |
