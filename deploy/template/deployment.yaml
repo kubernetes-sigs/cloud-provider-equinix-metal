@@ -32,6 +32,7 @@ spec:
         # cloud controller manager should be able to run on masters
         - key: "node-role.kubernetes.io/master"
           effect: NoSchedule
+          operator: Exists
       containers:
       - image: equinix/cloud-provider-equinix-metal:RELEASE_TAG
         name: cloud-provider-equinix-metal
