@@ -1,4 +1,4 @@
-![Kubernetes Cloud Provider for Equinix Metal](docs/images/github_kubernetes-cloud-provider_share.jpeg))
+![Kubernetes Cloud Provider for Equinix Metal](docs/images/github_kubernetes-cloud-provider_share.jpeg)
 
 # Kubernetes Cloud Controller Manager for Equinix Metal
 
@@ -250,9 +250,43 @@ When a load balancer is enabled, the CCM does the following:
 1. Enable BGP for the project
 1. Enable BGP on each node as it comes up
 1. Sets ASNs based on configuration or default
-1. Get an Equinix Metal Elasic IP for each `Service` of `type=LoadBalancer`
-1. Set the `Spec.LoadBalancerIP` on the `Service`
+1. For each `Service` of `type=LoadBalancer`:
+   * If you have not specified a load balancer IP on `Service.Spec.LoadBalancerIP`, get an Equinix Metal Elastic IP and set it on `Service.Spec.LoadBalancerIP`
+   * If you have specified a load balancer IP on `Service.Spec.LoadBalancerIP` (bring your own IP, or BYOIP), do nothing
 1. Pass control to the specific load balancer implementation
+
+
+#### Bring Your Own IP
+
+Whenever a `Service` of `type=LoadBalancer` is encountered, the CCM tries to ensure that an externally accessible load balancer IP is available.
+It does this in one of two ways:
+
+If you want to use a specific IP that you have ready, either because you brought it from the outside or because you retrieved an Elastic IP
+from Equinix Metal separately, you can add it to the `Service` explicitly as `Service.Spec.LoadBalancerIP`. For example:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ip-service
+spec:
+  selector:
+    app: MyAppIP
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 9376
+  type: LoadBalancer
+  loadBalancerIP: 145.60.80.60
+```
+
+CCM will detect that `loadBalancerIP` already was set and not try to create a new Equinix Metal Elastic IP.
+
+If the `Service.Spec.LoadBalancerIP` was *not* set, then CCM will use the Equinix Metal API to request a new, facility-specific
+Elastic IP and set it to `Service.Spec.LoadBalancerIP`.
+
+At this point, whether you bring your own IP or rely on CCM to request one for you, the load balancer IP has been set, and
+load balancers can consume them.
 
 #### Control Plane LoadBalancer Implementation
 
