@@ -8,7 +8,6 @@ import (
 	"net/url"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/empty"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/kubevip"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/metallb"
 	"github.com/packethost/packngo"
@@ -73,7 +72,9 @@ func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 		impl = metallb.NewLB(k8sclient, config)
 	case "empty":
 		klog.Info("loadbalancer implementation enabled: empty, bgp only")
-		impl = empty.NewLB(k8sclient, config)
+		// Set to nil as we don't want nodeReconciler and serviceReconciler
+		// to start if the loadbalancer setting is "empty".
+		impl = nil
 	default:
 		klog.Info("loadbalancer implementation disabled")
 		impl = nil
