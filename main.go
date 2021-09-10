@@ -30,8 +30,8 @@ const (
 	envVarLocalASN                     = "METAL_LOCAL_ASN"
 	envVarBGPPass                      = "METAL_BGP_PASS"
 	envVarAnnotationLocalASN           = "METAL_ANNOTATION_LOCAL_ASN"
-	envVarAnnotationPeerASNs           = "METAL_ANNOTATION_PEER_ASNS"
-	envVarAnnotationPeerIPs            = "METAL_ANNOTATION_PEER_IPS"
+	envVarAnnotationPeerASN            = "METAL_ANNOTATION_PEER_ASN"
+	envVarAnnotationPeerIP             = "METAL_ANNOTATION_PEER_IP"
 	envVarAnnotationSrcIP              = "METAL_ANNOTATION_SRC_IP"
 	envVarAnnotationBGPPass            = "METAL_ANNOTATION_BGP_PASS"
 	envVarAnnotationNetworkIPv4Private = "METAL_ANNOTATION_NETWORK_IPV4_PRIVATE"
@@ -170,15 +170,15 @@ func getMetalConfig(providerConfig string) (metal.Config, error) {
 	if annotationLocalASN != "" {
 		config.AnnotationLocalASN = annotationLocalASN
 	}
-	config.AnnotationPeerASNs = metal.DefaultAnnotationPeerASNs
-	annotationPeerASNs := os.Getenv(envVarAnnotationPeerASNs)
-	if annotationPeerASNs != "" {
-		config.AnnotationPeerASNs = annotationPeerASNs
+	config.AnnotationPeerASN = metal.DefaultAnnotationPeerASN
+	annotationPeerASN := os.Getenv(envVarAnnotationPeerASN)
+	if annotationPeerASN != "" {
+		config.AnnotationPeerASN = annotationPeerASN
 	}
-	config.AnnotationPeerIPs = metal.DefaultAnnotationPeerIPs
-	annotationPeerIPs := os.Getenv(envVarAnnotationPeerIPs)
-	if annotationPeerIPs != "" {
-		config.AnnotationPeerIPs = annotationPeerIPs
+	config.AnnotationPeerIP = metal.DefaultAnnotationPeerIP
+	annotationPeerIP := os.Getenv(envVarAnnotationPeerIP)
+	if annotationPeerIP != "" {
+		config.AnnotationPeerIP = annotationPeerIP
 	}
 	config.AnnotationSrcIP = metal.DefaultAnnotationSrcIP
 	annotationSrcIP := os.Getenv(envVarAnnotationSrcIP)
