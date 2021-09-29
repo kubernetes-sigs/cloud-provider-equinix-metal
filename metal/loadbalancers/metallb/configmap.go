@@ -12,6 +12,11 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+const (
+	// nameJoiner character that joins names in address pools
+	nameJoiner = ","
+)
+
 func ParseConfig(bs []byte) (*ConfigFile, error) {
 	var raw ConfigFile
 	if err := yaml.Unmarshal(bs, &raw); err != nil {
@@ -95,19 +100,36 @@ func (cfg *ConfigFile) AddAddressPool(add *AddressPool) bool {
 	if add == nil {
 		return false
 	}
-	var found bool
-
 	// go through the pools and see if we have one that matches
-	for _, pool := range cfg.Pools {
-		if !pool.Equal(add) {
-			continue
+	for i, pool := range cfg.Pools {
+		// MetalLB cannot handle two pools with everything the same
+		// except for the name. So if we have two pools that are identical except for the name:
+		// - if the name is the same, do nothing
+		// - if the name is different, modify the name on the first to encompass both
+		if pool.Equal(add) {
+			// they were equal, so we found a matcher
+			return false
 		}
-		// they were equal, so we found a matcher
-		found = true
+		if pool.EqualIgnoreName(add) {
+			// they were not equal, so the names must be different. We need to modify
+			// the name of the first one to cover both.
+			existing := strings.Split(pool.Name, nameJoiner)
+			for _, name := range existing {
+				// if it already has it, no need to add anything
+				if name == add.Name {
+					return false
+				}
+			}
+			// we made it here, so the name does not exist; add it
+			existing = append(existing, add.Name)
+			sort.Strings(existing)
+			pool.Name = strings.Join(existing, nameJoiner)
+			cfg.Pools[i] = pool
+			return true
+		}
 	}
-	if found {
-		return false
-	}
+
+	// if we got here, none matched exactly, so add it
 	cfg.Pools = append(cfg.Pools, *add)
 	return true
 }
@@ -121,9 +143,27 @@ func (cfg *ConfigFile) RemoveAddressPool(remove *AddressPool) {
 	pools := make([]AddressPool, 0)
 	// remove that one, keep all others
 	for _, pool := range cfg.Pools {
-		if !pool.Equal(remove) {
-			pools = append(pools, pool)
+		// if an exact match, continue
+		if pool.Equal(remove) {
+			continue
 		}
+		// if an exact match except for name, see if the name is in the list
+		if pool.EqualIgnoreName(remove) {
+			// they were not equal, so the names must be different.
+			// check if it is in teh list
+			existing := strings.Split(pool.Name, nameJoiner)
+			var newNames []string
+			for _, name := range existing {
+				// if it already has it, no need to add anything
+				if name == remove.Name {
+					continue
+				}
+				newNames = append(newNames, name)
+			}
+			sort.Strings(newNames)
+			pool.Name = strings.Join(newNames, nameJoiner)
+		}
+		pools = append(pools, pool)
 	}
 	cfg.Pools = pools
 }
@@ -404,16 +444,24 @@ func (ns *NodeSelector) Duplicate() NodeSelector {
 	return o
 }
 
-// Equal determine if two AddressPools are equal. Definition of a match is:
+// Equal determine if two AddressPools are equal. Definition of a match is
+// MatchIgnoreName == true && a.Name == o.Name
+func (a *AddressPool) Equal(o *AddressPool) bool {
+	return a.EqualIgnoreName(o) && a.Name == o.Name
+}
+
+// EqualIgnoreName determine if two AddressPools are equal. Definition of a match is:
 // - Protocol matches
-// - Name matches
 // - AvoidBuggyIPs matches
 // - AutoAssign matches
 // - Addresses match (order is ignored)
 // - BGPAdvertisements all match (order is ignored)
-func (a *AddressPool) Equal(o *AddressPool) bool {
+//
+// Note that two match even if the name is different. If you use this function,
+// you must check name match separately!
+func (a *AddressPool) EqualIgnoreName(o *AddressPool) bool {
 	// not matched if any field is mismatched
-	if o == nil || a.Protocol != o.Protocol || a.Name != o.Name ||
+	if o == nil || a.Protocol != o.Protocol ||
 		a.AvoidBuggyIPs != o.AvoidBuggyIPs || *a.AutoAssign != *o.AutoAssign {
 		return false
 	}
