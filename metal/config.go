@@ -36,7 +36,7 @@ func (c Config) Strings() []string {
 	if c.LoadBalancerSetting == "" {
 		ret = append(ret, "loadbalancer config: disabled")
 	} else {
-		ret = append(ret, "load balancer config: ''%s", c.LoadBalancerSetting)
+		ret = append(ret, fmt.Sprintf("load balancer config: ''%s", c.LoadBalancerSetting))
 	}
 	ret = append(ret, fmt.Sprintf("facility: '%s'", c.Facility))
 	ret = append(ret, fmt.Sprintf("local ASN: '%d'", c.LocalASN))
