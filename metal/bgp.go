@@ -27,14 +27,14 @@ type bgp struct {
 	localASN           int
 	bgpPass            string
 	annotationLocalASN string
-	annotationPeerASNs string
-	annotationPeerIPs  string
+	annotationPeerASN  string
+	annotationPeerIP   string
 	annotationSrcIP    string
 	annotationBgpPass  string
 	nodeSelector       labels.Selector
 }
 
-func newBGP(client *packngo.Client, project string, localASN int, bgpPass string, annotationLocalASN, annotationPeerASNs, annotationPeerIPs, annotationSrcIP, annotationBgpPass string, nodeSelector string) *bgp {
+func newBGP(client *packngo.Client, project string, localASN int, bgpPass string, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass string, nodeSelector string) *bgp {
 
 	selector := labels.Everything()
 	if nodeSelector != "" {
@@ -47,8 +47,8 @@ func newBGP(client *packngo.Client, project string, localASN int, bgpPass string
 		localASN:           localASN,
 		bgpPass:            bgpPass,
 		annotationLocalASN: annotationLocalASN,
-		annotationPeerASNs: annotationPeerASNs,
-		annotationPeerIPs:  annotationPeerIPs,
+		annotationPeerASN:  annotationPeerASN,
+		annotationPeerIP:   annotationPeerIP,
 		annotationSrcIP:    annotationSrcIP,
 		annotationBgpPass:  annotationBgpPass,
 		nodeSelector:       selector,
@@ -114,45 +114,68 @@ func (b *bgp) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateM
 			klog.V(2).Infof("bgp.reconcileNodes(): setting annotations on node %s", node.Name)
 			// get the bgp info
 			peer, err := getNodeBGPConfig(id, b.client)
-			if err != nil || peer == nil {
+			switch {
+			case err != nil || peer == nil:
 				klog.Errorf("bgp.reconcileNodes(): could not get BGP info for node %s: %v", node.Name, err)
-			} else {
+			case len(peer.PeerIps) == 0:
+				klog.Errorf("bgp.reconcileNodes(): got BGP info for node %s but it had no peer IPs", node.Name)
+			default:
+				// the localASN and peerASN are the same across peers
 				localASN := strconv.Itoa(peer.CustomerAs)
 				peerASN := strconv.Itoa(peer.PeerAs)
-				newAnnotations := make(map[string]string)
+				bgpPass := base64.StdEncoding.EncodeToString([]byte(peer.Md5Password))
+
+				// we always set the peer IPs as a sorted list, so that 0, 1, n are
+				// consistent in ordering
+				pips := peer.PeerIps
+				sort.Strings(pips)
+				var (
+					i  int
+					ip string
+				)
 				oldAnnotations := node.Annotations
 				if oldAnnotations == nil {
 					oldAnnotations = make(map[string]string)
 				}
-				val, ok := oldAnnotations[b.annotationLocalASN]
-				if !ok || val != localASN {
-					newAnnotations[b.annotationLocalASN] = localASN
+				newAnnotations := make(map[string]string)
+
+				// ensure all of the data we have is in the annotations, either
+				// adding or replacing
+				for i, ip = range pips {
+					annotationLocalASN := strings.Replace(b.annotationLocalASN, "{{n}}", strconv.Itoa(i), 1)
+					annotationPeerASN := strings.Replace(b.annotationPeerASN, "{{n}}", strconv.Itoa(i), 1)
+					annotationPeerIP := strings.Replace(b.annotationPeerIP, "{{n}}", strconv.Itoa(i), 1)
+					annotationSrcIP := strings.Replace(b.annotationSrcIP, "{{n}}", strconv.Itoa(i), 1)
+					annotationBgpPass := strings.Replace(b.annotationBgpPass, "{{n}}", strconv.Itoa(i), 1)
+
+					val, ok := oldAnnotations[annotationLocalASN]
+					if !ok || val != localASN {
+						newAnnotations[annotationLocalASN] = localASN
+					}
+
+					val, ok = oldAnnotations[annotationPeerASN]
+					if !ok || val != peerASN {
+						newAnnotations[annotationPeerASN] = peerASN
+					}
+
+					val, ok = oldAnnotations[annotationPeerIP]
+					if !ok || val != ip {
+						newAnnotations[annotationPeerIP] = ip
+					}
+
+					val, ok = oldAnnotations[annotationSrcIP]
+					if !ok || val != peer.CustomerIP {
+						newAnnotations[annotationSrcIP] = peer.CustomerIP
+					}
+					val, ok = oldAnnotations[annotationBgpPass]
+					if !ok || val != bgpPass {
+						newAnnotations[annotationBgpPass] = bgpPass
+					}
 				}
 
-				val, ok = oldAnnotations[b.annotationPeerASNs]
-				if !ok || val != peerASN {
-					newAnnotations[b.annotationPeerASNs] = peerASN
-				}
-
-				// we always set the peer IPs as a sorted list, comma-separated
-				pips := peer.PeerIps
-				sort.Strings(pips)
-				peerList := strings.Join(pips, ",")
-				val, ok = oldAnnotations[b.annotationPeerIPs]
-				if !ok || val != peerList {
-					newAnnotations[b.annotationPeerIPs] = peerList
-				}
-
-				val, ok = oldAnnotations[b.annotationSrcIP]
-				if !ok || val != peer.CustomerIP {
-					newAnnotations[b.annotationSrcIP] = peer.CustomerIP
-				}
-
-				val, ok = oldAnnotations[b.annotationBgpPass]
-				newVal := base64.StdEncoding.EncodeToString([]byte(peer.Md5Password))
-				if !ok || val != newVal {
-					newAnnotations[b.annotationBgpPass] = newVal
-				}
+				// TODO: ensure that any old ones that are not in the new data are removed
+				// for now, since there are consistently two upstream nodes, we will not bother
+				// it gets complex, because we need to match patterns. It is not worth the effort for now.
 
 				// patch the node with the new annotations
 				if len(newAnnotations) > 0 {
