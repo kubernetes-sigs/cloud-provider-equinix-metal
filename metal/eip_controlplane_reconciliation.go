@@ -18,12 +18,13 @@ import (
 )
 
 const (
-	controlPlaneLabel        = "node-role.kubernetes.io/master"
 	externalServiceName      = "cloud-provider-equinix-metal-kubernetes-external"
 	externalServiceNamespace = "kube-system"
 	metallbAnnotation        = "metallb.universe.tf/address-pool"
 	metallbDisabledtag       = "disabled-metallb-do-not-use-any-address-pool"
 )
+
+var controlPlaneLabels = []string{"node-role.kubernetes.io/master", "node-role.kubernetes.io/control-plane"}
 
 /*
  controlPlaneEndpointManager checks the availability of an elastic IP for
@@ -123,9 +124,13 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 		// filter down to only those nodes that are tagged as control plane
 		cpNodes := []*v1.Node{}
 		for _, n := range nodes {
-			if _, ok := n.Labels[controlPlaneLabel]; ok {
-				cpNodes = append(cpNodes, n)
-				klog.V(2).Infof("adding control plane node %s", n.Name)
+			for _, label := range controlPlaneLabels {
+				if _, ok := n.Labels[label]; ok {
+					cpNodes = append(cpNodes, n)
+					klog.V(2).Infof("adding control plane node %s", n.Name)
+					// no need to go through the other labels, once we found a match
+					break
+				}
 			}
 		}
 		if err := m.reassign(ctx, cpNodes, controlPlaneEndpoint, healthCheckURL); err != nil {
