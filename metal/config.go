@@ -12,8 +12,8 @@ type Config struct {
 	LocalASN                     int     `json:"localASN,omitempty"`
 	BGPPass                      string  `json:"bgpPass,omitempty"`
 	AnnotationLocalASN           string  `json:"annotationLocalASN,omitEmpty"`
-	AnnotationPeerASNs           string  `json:"annotationPeerASNs,omitEmpty"`
-	AnnotationPeerIPs            string  `json:"annotationPeerIPs,omitEmpty"`
+	AnnotationPeerASN            string  `json:"annotationPeerASN,omitEmpty"`
+	AnnotationPeerIP             string  `json:"annotationPeerIP,omitEmpty"`
 	AnnotationSrcIP              string  `json:"annotationSrcIP,omitEmpty"`
 	AnnotationBGPPass            string  `json:"annotationBGPPass,omitEmpty"`
 	AnnotationNetworkIPv4Private string  `json:"annotationNetworkIPv4Private,omitEmpty"`
