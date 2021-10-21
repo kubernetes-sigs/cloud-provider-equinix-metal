@@ -33,6 +33,9 @@ spec:
         - key: "node-role.kubernetes.io/master"
           effect: NoSchedule
           operator: Exists
+        - key: "node-role.kubernetes.io/control-plane"
+          effect: NoSchedule
+          operator: Exists
       containers:
       - image: equinix/cloud-provider-equinix-metal:RELEASE_TAG
         name: cloud-provider-equinix-metal
