@@ -203,11 +203,11 @@ This section lists each configuration option, and whether it can be set by each 
 | Load balancer setting |   | `METAL_LOAD_BALANCER` | `loadbalancer` | none |
 | BGP ASN for cluster nodes when enabling BGP on the project |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
 | BGP passphrase to use when enabling BGP on the project |   | `METAL_BGP_PASS` | `bgpPass` | `""` |
-| Kubernetes annotation to set node's BGP ASN |   | `METAL_ANNOTATION_LOCAL_ASN` | `annotationLocalASN` | `"metal.equinix.com/node-asn"` |
-| Kubernetes annotation to set BGP peer's ASN |   | `METAL_ANNOTATION_PEER_ASNS` | `annotationPeerASNs` | `"metal.equinix.com/peer-asn"` |
-| Kubernetes annotation to set BGP peer's IPs |   | `METAL_ANNOTATION_PEER_IPS` | `annotationPeerIPs` | `"metal.equinix.com/peer-ip"` |
-| Kubernetes annotation to set source IP for BGP peering |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/src-ip"` |
-| Kubernetes annotation to set BGP MD5 password, base64-encoded (see security warning below) |   | `METAL_ANNOTATION_BGP_PASS` | `annotationBGPPass` | `"metal.equinix.com/bgp-pass"` |
+| Kubernetes annotation to set node's BGP ASN, `{{n}}` replaced with ordinal index of peer |   | `METAL_ANNOTATION_LOCAL_ASN` | `annotationLocalASN` | `"metal.equinix.com/bgp-peers-{{n}}-node-asn"` |
+| Kubernetes annotation to set BGP peer's ASN, {{n}} replaced with ordinal index of peer |   | `METAL_ANNOTATION_PEER_ASN` | `annotationPeerASN` | `"metal.equinix.com/bgp-peers-{{n}}-peer-asn"` |
+| Kubernetes annotation to set BGP peer's IPs, {{n}} replaced with ordinal index of peer |   | `METAL_ANNOTATION_PEER_IP` | `annotationPeerIP` | `"metal.equinix.com/bgp-peers-{{n}}-peer-ip"` |
+| Kubernetes annotation to set source IP for BGP peering, {{n}} replaced with ordinal index of peer |   | `METAL_ANNOTATION_SRC_IP` | `annotationSrcIP` | `"metal.equinix.com/bgp-peers-{{n}}-src-ip"` |
+| Kubernetes annotation to set BGP MD5 password, base64-encoded (see security warning below) |   | `METAL_ANNOTATION_BGP_PASS` | `annotationBGPPass` | `"metal.equinix.com/bgp-peers-{{n}}-bgp-pass"` |
 | Kubernetes annotation to set the CIDR for the network range of the private address |  | `METAL_ANNOTATION_NETWORK_IPV4_PRIVATE` |  `annotationNetworkIPv4Private` | `metal.equinix.com/network-4-private` |
 | Tag for control plane Elastic IP |    | `METAL_EIP_TAG` | `eipTag` | No control plane Elastic IP |
 | Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | Same as `kube-apiserver` on control plane nodes, same as `0` |
@@ -561,15 +561,29 @@ Value for node selector should be a valid Kubernetes label selector (e.g. key1=v
 
 ## Node Annotations
 
-The Equinix Metal CCM sets Kubernetes annotations on each cluster node:
+The Equinix Metal CCM sets Kubernetes annotations on each cluster node.
 
-* Node, or local, ASN, default annotation `metal.equinix.com/node-asn`
-* Peer ASNs, comma-separated if multiple, default annotation `metal.equinix.com/peer-asns`
-* Peer IPs, comma-separated if multiple, default annotation `metal.equinix.com/peer-ips`
-* Source IP to use when communicating with upstream peers, default annotation `metal.equinix.com/src-ip`
-* CIDR of the private network range in the project which this node is part of, default annotation `metal.equinix.com/network-ipv4/private`
+* Node, or local, ASN, default annotation `metal.equinix.com/bgp-peers-{{n}}-node-asn`
+* Peer ASN, default annotation `metal.equinix.com/bgp-peers-{{n}}-peer-asn`
+* Peer IP, default annotation `metal.equinix.com/bgp-peers-{{n}}-peer-ip`
+* Source IP to use when communicating with peer, default annotation `metal.equinix.com/bgp-peers-{{n}}-src-ip`
+* BGP password for peer, default annotation `metal.equinix.com/bgp-peers-{{n}}-bgp-pass`
+* CIDR of the private network range in the project which this node is part of, default annotation `metal.equinix.com/network-4-private`
 
 These annotation names can be overridden, if you so choose, using the options in [Configuration][Configuration].
+
+Note that the annotations for BGP peering are a _pattern_. There is one annotation per data point per peer,
+following the pattern `metal.equinix.com/bgp-peers-{{n}}-<info>`, where:
+
+* `{{n}}` is the number of the peer, **always** starting with `0`
+* `<info>` is the relevant information, such as `node-asn` or `peer-ip`
+
+For example:
+
+* `metal.equinix.com/bgp-peers-0-peer-asn` - ASN of peer 0
+* `metal.equinix.com/bgp-peers-1-peer-asn` - ASN of peer 1
+* `metal.equinix.com/bgp-peers-0-peer-ip` - IP of peer 0
+* `metal.equinix.com/bgp-peers-1-peer-ip` - IP of peer 1
 
 ## Elastic IP Configuration
 

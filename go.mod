@@ -17,7 +17,7 @@ require (
 	k8s.io/cloud-provider v0.19.4
 	k8s.io/component-base v0.19.4
 	k8s.io/klog/v2 v2.5.0
-	k8s.io/kubernetes v1.19.4
+	k8s.io/kubernetes v1.19.11
 )
 
 replace (
