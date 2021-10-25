@@ -55,7 +55,8 @@ type Config struct {
 }
 
 func AddExtraFlags(fs *pflag.FlagSet, providerConfig *string) {
-	fs.StringVar(providerConfig, "provider-config", "", "path to provider config file (DEPRECATED, use cloud-config")
+	// TODO: how do we honor the legacy provider-config?
+	// fs.StringVar(providerConfig, "provider-config", "", "path to provider config file (DEPRECATED, use cloud-config")
 }
 
 // String converts the Config structure to a string, while masking hidden fields.
