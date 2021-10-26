@@ -42,6 +42,7 @@ type cloudService interface {
 
 type cloudInstances interface {
 	cloudprovider.Instances
+	cloudprovider.InstancesV2
 	cloudService
 }
 type cloudLoadBalancers interface {
@@ -161,8 +162,8 @@ func (c *cloud) Instances() (cloudprovider.Instances, bool) {
 
 // InstancesV2 returns an implementation of cloudprovider.InstancesV2.
 func (c *cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
-	klog.Warning("The Equinix Metal cloud provider does not support InstancesV2")
-	return nil, false
+	klog.V(5).Info("called InstancesV2")
+	return c.instances, true
 }
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.

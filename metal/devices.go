@@ -193,14 +193,17 @@ func (i *instances) InstanceShutdownByProviderID(_ context.Context, providerID s
 	return device.State == "inactive", nil
 }
 
+// InstanceShutdown returns true if the node is shutdown in cloudprovider
 func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, error) {
 	return i.InstanceShutdownByProviderID(ctx, node.Spec.ProviderID)
 }
 
+// InstanceExists returns true if the node exists in cloudprovider
 func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
 	return i.InstanceExistsByProviderID(ctx, node.Spec.ProviderID)
 }
 
+// InstanceMetadata returns instancemetadata for the node according to the cloudprovider
 func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
 	device, err := i.deviceFromProviderID(node.Spec.ProviderID)
 	if err != nil {
