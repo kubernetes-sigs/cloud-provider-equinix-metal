@@ -123,13 +123,8 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		cfg := ConfigFile{}
-
-		// for reasons that are unclear, these changes seem to modify the original pools,
-		// even though we duplicate them. We will be smart and do an explicit duplicate to
-		// avoid the issue.
-		for _, pool := range pools {
-			cfg.Pools = append(cfg.Pools, pool)
+		cfg := ConfigFile{
+			Pools: append([]AddressPool{}, pools...),
 		}
 
 		changed := cfg.AddAddressPool(&tt.pool)
@@ -177,14 +172,10 @@ func TestConfigFileRemoveAddressPool(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		cfg := ConfigFile{}
-
-		// for reasons that are unclear, these changes seem to modify the original pools,
-		// even though we duplicate them. We will be smart and do an explicit duplicate to
-		// avoid the issue.
-		for _, pool := range pools {
-			cfg.Pools = append(cfg.Pools, pool)
+		cfg := ConfigFile{
+			Pools: append([]AddressPool{}, pools...),
 		}
+
 		cfg.RemoveAddressPool(&tt.pool)
 		if len(cfg.Pools) != len(tt.expected) {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), len(tt.expected), tt.message)
@@ -579,7 +570,114 @@ func TestSelectorRequirementsSliceLen(t *testing.T) {
 }
 
 func TestSelectorRequirementsSliceLess(t *testing.T) {
-
+	// basic set we use for our tests.
+	/*
+		type SelectorRequirements struct {
+			Key      string   `yaml:"key"`
+			Operator string   `yaml:"operator"`
+			Values   []string `yaml:"values"`
+		}
+	*/
+	sr := map[string]SelectorRequirements{
+		"mykey-equal-abc": {
+			Key:      "mykey",
+			Operator: "equal",
+			Values:   []string{"a", "b", "c"},
+		},
+		"yourkey-equal-abc": {
+			Key:      "yourkey",
+			Operator: "equal",
+			Values:   []string{"a", "b", "c"},
+		},
+		"mykey-equal-def": {
+			Key:      "mykey",
+			Operator: "equal",
+			Values:   []string{"d", "e", "f"},
+		},
+		"mykey-equal-ab": {
+			Key:      "mykey",
+			Operator: "equal",
+			Values:   []string{"a", "b"},
+		},
+		"mykey-equal-de": {
+			Key:      "mykey",
+			Operator: "equal",
+			Values:   []string{"d", "e"},
+		},
+		"yourkey-equal-def": {
+			Key:      "yourkey",
+			Operator: "equal",
+			Values:   []string{"d", "e", "f"},
+		},
+		"yourkey-equal-de": {
+			Key:      "yourkey",
+			Operator: "equal",
+			Values:   []string{"d", "e"},
+		},
+		"mykey-in-abc": {
+			Key:      "mykey",
+			Operator: "in",
+			Values:   []string{"a", "b", "c"},
+		},
+		"mykey-in-ab": {
+			Key:      "mykey",
+			Operator: "in",
+			Values:   []string{"a", "b"},
+		},
+		"yourkey-in-abc": {
+			Key:      "yourkey",
+			Operator: "in",
+			Values:   []string{"a", "b", "c"},
+		},
+		"mykey-in-def": {
+			Key:      "mykey",
+			Operator: "in",
+			Values:   []string{"d", "e", "f"},
+		},
+		"yourkey-in-def": {
+			Key:      "yourkey",
+			Operator: "in",
+			Values:   []string{"d", "e", "f"},
+		},
+	}
+	tests := []struct {
+		left, right string
+		less        bool
+	}{
+		{"mykey-equal-abc", "mykey-equal-def", true},
+		{"mykey-equal-abc", "yourkey-equal-abc", true},
+		{"mykey-equal-abc", "yourkey-equal-def", true},
+		{"mykey-equal-abc", "mykey-equal-ab", false},
+		{"mykey-equal-ab", "mykey-equal-abc", true},
+		{"mykey-equal-abc", "mykey-equal-de", false},
+		{"mykey-equal-de", "mykey-equal-abc", true},
+		{"mykey-equal-de", "mykey-equal-ab", false},
+		{"mykey-equal-ab", "mykey-equal-de", true},
+		{"mykey-equal-abc", "yourkey-equal-de", true},
+		{"mykey-equal-abc", "mykey-in-abc", true},
+		{"mykey-in-abc", "mykey-equal-abc", false},
+		{"mykey-in-ab", "mykey-equal-def", false},
+		{"mykey-in-def", "mykey-in-abc", false},
+		{"mykey-in-abc", "mykey-in-def", true},
+		{"mykey-in-abc", "yourkey-in-def", true},
+		{"mykey-in-abc", "yourkey-equal-abc", true},
+	}
+	for i, tt := range tests {
+		if _, ok := sr[tt.left]; !ok {
+			t.Fatalf("unknown entry: %s", tt.left)
+		}
+		if _, ok := sr[tt.right]; !ok {
+			t.Fatalf("unknown entry: %s", tt.right)
+		}
+		var srs SelectorRequirementsSlice = []SelectorRequirements{
+			sr[tt.left],
+			sr[tt.right],
+		}
+		actual := srs.Less(0, 1)
+		if actual != tt.less {
+			t.Errorf("%d: left %s vs right %s gave %v instead of expected %v", i, tt.left, tt.right, actual, tt.less)
+		}
+	}
 }
 
 func TestSelectorRequirementsSliceEqual(t *testing.T) {
