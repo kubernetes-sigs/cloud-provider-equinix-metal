@@ -1,6 +1,7 @@
 package metallb
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -98,25 +99,51 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 		genPool(),
 		genPool(),
 	}
-	cfg := ConfigFile{
-		Pools: pools,
+	modifiedPool := pools[0].Duplicate()
+	modifiedPool.Name = "newName"
+	joinedPool := pools[0].Duplicate()
+	joinedPool.Name = strings.Join([]string{pools[0].Name, modifiedPool.Name}, nameJoiner)
+	modifiedPools := []AddressPool{
+		joinedPool,
+		pools[1],
 	}
 
+	newPool := genPool()
+
 	tests := []struct {
-		pool    AddressPool
-		total   int
-		message string
+		pool     AddressPool
+		changed  bool
+		expected []AddressPool
+		message  string
 	}{
-		{pools[0], len(pools), "add existing first pool"},
-		{pools[1], len(pools), "add existing second pool"},
-		{genPool(), len(pools) + 1, "new pool"},
+		{pools[0], false, pools, "add existing first pool with same name"},
+		{pools[1], false, pools, "add existing second pool with same name"},
+		{modifiedPool, true, modifiedPools, "add existing first pool with different name"},
+		{newPool, true, append(pools, newPool), "new pool"},
 	}
 
 	for i, tt := range tests {
-		cfg.Pools = pools[:]
-		cfg.AddAddressPool(&tt.pool)
-		if len(cfg.Pools) != tt.total {
-			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), tt.total, tt.message)
+		cfg := ConfigFile{}
+
+		// for reasons that are unclear, these changes seem to modify the original pools,
+		// even though we duplicate them. We will be smart and do an explicit duplicate to
+		// avoid the issue.
+		for _, pool := range pools {
+			cfg.Pools = append(cfg.Pools, pool)
+		}
+
+		changed := cfg.AddAddressPool(&tt.pool)
+		if changed != tt.changed {
+			t.Errorf("%d: mismatched changed actual %v expected %v", i, changed, tt.changed)
+		}
+		if len(cfg.Pools) != len(tt.expected) {
+			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), len(tt.expected), tt.message)
+		} else {
+			for j, pool := range cfg.Pools {
+				if !pool.Equal(&tt.expected[j]) {
+					t.Errorf("%d: pool %d mismatched, actual %#v, expected %#v", i, j, pool, tt.expected[j])
+				}
+			}
 		}
 	}
 }
@@ -125,25 +152,48 @@ func TestConfigFileRemoveAddressPool(t *testing.T) {
 		genPool(),
 		genPool(),
 	}
-	cfg := ConfigFile{
-		Pools: pools,
+	joinedPool := genPool()
+	joinedPool.Name = "newName,oldName"
+	pools = append(pools, joinedPool)
+	unjoinedPoolOld := joinedPool.Duplicate()
+	unjoinedPoolOld.Name = "oldName"
+	unjoinedPoolNew := joinedPool.Duplicate()
+	unjoinedPoolNew.Name = "newName"
+	var modifiedPools []AddressPool
+	for _, pool := range pools {
+		modifiedPools = append(modifiedPools, pool)
 	}
+	modifiedPools[2] = unjoinedPoolNew
 
 	tests := []struct {
-		pool    AddressPool
-		total   int
-		message string
+		pool     AddressPool
+		expected []AddressPool
+		message  string
 	}{
-		{pools[0], len(pools) - 1, "remove first existing pool"},
-		{pools[1], len(pools) - 1, "remove second existing pool"},
-		{genPool(), len(pools), "no match"},
+		{pools[0], pools[1:], "remove first existing pool"},
+		{pools[1], []AddressPool{pools[0], pools[2]}, "remove second existing pool"},
+		{genPool(), pools, "no match"},
+		{unjoinedPoolOld, modifiedPools, "remove single name of joined pool"},
 	}
 
 	for i, tt := range tests {
-		cfg.Pools = pools[:]
+		cfg := ConfigFile{}
+
+		// for reasons that are unclear, these changes seem to modify the original pools,
+		// even though we duplicate them. We will be smart and do an explicit duplicate to
+		// avoid the issue.
+		for _, pool := range pools {
+			cfg.Pools = append(cfg.Pools, pool)
+		}
 		cfg.RemoveAddressPool(&tt.pool)
-		if len(cfg.Pools) != tt.total {
-			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), tt.total, tt.message)
+		if len(cfg.Pools) != len(tt.expected) {
+			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), len(tt.expected), tt.message)
+		} else {
+			for j, pool := range cfg.Pools {
+				if !pool.Equal(&tt.expected[j]) {
+					t.Errorf("%d: pool %d mismatched, actual %#v, expected %#v", i, j, pool, tt.expected[j])
+				}
+			}
 		}
 	}
 }
