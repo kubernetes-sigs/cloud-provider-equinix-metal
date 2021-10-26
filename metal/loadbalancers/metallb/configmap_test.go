@@ -661,6 +661,8 @@ func TestSelectorRequirementsSliceLess(t *testing.T) {
 		{"mykey-in-abc", "mykey-in-def", true},
 		{"mykey-in-abc", "yourkey-in-def", true},
 		{"mykey-in-abc", "yourkey-equal-abc", true},
+		{"mykey-in-abc", "mykey-in-ab", false},
+		{"mykey-in-abc", "mykey-in-abc", false},
 	}
 	for i, tt := range tests {
 		if _, ok := sr[tt.left]; !ok {
