@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 )
@@ -52,11 +51,6 @@ type Config struct {
 	EIPTag                       string  `json:"eipTag,omitEmpty"`
 	APIServerPort                int32   `json:"apiServerPort,omitEmpty"`
 	BGPNodeSelector              string  `json:"bgpNodeSelector,omitEmpty"`
-}
-
-func AddExtraFlags(fs *pflag.FlagSet, providerConfig *string) {
-	// TODO: how do we honor the legacy provider-config?
-	// fs.StringVar(providerConfig, "provider-config", "", "path to provider config file (DEPRECATED, use cloud-config")
 }
 
 // String converts the Config structure to a string, while masking hidden fields.

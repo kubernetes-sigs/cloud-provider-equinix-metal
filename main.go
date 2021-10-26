@@ -37,7 +37,6 @@ func main() {
 	fss := cliflag.NamedFlagSets{
 		NormalizeNameFunc: cliflag.WordSepNormalizeFunc,
 	}
-	// TODO: how do we alias cloud-config (in the "generic" flagset) as provider-config, or offer a secondary (legacy) argument
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 
