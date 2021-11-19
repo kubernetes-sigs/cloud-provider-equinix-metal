@@ -198,7 +198,8 @@ This section lists each configuration option, and whether it can be set by each 
 | Path to config secret |    |    | `provider-config` | error |
 | API Key |    | `METAL_API_KEY` | `apiKey` | error |
 | Project ID |    | `METAL_PROJECT_ID` | `projectID` | error |
-| Facility |    | `METAL_FACILITY_NAME` | `facility` | read metadata on host on which CCM is running, else error |
+| Metro |    | `METAL_METRO_NAME` | `metro` | read metadata on host on which CCM is running, else error |
+| Facility |    | `METAL_FACILITY_NAME` | `facility` | if metro is set, leave blank, else read metadata on host on which CCM is running, else error |
 | Base URL to Equinix API |    |    | `base-url` | Official Equinix Metal API |
 | Load balancer setting |   | `METAL_LOAD_BALANCER` | `loadbalancer` | none |
 | BGP ASN for cluster nodes when enabling BGP on the project |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
@@ -604,14 +605,14 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Build it for your local platform `make build`
 1. Set the environment variable `CCM_SECRET` to a file with the secret contents as a json, i.e. the content of the secret's `stringData`, e.g. `CCM_SECRET=ccm-secret.yaml`
 1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
-1. Set the environment variable `METAL_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `METAL_FACILITY_NAME=ewr1`
+1. Set the environment variable `METAL_METRO_NAME` to the correct metro where the cluster is running, e.g. `METAL_METRO_NAME=ny` _OR_ set the environment variable `METAL_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `METAL_FACILITY_NAME=ewr1`
 1. If you want to run the loadbalancer, and it is not yet deployed, run `kubectl apply -f deploy/loadbalancer.yaml`
 1. Enable the loadbalancer by setting the environment variable `METAL_LOAD_BALANCER=metallb://`
 1. If you want to use a managed Elastic IP for the control plane, create one using the Equinix Metal API or Web UI, tag it uniquely, and set the environment variable `METAL_EIP_TAG=<tag>`
 1. Run the command, e.g.:
 
 ```
-METAL_FACILITY_NAME=${METAL_FACILITY_NAME} METAL_LOAD_BALANCER=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
+METAL_METRO_NAME=${METAL_METRO_NAME} METAL_LOAD_BALANCER=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
 ```
 
 For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.

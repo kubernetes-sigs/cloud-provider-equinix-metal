@@ -59,6 +59,7 @@ type cloud struct {
 	instances                   cloudInstances
 	zones                       cloudZones
 	loadBalancer                cloudLoadBalancers
+	metro                       string
 	facility                    string
 	controlPlaneEndpointManager *controlPlaneEndpointManager
 	// holds our bgp service handler
@@ -69,10 +70,11 @@ func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interfa
 	i := newInstances(client, metalConfig.ProjectID, metalConfig.AnnotationNetworkIPv4Private)
 	return &cloud{
 		client:                      client,
+		metro:                       metalConfig.Metro,
 		facility:                    metalConfig.Facility,
 		instances:                   i,
 		zones:                       newZones(client, metalConfig.ProjectID),
-		loadBalancer:                newLoadBalancers(client, metalConfig.ProjectID, metalConfig.Facility, metalConfig.LoadBalancerSetting),
+		loadBalancer:                newLoadBalancers(client, metalConfig.ProjectID, metalConfig.Metro, metalConfig.Facility, metalConfig.LoadBalancerSetting),
 		bgp:                         newBGP(client, metalConfig.ProjectID, metalConfig.LocalASN, metalConfig.BGPPass, metalConfig.AnnotationLocalASN, metalConfig.AnnotationPeerASN, metalConfig.AnnotationPeerIP, metalConfig.AnnotationSrcIP, metalConfig.AnnotationBGPPass, metalConfig.BGPNodeSelector),
 		controlPlaneEndpointManager: newControlPlaneEndpointManager(metalConfig.EIPTag, metalConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, metalConfig.APIServerPort),
 	}, nil

@@ -122,6 +122,7 @@ configSecret:
 config:
   apiKey: ""
   projectID: ""
+  # metro: metro
   # facility: facility
   # base-url: ""
   # loadbalancer: ""

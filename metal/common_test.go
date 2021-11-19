@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/google/uuid"
 	"github.com/packethost/packet-api-server/pkg/store"
 	"github.com/packethost/packngo"
 	"github.com/packethost/packngo/metadata"
 	randomdata "github.com/pallinder/go-randomdata"
 )
+
+var randomID = uuid.New().String()
 
 // find an ewr1 region or create it
 func testGetOrCreateValidRegion(name, code string, backend store.DataStore) (*packngo.Facility, error) {
