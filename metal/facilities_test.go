@@ -38,11 +38,11 @@ func TestGetZoneByProviderID(t *testing.T) {
 		region     string
 		err        error
 	}{
-		{"", "", fmt.Errorf("providerID cannot be empty")},                                           // empty ID
-		{"foo-bar-abcdefg", "", fmt.Errorf("instance not found")},                                    // invalid format
-		{"aws://abcdef5667", "", fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
-		{"equinixmetal://acbdef-56788", "", fmt.Errorf("instance not found")},                        // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", dev.ID), validRegionCode, nil},                             // valid
+		{"", "", fmt.Errorf("providerID cannot be empty")},                                            // empty ID
+		{randomID, "", fmt.Errorf("instance not found")},                                              // invalid format
+		{"aws://" + randomID, "", fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
+		{"equinixmetal://" + randomID, "", fmt.Errorf("instance not found")},                          // unknown ID
+		{fmt.Sprintf("equinixmetal://%s", dev.ID), validRegionCode, nil},                              // valid
 	}
 
 	zones, _ := vc.Zones()

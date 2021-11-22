@@ -5,10 +5,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+)
+
+var (
+	projectID = uuid.New().String()
 )
 
 func TestNodeAddresses(t *testing.T) {
@@ -86,13 +91,13 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 		addresses []v1.NodeAddress
 		err       error
 	}{
-		{"", nil, fmt.Errorf("providerID cannot be empty")},                                           // empty ID
-		{"foo-bar-abcdefg", nil, fmt.Errorf("instance not found")},                                    // invalid format
-		{"aws://abcdef5667", nil, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
-		{"equinixmetal://acbdef-56788", nil, fmt.Errorf("instance not found")},                        // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", dev.ID), validAddresses, nil},                               // valid
-		{fmt.Sprintf("packet://%s", dev.ID), validAddresses, nil},                                     // valid
-		{dev.ID, validAddresses, nil},                                                                 // valid
+		{"", nil, fmt.Errorf("providerID cannot be empty")},                                            // empty ID
+		{randomID, nil, fmt.Errorf("instance not found")},                                              // invalid format
+		{"aws://" + randomID, nil, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
+		{"equinixmetal://" + randomID, nil, fmt.Errorf("instance not found")},                          // unknown ID
+		{fmt.Sprintf("equinixmetal://%s", dev.ID), validAddresses, nil},                                // valid
+		{fmt.Sprintf("packet://%s", dev.ID), validAddresses, nil},                                      // valid
+		{dev.ID, validAddresses, nil},                                                                  // valid
 	}
 
 	for i, tt := range tests {
@@ -177,12 +182,12 @@ func TestInstanceTypeByProviderID(t *testing.T) {
 		plan string
 		err  error
 	}{
-		{"", "", fmt.Errorf("providerID cannot be empty")},                                           // empty name
-		{"foo-bar-abcdefg", "", fmt.Errorf("instance not found")},                                    // invalid format
-		{"aws://abcdef5667", "", fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetalk
-		{"equinixmetal://acbdef-56788", "", fmt.Errorf("instance not found")},                        // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", dev.ID), dev.Plan.Name, nil},                               // valid
-		{fmt.Sprintf("packet://%s", dev.ID), dev.Plan.Name, nil},                                     // valid
+		{"", "", fmt.Errorf("providerID cannot be empty")},                                            // empty name
+		{randomID, "", fmt.Errorf("instance not found")},                                              // invalid format
+		{"aws://" + randomID, "", fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetalk
+		{"equinixmetal://" + randomID, "", fmt.Errorf("instance not found")},                          // unknown ID
+		{fmt.Sprintf("equinixmetal://%s", dev.ID), dev.Plan.Name, nil},                                // valid
+		{fmt.Sprintf("packet://%s", dev.ID), dev.Plan.Name, nil},                                      // valid
 	}
 
 	for i, tt := range tests {
@@ -235,12 +240,12 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 		exists bool
 		err    error
 	}{
-		{"", false, fmt.Errorf("providerID cannot be empty")},                                           // empty name
-		{"foo-bar-abcdefg", false, nil},                                                                 // invalid format
-		{"aws://abcdef5667", false, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
-		{"equinixmetal://acbdef-56788", false, nil},                                                     // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", dev.ID), true, nil},                                           // valid
-		{fmt.Sprintf("packet://%s", dev.ID), true, nil},                                                 // valid
+		{"", false, fmt.Errorf("providerID cannot be empty")}, // empty name
+		{randomID, false, nil},                                // invalid format
+		{"aws://" + randomID, false, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
+		{"equinixmetal://" + randomID, false, nil},                                                       // unknown ID
+		{fmt.Sprintf("equinixmetal://%s", dev.ID), true, nil},                                            // valid
+		{fmt.Sprintf("packet://%s", dev.ID), true, nil},                                                  // valid
 		{dev.ID, true, nil}, // valid
 	}
 
@@ -274,16 +279,16 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 		down bool
 		err  error
 	}{
-		{"", false, fmt.Errorf("providerID cannot be empty")},                                           // empty name
-		{"foo-bar-abcdefg", false, fmt.Errorf("instance not found")},                                    // invalid format
-		{"aws://abcdef5667", false, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
-		{"equinixmetal://acbdef-56788", false, fmt.Errorf("instance not found")},                        // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", devActive.ID), false, nil},                                    // valid
-		{fmt.Sprintf("packet://%s", devActive.ID), false, nil},                                          // valid
-		{devActive.ID, false, nil},                                                                      // valid
-		{fmt.Sprintf("equinixmetal://%s", devInactive.ID), true, nil},                                   // valid
-		{fmt.Sprintf("packet://%s", devInactive.ID), true, nil},                                         // valid
-		{devInactive.ID, true, nil},                                                                     // valid
+		{"", false, fmt.Errorf("providerID cannot be empty")},                                            // empty name
+		{randomID, false, fmt.Errorf("instance not found")},                                              // invalid format
+		{"aws://" + randomID, false, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
+		{"equinixmetal://" + randomID, false, fmt.Errorf("instance not found")},                          // unknown ID
+		{fmt.Sprintf("equinixmetal://%s", devActive.ID), false, nil},                                     // valid
+		{fmt.Sprintf("packet://%s", devActive.ID), false, nil},                                           // valid
+		{devActive.ID, false, nil},                                                                       // valid
+		{fmt.Sprintf("equinixmetal://%s", devInactive.ID), true, nil},                                    // valid
+		{fmt.Sprintf("packet://%s", devInactive.ID), true, nil},                                          // valid
+		{devInactive.ID, true, nil},                                                                      // valid
 	}
 
 	for i, tt := range tests {

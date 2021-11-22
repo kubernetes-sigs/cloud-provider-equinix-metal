@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/google/uuid"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	emServer "github.com/packethost/packet-api-server/pkg/server"
 	"github.com/packethost/packet-api-server/pkg/store"
@@ -14,7 +15,6 @@ import (
 )
 
 const (
-	projectID       = "abcdef-123456"
 	token           = "12345678"
 	nodeName        = "ccm-test"
 	validRegionCode = "ewr1"
@@ -61,7 +61,7 @@ func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
 
 	// now just need to create a client
 	config := Config{
-		ProjectID: projectID,
+		ProjectID: uuid.New().String(),
 	}
 	c, _ := newCloud(config, client)
 	validCloud = c.(*cloud)

@@ -27,14 +27,15 @@ type loadBalancers struct {
 	client            *packngo.Client
 	k8sclient         kubernetes.Interface
 	project           string
+	metro             string
 	facility          string
 	clusterID         string
 	implementor       loadbalancers.LB
 	implementorConfig string
 }
 
-func newLoadBalancers(client *packngo.Client, projectID, facility string, config string) *loadBalancers {
-	return &loadBalancers{client, nil, projectID, facility, "", nil, config}
+func newLoadBalancers(client *packngo.Client, projectID, metro, facility string, config string) *loadBalancers {
+	return &loadBalancers{client, nil, projectID, metro, facility, "", nil, config}
 }
 
 func (l *loadBalancers) name() string {
@@ -360,17 +361,23 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 			klog.V(2).Infof("no IP assignment found for %s, requesting", svcName)
 			// create a request
 			facility := l.facility
+			metro := l.metro
 			req := packngo.IPReservationRequest{
 				Type:        "public_ipv4",
 				Quantity:    1,
 				Description: ccmIPDescription,
-				Facility:    &facility,
 				Tags: []string{
 					emTag,
 					svcTag,
 					clsTag,
 				},
 				FailOnApprovalRequired: true,
+			}
+			if metro != "" {
+				req.Metro = &metro
+			}
+			if facility != "" {
+				req.Facility = &facility
 			}
 
 			ipReservation, _, err = l.client.ProjectIPs.Request(l.project, &req)

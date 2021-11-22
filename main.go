@@ -26,6 +26,7 @@ const (
 	apiKeyName                         = "METAL_API_KEY"
 	projectIDName                      = "METAL_PROJECT_ID"
 	facilityName                       = "METAL_FACILITY_NAME"
+	metroName                          = "METAL_METRO_NAME"
 	loadBalancerSettingName            = "METAL_LOAD_BALANCER"
 	envVarLocalASN                     = "METAL_LOCAL_ASN"
 	envVarBGPPass                      = "METAL_BGP_PASS"
@@ -125,6 +126,10 @@ func getMetalConfig(providerConfig string) (metal.Config, error) {
 	if facility == "" {
 		facility = rawConfig.Facility
 	}
+	metro := os.Getenv(metroName)
+	if metro == "" {
+		metro = rawConfig.Metro
+	}
 
 	if apiToken == "" {
 		return config, fmt.Errorf("environment variable %q is required", apiKeyName)
@@ -135,14 +140,15 @@ func getMetalConfig(providerConfig string) (metal.Config, error) {
 	}
 
 	// if facility was not defined, retrieve it from our metadata
-	if facility == "" {
+	if facility == "" && metro == "" {
 		metadata, err := metal.GetAndParseMetadata("")
 		if err != nil {
-			return config, fmt.Errorf("facility not set in environment variable %q or config file, and error reading metadata: %v", facilityName, err)
+			return config, fmt.Errorf("metro and facility not set in environment variables %q and %q or config file, and error reading metadata: %v", metroName, facilityName, err)
 		}
-		facility = metadata.Facility
+		metro = metadata.Metro
 	}
 	config.Facility = facility
+	config.Metro = metro
 
 	// get the local ASN
 	localASN := os.Getenv(envVarLocalASN)

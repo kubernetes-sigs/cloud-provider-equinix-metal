@@ -8,6 +8,7 @@ type Config struct {
 	ProjectID                    string  `json:"projectId"`
 	BaseURL                      *string `json:"base-url,omitempty"`
 	LoadBalancerSetting          string  `json:"loadbalancer"`
+	Metro                        string  `json:"metro,omitempty"`
 	Facility                     string  `json:"facility,omitempty"`
 	LocalASN                     int     `json:"localASN,omitempty"`
 	BGPPass                      string  `json:"bgpPass,omitempty"`
@@ -38,6 +39,7 @@ func (c Config) Strings() []string {
 	} else {
 		ret = append(ret, fmt.Sprintf("load balancer config: ''%s", c.LoadBalancerSetting))
 	}
+	ret = append(ret, fmt.Sprintf("metro: '%s'", c.Metro))
 	ret = append(ret, fmt.Sprintf("facility: '%s'", c.Facility))
 	ret = append(ret, fmt.Sprintf("local ASN: '%d'", c.LocalASN))
 	ret = append(ret, fmt.Sprintf("Elastic IP Tag: '%s'", c.EIPTag))
