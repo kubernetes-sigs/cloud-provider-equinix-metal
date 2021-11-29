@@ -14,7 +14,7 @@ import (
 var randomID = uuid.New().String()
 
 // find an ewr1 region or create it
-func testGetOrCreateValidRegion(name, code string, backend store.DataStore) (*packngo.Facility, error) {
+func testGetOrCreateValidZone(name, code string, backend store.DataStore) (*packngo.Facility, error) {
 	facility, err := backend.GetFacilityByCode(code)
 	if err != nil {
 		return nil, err

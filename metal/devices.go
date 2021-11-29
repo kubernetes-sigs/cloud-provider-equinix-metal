@@ -216,13 +216,32 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 		// TODO(displague) should we return the public addresses DNS name as the Type=Hostname NodeAddress type too?
 		return nil, err
 	}
+	var p, r, z string
+	if device.Plan != nil {
+		p = device.Plan.Slug
+	}
+
+	// "A zone represents a logical failure domain"
+	// "A region represents a larger domain, made up of one or more zones"
+	//
+	// Equinix Metal metros are made up of one or more facilities, so we treat
+	// metros as K8s topology regions. EM facilities are then equated to zones.
+	//
+	// https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
+
+	if device.Facility != nil {
+		z = device.Facility.Code
+	}
+	if device.Metro != nil {
+		r = device.Metro.Code
+	}
 
 	return &cloudprovider.InstanceMetadata{
 		ProviderID:    node.Spec.ProviderID,
-		InstanceType:  device.Plan.Name,
+		InstanceType:  p,
 		NodeAddresses: nodeAddresses,
-		Zone:          device.Facility.Name,
-		Region:        device.Metro.Name,
+		Zone:          z,
+		Region:        r,
 	}, nil
 }
 

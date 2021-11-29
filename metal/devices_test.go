@@ -1,6 +1,7 @@
 package metal
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -8,19 +9,30 @@ import (
 	"github.com/google/uuid"
 	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
-	cloudprovider "k8s.io/cloud-provider"
 )
 
 var (
 	projectID = uuid.New().String()
 )
 
+// testNode provides a simple Node object satisfying the lookup requirements of InstanceMetadata()
+func testNode(providerID string) *v1.Node {
+	return &v1.Node{
+		// ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		Spec: v1.NodeSpec{
+			ProviderID: providerID,
+		},
+	}
+}
+
 func TestNodeAddresses(t *testing.T) {
 	vc, backend := testGetValidCloud(t)
-	inst, _ := vc.Instances()
+	inst, _ := vc.InstancesV2()
+	if inst == nil {
+		t.Fatal("inst is nil")
+	}
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidRegion(validRegionName, validRegionCode, backend)
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
 	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
 	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 	// update the addresses on the device; normally created by Equinix Metal itself
@@ -42,17 +54,22 @@ func TestNodeAddresses(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
+		node      *v1.Node
 		addresses []v1.NodeAddress
 		err       error
 	}{
-		{"", nil, fmt.Errorf("node name cannot be empty")},          // empty name
-		{"thisdoesnotexist", nil, fmt.Errorf("instance not found")}, // unknown name
-		{devName, validAddresses, nil},                              // valid
+		{testNode(""), nil, fmt.Errorf("providerID cannot be empty")},           // empty name
+		{testNode("equinixmetal://123"), nil, fmt.Errorf("instance not found")}, // unknown name
+		{testNode("equinixmetal://" + dev.ID), validAddresses, nil},             // valid
 	}
 
 	for i, tt := range tests {
-		addresses, err := inst.NodeAddresses(nil, types.NodeName(tt.name))
+		var addresses []v1.NodeAddress
+
+		md, err := inst.InstanceMetadata(context.TODO(), tt.node)
+		if md != nil {
+			addresses = md.NodeAddresses
+		}
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
@@ -63,9 +80,9 @@ func TestNodeAddresses(t *testing.T) {
 }
 func TestNodeAddressesByProviderID(t *testing.T) {
 	vc, backend := testGetValidCloud(t)
-	inst, _ := vc.Instances()
+	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidRegion(validRegionName, validRegionCode, backend)
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
 	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
 	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 	// update the addresses on the device; normally created by Equinix Metal itself
@@ -101,7 +118,12 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		addresses, err := inst.NodeAddressesByProviderID(nil, tt.id)
+		var addresses []v1.NodeAddress
+
+		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.id))
+		if md != nil {
+			addresses = md.NodeAddresses
+		}
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
@@ -111,11 +133,12 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	}
 }
 
+/*
 func TestInstanceID(t *testing.T) {
 	vc, backend := testGetValidCloud(t)
-	inst, _ := vc.Instances()
+	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidRegion(validRegionName, validRegionCode, backend)
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
 	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
 	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 
@@ -130,36 +153,51 @@ func TestInstanceID(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		id, err := inst.InstanceID(nil, types.NodeName(tt.name))
+		var id string
+		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.id))
+		if md != nil {
+			id, err = deviceIDFromProviderID(md.ProviderID)
+		}
+
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
-			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
+			t.Errorf("%d: mismatched errors, actual %q expected %q", i, err, tt.err)
 		case id != tt.id:
 			t.Errorf("%d: mismatched id, actual %v expected %v", i, id, tt.id)
 		}
 	}
 }
-
+*/
 func TestInstanceType(t *testing.T) {
 	vc, backend := testGetValidCloud(t)
-	inst, _ := vc.Instances()
+	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidRegion(validRegionName, validRegionCode, backend)
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
 	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
 	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	privateIP := "10.1.1.2"
+	publicIP := "25.50.75.100"
+	dev.Network = append(dev.Network, []*packngo.IPAddressAssignment{
+		{IpAddressCommon: packngo.IpAddressCommon{Address: privateIP, Management: true, AddressFamily: 4}},
+		{IpAddressCommon: packngo.IpAddressCommon{Address: publicIP, Public: true, AddressFamily: 4}},
+	}...)
 
 	tests := []struct {
 		name string
 		plan string
 		err  error
 	}{
-		{"", "", fmt.Errorf("node name cannot be empty")},          // empty name
+		{"", "", fmt.Errorf("providerID cannot be empty")},         // empty name
 		{"thisdoesnotexist", "", fmt.Errorf("instance not found")}, // unknown name
-		{devName, dev.Plan.Name, nil},                              // valid
+		{"equinixmetal://" + dev.ID, dev.Plan.Slug, nil},           // valid
 	}
 
 	for i, tt := range tests {
-		plan, err := inst.InstanceType(nil, types.NodeName(tt.name))
+		var plan string
+		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.name))
+		if md != nil {
+			plan = md.InstanceType
+		}
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
@@ -169,11 +207,58 @@ func TestInstanceType(t *testing.T) {
 	}
 }
 
+func TestInstanceZone(t *testing.T) {
+	vc, backend := testGetValidCloud(t)
+	inst, _ := vc.InstancesV2()
+	devName := testGetNewDevName()
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
+	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
+	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	privateIP := "10.1.1.2"
+	publicIP := "25.50.75.100"
+	metro := &packngo.Metro{ID: "123", Code: validRegionCode, Name: validRegionName, Country: "Country"}
+	dev.Metro = metro
+	facility.Metro = metro
+	dev.Network = append(dev.Network, []*packngo.IPAddressAssignment{
+		{IpAddressCommon: packngo.IpAddressCommon{Address: privateIP, Management: true, AddressFamily: 4}},
+		{IpAddressCommon: packngo.IpAddressCommon{Address: publicIP, Public: true, AddressFamily: 4}},
+	}...)
+
+	tests := []struct {
+		name   string
+		region string
+		zone   string
+		err    error
+	}{
+		{"", "", "", fmt.Errorf("providerID cannot be empty")},            // empty name
+		{"thisdoesnotexist", "", "", fmt.Errorf("instance not found")},    // unknown name
+		{"equinixmetal://" + dev.ID, validRegionCode, validZoneCode, nil}, // valid
+	}
+
+	for i, tt := range tests {
+		var zone, region string
+		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.name))
+		if md != nil {
+			zone = md.Zone
+			region = md.Region
+		}
+		switch {
+		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
+			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
+		case zone != tt.zone:
+			t.Errorf("%d: mismatched zone, actual %v expected %v", i, zone, tt.zone)
+		case region != tt.region:
+			t.Errorf("%d: mismatched region, actual %v expected %v", i, region, tt.region)
+		}
+	}
+}
+
+/*
 func TestInstanceTypeByProviderID(t *testing.T) {
 	vc, backend := testGetValidCloud(t)
 	inst, _ := vc.Instances()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidRegion(validRegionName, validRegionCode, backend)
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
 	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
 	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 
@@ -212,26 +297,34 @@ func TestAddSSHKeyToAllInstances(t *testing.T) {
 
 func TestCurrentNodeName(t *testing.T) {
 	vc, _ := testGetValidCloud(t)
-	inst, _ := vc.Instances()
+	inst, _ := vc.InstancesV2()
 	var (
-		name          = "foobar"
+		devName       = testGetNewDevName()
 		expectedError error
-		expectedName  = types.NodeName(name)
+		expectedName  = types.NodeName(devName)
 	)
-	nn, err := inst.CurrentNodeName(nil, name)
+
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
+	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
+	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+
+	md, err := inst.InstanceMetadata(context.TODO(), testNode("equinixmetal://"+dev.ID))
+
 	if err != expectedError {
 		t.Errorf("mismatched errors, actual %v expected %v", err, expectedError)
 	}
-	if nn != expectedName {
+	if md. != expectedName {
 		t.Errorf("mismatched nodename, actual %v expected %v", nn, expectedName)
 	}
 }
 
+*/
+
 func TestInstanceExistsByProviderID(t *testing.T) {
 	vc, backend := testGetValidCloud(t)
-	inst, _ := vc.Instances()
+	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidRegion(validRegionName, validRegionCode, backend)
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
 	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
 	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 
@@ -250,7 +343,7 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		exists, err := inst.InstanceExistsByProviderID(nil, tt.id)
+		exists, err := inst.InstanceExists(nil, testNode(tt.id))
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
@@ -262,9 +355,9 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 
 func TestInstanceShutdownByProviderID(t *testing.T) {
 	vc, backend := testGetValidCloud(t)
-	inst, _ := vc.Instances()
+	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidRegion(validRegionName, validRegionCode, backend)
+	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
 	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
 	devActive, _ := backend.CreateDevice(projectID, devName, plan, facility)
 	devInactive, _ := backend.CreateDevice(projectID, devName, plan, facility)
@@ -292,7 +385,7 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		down, err := inst.InstanceShutdownByProviderID(nil, tt.id)
+		down, err := inst.InstanceShutdown(context.TODO(), testNode(tt.id))
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)

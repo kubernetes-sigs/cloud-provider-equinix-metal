@@ -60,7 +60,7 @@ func (z zones) GetZoneByProviderID(_ context.Context, providerID string) (cloudp
 		return cloudprovider.Zone{}, err
 	}
 
-	return cloudprovider.Zone{Region: device.Facility.Code}, nil
+	return deviceToZone(device), nil
 }
 
 // GetZoneByNodeName returns the Zone containing the current zone and locality region of the node specified by node name
@@ -73,5 +73,22 @@ func (z zones) GetZoneByNodeName(_ context.Context, nodeName types.NodeName) (cl
 		return cloudprovider.Zone{}, err
 	}
 
-	return cloudprovider.Zone{Region: device.Facility.Code}, nil
+	return deviceToZone(device), nil
+}
+
+func deviceToZone(device *packngo.Device) cloudprovider.Zone {
+	var facility, metro string
+
+	if device.Facility != nil {
+		facility = device.Facility.Code
+	}
+
+	if device.Metro != nil {
+		metro = device.Metro.Code
+	}
+
+	return cloudprovider.Zone{
+		FailureDomain: facility,
+		Region:        metro,
+	}
 }

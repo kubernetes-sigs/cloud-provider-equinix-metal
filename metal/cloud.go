@@ -41,7 +41,6 @@ type cloudService interface {
 }
 
 type cloudInstances interface {
-	cloudprovider.Instances
 	cloudprovider.InstancesV2
 	cloudService
 }
@@ -66,6 +65,8 @@ type cloud struct {
 	// holds our bgp service handler
 	bgp *bgp
 }
+
+var _ cloudprovider.Interface = (*cloud)(nil)
 
 func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
 	i := newInstances(client, metalConfig.ProjectID, metalConfig.AnnotationNetworkIPv4Private)
@@ -157,7 +158,7 @@ func (c *cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (c *cloud) Instances() (cloudprovider.Instances, bool) {
 	klog.V(5).Info("called Instances")
-	return c.instances, true
+	return nil, false
 }
 
 // InstancesV2 returns an implementation of cloudprovider.InstancesV2.

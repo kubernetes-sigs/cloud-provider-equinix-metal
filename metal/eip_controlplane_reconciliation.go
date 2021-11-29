@@ -12,7 +12,6 @@ import (
 	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -148,14 +147,14 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 		return errors.New("control plane node apiserver port not yet determined, cannot reassign, will try again on next loop")
 	}
 	for _, node := range nodes {
-		addresses, err := m.instances.NodeAddresses(ctx, types.NodeName(node.Name))
+		md, err := m.instances.InstanceMetadata(ctx, node)
 		if err != nil {
 			return err
 		}
 
 		// I decided to iterate over all the addresses assigned to the node to avoid network misconfiguration
 		// The first one for example is the node name, and if the hostname is not well configured it will never work.
-		for _, a := range addresses {
+		for _, a := range md.NodeAddresses {
 			if a.Type == "Hostname" {
 				klog.V(2).Infof("skipping address check of type %s: %s", a.Type, a.Address)
 				continue
@@ -182,7 +181,7 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 
 			// We have a healthy node, this is the candidate to receive the EIP
 			if resp.StatusCode == http.StatusOK {
-				deviceID, err := m.instances.InstanceID(ctx, types.NodeName(node.Name))
+				deviceID, err := deviceIDFromProviderID(md.ProviderID)
 				if err != nil {
 					return err
 				}
