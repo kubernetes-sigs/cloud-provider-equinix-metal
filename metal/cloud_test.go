@@ -161,13 +161,6 @@ func TestHasClusterID(t *testing.T) {
 
 // builds an Equinix Metal client
 func constructClient(authToken string, baseURL *string) *packngo.Client {
-	/*
-		tr := &http.Transport{
-			MaxIdleConns:       10,
-			IdleConnTimeout:    30 * time.Second,
-			DisableCompression: true,
-		}
-	*/
 	client := retryablehttp.NewClient()
 
 	// client.Transport = logging.NewTransport("EquinixMetal", client.Transport)

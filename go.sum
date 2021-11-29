@@ -174,6 +174,8 @@ github.com/google/go-cmp v0.2.0/go.mod h1:oXzfMopK8JAjlY9xF4vHSVASa0yLyX7SntLO5a
 github.com/google/go-cmp v0.3.0/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMywk6iLU=
 github.com/google/go-cmp v0.3.1/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMywk6iLU=
 github.com/google/go-cmp v0.4.0/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+github.com/google/go-cmp v0.5.0/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+github.com/google/go-cmp v0.5.4/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
 github.com/google/go-cmp v0.5.6 h1:BKbKCqvP6I+rmFHt06ZmyQtvB8xAkWdhFyr0ZUNZcxQ=
 github.com/google/go-cmp v0.5.6/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
 github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
@@ -321,10 +323,8 @@ github.com/onsi/gomega v1.7.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1Cpa
 github.com/packethost/packet-api-server v0.0.0-20200706140707-f0f79ef89944 h1:JfXrldQ9t47ZBoAtKBh/9ARDW+W5FwPi5abHERBoMeU=
 github.com/packethost/packet-api-server v0.0.0-20200706140707-f0f79ef89944/go.mod h1:20y0oYV+wNTv4CnBEi30PiiSGOoDFtsk25g1Rs3w7kU=
 github.com/packethost/packngo v0.2.1-0.20200629161839-1810e48469b4/go.mod h1:erURcsqYzwc9wSb04TX4so+s6F3uZtbXUil0W1LCGHA=
-github.com/packethost/packngo v0.17.0 h1:fGPlj9NDt6ejOrAMfUgx955oCaR1QBKA9pec14m0L38=
-github.com/packethost/packngo v0.17.0/go.mod h1:YrtUNN9IRjjqN6zK+cy2IYoi3EjHfoWTWxJkI1I1Vk0=
-github.com/packethost/packngo v0.19.2-0.20211119121357-05157869e685 h1:xBXxgQ5PeczC9gqv3XKK3/Fo6h9L+NGNb89mEpbbrFI=
-github.com/packethost/packngo v0.19.2-0.20211119121357-05157869e685/go.mod h1:/UHguFdPs6Lf6FOkkSEPnRY5tgS0fsVM+Zv/bvBrmt0=
+github.com/packethost/packngo v0.20.0 h1:vUU1z2q+x6/pfNCwHbmdoMrXl/lin8LBk24yqtp4ZjQ=
+github.com/packethost/packngo v0.20.0/go.mod h1:/UHguFdPs6Lf6FOkkSEPnRY5tgS0fsVM+Zv/bvBrmt0=
 github.com/pallinder/go-randomdata v1.2.0 h1:EJPxw+sgM1mbMW8RBu5zkG4FbloJpDOCCqPccdWto8A=
 github.com/pallinder/go-randomdata v1.2.0/go.mod h1:p8CasZQiWDLuaKy5ihVvdshqc7LlL6ovmRxAuNXgi3U=
 github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
