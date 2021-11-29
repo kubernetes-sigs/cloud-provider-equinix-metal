@@ -58,9 +58,10 @@ func TestNodeAddresses(t *testing.T) {
 		addresses []v1.NodeAddress
 		err       error
 	}{
-		{testNode(""), nil, fmt.Errorf("providerID cannot be empty")},           // empty name
-		{testNode("equinixmetal://123"), nil, fmt.Errorf("instance not found")}, // unknown name
-		{testNode("equinixmetal://" + dev.ID), validAddresses, nil},             // valid
+		{testNode(""), nil, fmt.Errorf("providerID cannot be empty")},                   // empty name
+		{testNode("equinixmetal://123"), nil, fmt.Errorf("123 is not a valid UUID")},    // invalid id
+		{testNode("equinixmetal://" + randomID), nil, fmt.Errorf("instance not found")}, // unknown name
+		{testNode("equinixmetal://" + dev.ID), validAddresses, nil},                     // valid
 	}
 
 	for i, tt := range tests {
@@ -187,9 +188,10 @@ func TestInstanceType(t *testing.T) {
 		plan string
 		err  error
 	}{
-		{"", "", fmt.Errorf("providerID cannot be empty")},         // empty name
-		{"thisdoesnotexist", "", fmt.Errorf("instance not found")}, // unknown name
-		{"equinixmetal://" + dev.ID, dev.Plan.Slug, nil},           // valid
+		{"", "", fmt.Errorf("providerID cannot be empty")},                           // empty name
+		{"thisdoesnotexist", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")}, // invalid id
+		{randomID, "", fmt.Errorf("instance not found")},                             // unknown name
+		{"equinixmetal://" + dev.ID, dev.Plan.Slug, nil},                             // valid
 	}
 
 	for i, tt := range tests {
@@ -230,9 +232,10 @@ func TestInstanceZone(t *testing.T) {
 		zone   string
 		err    error
 	}{
-		{"", "", "", fmt.Errorf("providerID cannot be empty")},            // empty name
-		{"thisdoesnotexist", "", "", fmt.Errorf("instance not found")},    // unknown name
-		{"equinixmetal://" + dev.ID, validRegionCode, validZoneCode, nil}, // valid
+		{"", "", "", fmt.Errorf("providerID cannot be empty")},                           // empty name
+		{"thisdoesnotexist", "", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")}, // invalid id
+		{randomID, "", "", fmt.Errorf("instance not found")},                             // unknown name
+		{"equinixmetal://" + dev.ID, validRegionCode, validZoneCode, nil},                // valid
 	}
 
 	for i, tt := range tests {
