@@ -205,7 +205,7 @@ func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (bool, er
 
 // InstanceMetadata returns instancemetadata for the node according to the cloudprovider
 func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
-	device, err := i.deviceFromProviderID(node.Spec.ProviderID)
+	device, err := i.deviceByNode(node)
 	if err != nil {
 		return nil, err
 	}
@@ -243,6 +243,14 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 		Zone:          z,
 		Region:        r,
 	}, nil
+}
+
+func (i *instances) deviceByNode(node *v1.Node) (*packngo.Device, error) {
+	if node.Spec.ProviderID != "" {
+		return i.deviceFromProviderID(node.Spec.ProviderID)
+	}
+
+	return deviceByName(i.client, i.project, types.NodeName(node.GetName()))
 }
 
 func deviceByID(client *packngo.Client, id string) (*packngo.Device, error) {

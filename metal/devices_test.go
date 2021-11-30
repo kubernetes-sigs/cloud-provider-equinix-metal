@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -16,9 +17,9 @@ var (
 )
 
 // testNode provides a simple Node object satisfying the lookup requirements of InstanceMetadata()
-func testNode(providerID string) *v1.Node {
+func testNode(providerID, nodeName string) *v1.Node {
 	return &v1.Node{
-		// ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
 		Spec: v1.NodeSpec{
 			ProviderID: providerID,
 		},
@@ -54,29 +55,35 @@ func TestNodeAddresses(t *testing.T) {
 	}
 
 	tests := []struct {
+		testName  string
 		node      *v1.Node
 		addresses []v1.NodeAddress
 		err       error
 	}{
-		{testNode(""), nil, fmt.Errorf("providerID cannot be empty")},                   // empty name
-		{testNode("equinixmetal://123"), nil, fmt.Errorf("123 is not a valid UUID")},    // invalid id
-		{testNode("equinixmetal://" + randomID), nil, fmt.Errorf("instance not found")}, // unknown name
-		{testNode("equinixmetal://" + dev.ID), validAddresses, nil},                     // valid
+		{"empty node name", testNode("", ""), nil, fmt.Errorf("node name cannot be empty")},
+		{"instance not found", testNode("", nodeName), nil, fmt.Errorf("instance not found")},
+		{"invalid id", testNode("equinixmetal://123", nodeName), nil, fmt.Errorf("123 is not a valid UUID")},
+		{"unknown name", testNode("equinixmetal://"+randomID, nodeName), nil, fmt.Errorf("instance not found")},
+		{"valid both", testNode("equinixmetal://"+dev.ID, devName), validAddresses, nil},
+		{"valid provider id", testNode("equinixmetal://"+dev.ID, nodeName), validAddresses, nil},
+		{"valid node name", testNode("", devName), validAddresses, nil},
 	}
 
 	for i, tt := range tests {
-		var addresses []v1.NodeAddress
+		t.Run(tt.testName, func(t *testing.T) {
+			var addresses []v1.NodeAddress
 
-		md, err := inst.InstanceMetadata(context.TODO(), tt.node)
-		if md != nil {
-			addresses = md.NodeAddresses
-		}
-		switch {
-		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
-			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
-		case !compareAddresses(addresses, tt.addresses):
-			t.Errorf("%d: mismatched addresses, actual %v expected %v", i, addresses, tt.addresses)
-		}
+			md, err := inst.InstanceMetadata(context.TODO(), tt.node)
+			if md != nil {
+				addresses = md.NodeAddresses
+			}
+			switch {
+			case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
+				t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
+			case !compareAddresses(addresses, tt.addresses):
+				t.Errorf("%d: mismatched addresses, actual %v expected %v", i, addresses, tt.addresses)
+			}
+		})
 	}
 }
 func TestNodeAddressesByProviderID(t *testing.T) {
@@ -105,32 +112,35 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	}
 
 	tests := []struct {
+		testName  string
 		id        string
 		addresses []v1.NodeAddress
 		err       error
 	}{
-		{"", nil, fmt.Errorf("providerID cannot be empty")},                                            // empty ID
-		{randomID, nil, fmt.Errorf("instance not found")},                                              // invalid format
-		{"aws://" + randomID, nil, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
-		{"equinixmetal://" + randomID, nil, fmt.Errorf("instance not found")},                          // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", dev.ID), validAddresses, nil},                                // valid
-		{fmt.Sprintf("packet://%s", dev.ID), validAddresses, nil},                                      // valid
-		{dev.ID, validAddresses, nil},                                                                  // valid
+		{"empty ID", "", nil, fmt.Errorf("instance not found")},
+		{"invalid format", randomID, nil, fmt.Errorf("instance not found")},
+		{"not equinixmetal", "aws://" + randomID, nil, fmt.Errorf("provider name from providerID should be equinixmetal")},
+		{"unknown ID", "equinixmetal://" + randomID, nil, fmt.Errorf("instance not found")},
+		{"valid prefix", fmt.Sprintf("equinixmetal://%s", dev.ID), validAddresses, nil},
+		{"valid legacy prefix", fmt.Sprintf("packet://%s", dev.ID), validAddresses, nil},
+		{"valid without prefix", dev.ID, validAddresses, nil},
 	}
 
 	for i, tt := range tests {
-		var addresses []v1.NodeAddress
+		t.Run(tt.testName, func(t *testing.T) {
+			var addresses []v1.NodeAddress
 
-		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.id))
-		if md != nil {
-			addresses = md.NodeAddresses
-		}
-		switch {
-		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
-			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
-		case !compareAddresses(addresses, tt.addresses):
-			t.Errorf("%d: mismatched addresses, actual %v expected %v", i, addresses, tt.addresses)
-		}
+			md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.id, nodeName))
+			if md != nil {
+				addresses = md.NodeAddresses
+			}
+			switch {
+			case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
+				t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
+			case !compareAddresses(addresses, tt.addresses):
+				t.Errorf("%d: mismatched addresses, actual %v expected %v", i, addresses, tt.addresses)
+			}
+		})
 	}
 }
 
@@ -155,7 +165,7 @@ func TestInstanceID(t *testing.T) {
 
 	for i, tt := range tests {
 		var id string
-		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.id))
+		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.id, nodeName))
 		if md != nil {
 			id, err = deviceIDFromProviderID(md.ProviderID)
 		}
@@ -184,28 +194,31 @@ func TestInstanceType(t *testing.T) {
 	}...)
 
 	tests := []struct {
-		name string
-		plan string
-		err  error
+		testName string
+		name     string
+		plan     string
+		err      error
 	}{
-		{"", "", fmt.Errorf("providerID cannot be empty")},                           // empty name
-		{"thisdoesnotexist", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")}, // invalid id
-		{randomID, "", fmt.Errorf("instance not found")},                             // unknown name
-		{"equinixmetal://" + dev.ID, dev.Plan.Slug, nil},                             // valid
+		{"empty name", "", "", fmt.Errorf("instance not found")},
+		{"invalid id", "thisdoesnotexist", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")},
+		{"unknown name", randomID, "", fmt.Errorf("instance not found")},
+		{"valid", "equinixmetal://" + dev.ID, dev.Plan.Slug, nil},
 	}
 
 	for i, tt := range tests {
-		var plan string
-		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.name))
-		if md != nil {
-			plan = md.InstanceType
-		}
-		switch {
-		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
-			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
-		case plan != tt.plan:
-			t.Errorf("%d: mismatched id, actual %v expected %v", i, plan, tt.plan)
-		}
+		t.Run(tt.testName, func(t *testing.T) {
+			var plan string
+			md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.name, nodeName))
+			if md != nil {
+				plan = md.InstanceType
+			}
+			switch {
+			case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
+				t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
+			case plan != tt.plan:
+				t.Errorf("%d: mismatched id, actual %v expected %v", i, plan, tt.plan)
+			}
+		})
 	}
 }
 
@@ -227,32 +240,35 @@ func TestInstanceZone(t *testing.T) {
 	}...)
 
 	tests := []struct {
-		name   string
-		region string
-		zone   string
-		err    error
+		testName string
+		name     string
+		region   string
+		zone     string
+		err      error
 	}{
-		{"", "", "", fmt.Errorf("providerID cannot be empty")},                           // empty name
-		{"thisdoesnotexist", "", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")}, // invalid id
-		{randomID, "", "", fmt.Errorf("instance not found")},                             // unknown name
-		{"equinixmetal://" + dev.ID, validRegionCode, validZoneCode, nil},                // valid
+		{"empty name", "", "", "", fmt.Errorf("instance not found")},
+		{"invalid id", "thisdoesnotexist", "", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")},
+		{"unknown name", randomID, "", "", fmt.Errorf("instance not found")},
+		{"valid", "equinixmetal://" + dev.ID, validRegionCode, validZoneCode, nil},
 	}
 
 	for i, tt := range tests {
-		var zone, region string
-		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.name))
-		if md != nil {
-			zone = md.Zone
-			region = md.Region
-		}
-		switch {
-		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
-			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
-		case zone != tt.zone:
-			t.Errorf("%d: mismatched zone, actual %v expected %v", i, zone, tt.zone)
-		case region != tt.region:
-			t.Errorf("%d: mismatched region, actual %v expected %v", i, region, tt.region)
-		}
+		t.Run(tt.testName, func(t *testing.T) {
+			var zone, region string
+			md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.name, nodeName))
+			if md != nil {
+				zone = md.Zone
+				region = md.Region
+			}
+			switch {
+			case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
+				t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
+			case zone != tt.zone:
+				t.Errorf("%d: mismatched zone, actual %v expected %v", i, zone, tt.zone)
+			case region != tt.region:
+				t.Errorf("%d: mismatched region, actual %v expected %v", i, region, tt.region)
+			}
+		})
 	}
 }
 
@@ -311,7 +327,7 @@ func TestCurrentNodeName(t *testing.T) {
 	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
 	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 
-	md, err := inst.InstanceMetadata(context.TODO(), testNode("equinixmetal://"+dev.ID))
+	md, err := inst.InstanceMetadata(context.TODO(), testNode("equinixmetal://"+dev.ID, nodeName))
 
 	if err != expectedError {
 		t.Errorf("mismatched errors, actual %v expected %v", err, expectedError)
@@ -346,7 +362,7 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		exists, err := inst.InstanceExists(nil, testNode(tt.id))
+		exists, err := inst.InstanceExists(nil, testNode(tt.id, nodeName))
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
@@ -388,7 +404,7 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		down, err := inst.InstanceShutdown(context.TODO(), testNode(tt.id))
+		down, err := inst.InstanceShutdown(context.TODO(), testNode(tt.id, nodeName))
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
