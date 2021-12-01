@@ -237,7 +237,7 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 	}
 
 	return &cloudprovider.InstanceMetadata{
-		ProviderID:    node.Spec.ProviderID,
+		ProviderID:    providerIDFromDevice(device),
 		InstanceType:  p,
 		NodeAddresses: nodeAddresses,
 		Zone:          z,
@@ -320,6 +320,11 @@ func (i *instances) deviceFromProviderID(providerID string) (*packngo.Device, er
 	}
 
 	return deviceByID(i.client, id)
+}
+
+// providerIDFromDevice returns a providerID from a device
+func providerIDFromDevice(device *packngo.Device) string {
+	return fmt.Sprintf("%s://%s", ProviderName, device.ID)
 }
 
 // reconcileNodes ensures each node has the annotations it needs
