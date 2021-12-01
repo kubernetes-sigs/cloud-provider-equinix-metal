@@ -293,7 +293,7 @@ load balancers can consume them.
 
 For the control plane nodes, the Equinix Metal CCM uses static Elastic IP assignment, via the Equinix Metal API, to tell the
 Equinix Metal network which control plane node should receive the traffic. For more details on the control plane
-load-balancer, see [this section](#Elastic_IP_as_Control_Plane_Endpoint).
+load-balancer, see [this section](#control-plane-load-balancing).
 
 #### Service LoadBalancer Implementations
 
