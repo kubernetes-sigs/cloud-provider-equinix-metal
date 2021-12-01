@@ -24,8 +24,13 @@ type instances struct {
 	annotationNetwork string
 }
 
-func newInstances(client *packngo.Client, project, annotationNetwork string) *instances {
-	return &instances{client: client, project: project, annotationNetwork: annotationNetwork}
+var (
+	_ cloudprovider.Instances   = (*instances)(nil)
+	_ cloudprovider.InstancesV2 = (*instances)(nil)
+)
+
+func newInstances(client *packngo.Client, projectID, annotationNetwork string) *instances {
+	return &instances{client: client, project: projectID, annotationNetwork: annotationNetwork}
 }
 
 // cloudService implementation
@@ -188,6 +193,66 @@ func (i *instances) InstanceShutdownByProviderID(_ context.Context, providerID s
 	return device.State == "inactive", nil
 }
 
+// InstanceShutdown returns true if the node is shutdown in cloudprovider
+func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, error) {
+	return i.InstanceShutdownByProviderID(ctx, node.Spec.ProviderID)
+}
+
+// InstanceExists returns true if the node exists in cloudprovider
+func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
+	return i.InstanceExistsByProviderID(ctx, node.Spec.ProviderID)
+}
+
+// InstanceMetadata returns instancemetadata for the node according to the cloudprovider
+func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
+	device, err := i.deviceByNode(node)
+	if err != nil {
+		return nil, err
+	}
+	nodeAddresses, err := nodeAddresses(device)
+	if err != nil {
+		// TODO(displague) we error on missing private and public ip. is that restrictive?
+
+		// TODO(displague) should we return the public addresses DNS name as the Type=Hostname NodeAddress type too?
+		return nil, err
+	}
+	var p, r, z string
+	if device.Plan != nil {
+		p = device.Plan.Slug
+	}
+
+	// "A zone represents a logical failure domain"
+	// "A region represents a larger domain, made up of one or more zones"
+	//
+	// Equinix Metal metros are made up of one or more facilities, so we treat
+	// metros as K8s topology regions. EM facilities are then equated to zones.
+	//
+	// https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
+
+	if device.Facility != nil {
+		z = device.Facility.Code
+	}
+	if device.Metro != nil {
+		r = device.Metro.Code
+	}
+
+	return &cloudprovider.InstanceMetadata{
+		ProviderID:    providerIDFromDevice(device),
+		InstanceType:  p,
+		NodeAddresses: nodeAddresses,
+		Zone:          z,
+		Region:        r,
+	}, nil
+}
+
+func (i *instances) deviceByNode(node *v1.Node) (*packngo.Device, error) {
+	if node.Spec.ProviderID != "" {
+		return i.deviceFromProviderID(node.Spec.ProviderID)
+	}
+
+	return deviceByName(i.client, i.project, types.NodeName(node.GetName()))
+}
+
 func deviceByID(client *packngo.Client, id string) (*packngo.Device, error) {
 	klog.V(2).Infof("called deviceByID with ID %s", id)
 	device, _, err := client.Devices.Get(id, nil)
@@ -234,8 +299,8 @@ func deviceIDFromProviderID(providerID string) (string, error) {
 	switch len(split) {
 	case 2:
 		deviceID = split[1]
-		if split[0] != providerName && split[0] != deprecatedProviderName {
-			return "", errors.Errorf("provider name from providerID should be %s, was %s", providerName, split[0])
+		if split[0] != ProviderName && split[0] != deprecatedProviderName {
+			return "", errors.Errorf("provider name from providerID should be %s, was %s", ProviderName, split[0])
 		}
 	case 1:
 		deviceID = providerID
@@ -255,6 +320,11 @@ func (i *instances) deviceFromProviderID(providerID string) (*packngo.Device, er
 	}
 
 	return deviceByID(i.client, id)
+}
+
+// providerIDFromDevice returns a providerID from a device
+func providerIDFromDevice(device *packngo.Device) string {
+	return fmt.Sprintf("%s://%s", ProviderName, device.ID)
 }
 
 // reconcileNodes ensures each node has the annotations it needs

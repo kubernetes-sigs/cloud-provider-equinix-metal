@@ -195,7 +195,7 @@ This section lists each configuration option, and whether it can be set by each 
 
 | Purpose | CLI Flag | Env Var | Secret Field | Default |
 | --- | --- | --- | --- | --- |
-| Path to config secret |    |    | `provider-config` | error |
+| Path to config secret |    |    | `cloud-config` | error |
 | API Key |    | `METAL_API_KEY` | `apiKey` | error |
 | Project ID |    | `METAL_PROJECT_ID` | `projectID` | error |
 | Metro |    | `METAL_METRO_NAME` | `metro` | read metadata on host on which CCM is running, else error |
@@ -229,16 +229,16 @@ The Kubernetes CCM for Equinix Metal deploys as a `Deployment` into your cluster
 * lists and retrieves instances by ID, returning Equinix Metal servers
 * manages load balancers
 
-### Facility
+### Metros and Facilities
 
-The Equinix Metal CCM works in one facility at a time. You can control which facility it works using the facility option
+The Equinix Metal CCM works in one metro at a time. You can control which metro or facility it works using the metro and facility options
 in [Configuration][Configuration].
 
-If no facility is provided, it attempts to find the facility using metadata of the node on which it is running. If it cannot
+If no metro or facility is provided, it attempts to find the metro using metadata of the node on which it is running. If it cannot
 determine the metadata, for example if the CCM is running on a non-Equinix-Metal node, it will error and exit.
 
 The overrides of environment variable and config file are provided so that you can run the CCM
-on a node in a different facility, or even outside of Equinix Metal entirely.
+on a node in a different metro or facility, or even outside of Equinix Metal entirely.
 
 ### Load Balancers
 
@@ -612,7 +612,7 @@ You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This 
 1. Run the command, e.g.:
 
 ```
-METAL_METRO_NAME=${METAL_METRO_NAME} METAL_LOAD_BALANCER=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --provider-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
+METAL_METRO_NAME=${METAL_METRO_NAME} METAL_LOAD_BALANCER=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --cloud-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
 ```
 
 For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.

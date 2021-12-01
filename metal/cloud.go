@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	providerName string = "equinixmetal"
+	ProviderName string = "equinixmetal"
 
 	// deprecatedProviderName is used to provide backward compatibility support
 	// with previous versions
@@ -41,7 +41,7 @@ type cloudService interface {
 }
 
 type cloudInstances interface {
-	cloudprovider.Instances
+	cloudprovider.InstancesV2
 	cloudService
 }
 type cloudLoadBalancers interface {
@@ -66,6 +66,8 @@ type cloud struct {
 	bgp *bgp
 }
 
+var _ cloudprovider.Interface = (*cloud)(nil)
+
 func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
 	i := newInstances(client, metalConfig.ProjectID, metalConfig.AnnotationNetworkIPv4Private)
 	return &cloud{
@@ -80,22 +82,28 @@ func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interfa
 	}, nil
 }
 
-func InitializeProvider(metalConfig Config) error {
-	// set up our client and create the cloud interface
-	client := packngo.NewClientWithAuth("", metalConfig.AuthToken, nil)
-	client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", VERSION, client.UserAgent)
-	cloud, err := newCloud(metalConfig, client)
-	if err != nil {
-		return fmt.Errorf("failed to create new cloud handler: %v", err)
-	}
-
-	// finally, register
-	cloudprovider.RegisterCloudProvider(providerName, func(config io.Reader) (cloudprovider.Interface, error) {
+func init() {
+	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		// by the time we get here, there is no error, as it would have been handled earlier
+		metalConfig, err := getMetalConfig(config)
+		// register the provider
+		if err != nil {
+			return nil, fmt.Errorf("provider config error: %v", err)
+		}
+
+		// report the config
+		printMetalConfig(metalConfig)
+
+		// set up our client and create the cloud interface
+		client := packngo.NewClientWithAuth("cloud-provider-equinix-metal", metalConfig.AuthToken, nil)
+		client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", VERSION, client.UserAgent)
+		cloud, err := newCloud(metalConfig, client)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new cloud handler: %v", err)
+		}
+
 		return cloud, nil
 	})
-
-	return nil
 }
 
 // services get those elements that are initializable
@@ -150,13 +158,13 @@ func (c *cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (c *cloud) Instances() (cloudprovider.Instances, bool) {
 	klog.V(5).Info("called Instances")
-	return c.instances, true
+	return nil, false
 }
 
 // InstancesV2 returns an implementation of cloudprovider.InstancesV2.
 func (c *cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
-	klog.Warning("The Equinix Metal cloud provider does not support InstancesV2")
-	return nil, false
+	klog.V(5).Info("called InstancesV2")
+	return c.instances, true
 }
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.
@@ -179,8 +187,8 @@ func (c *cloud) Routes() (cloudprovider.Routes, bool) {
 
 // ProviderName returns the cloud provider ID.
 func (c *cloud) ProviderName() string {
-	klog.V(2).Infof("called ProviderName, returning %s", providerName)
-	return providerName
+	klog.V(2).Infof("called ProviderName, returning %s", ProviderName)
+	return ProviderName
 }
 
 // HasClusterID returns true if a ClusterID is required and set

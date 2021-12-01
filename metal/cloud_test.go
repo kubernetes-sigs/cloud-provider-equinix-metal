@@ -17,8 +17,10 @@ import (
 const (
 	token           = "12345678"
 	nodeName        = "ccm-test"
-	validRegionCode = "ewr1"
-	validRegionName = "Parsippany, NJ"
+	validRegionCode = "ME"
+	validRegionName = "Metro"
+	validZoneCode   = "ewr1"
+	validZoneName   = "Parsippany, NJ"
 	validPlanSlug   = "hourly"
 	validPlanName   = "Bill by the hour"
 )
@@ -51,7 +53,7 @@ func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
 		},
 	}
 	// ensure we have a single region
-	backend.CreateFacility(validRegionName, validRegionCode)
+	backend.CreateFacility(validZoneName, validZoneCode)
 	ts := httptest.NewServer(fake.CreateHandler())
 
 	url, _ := url.Parse(ts.URL)
@@ -86,8 +88,8 @@ func TestLoadBalancer(t *testing.T) {
 func TestInstances(t *testing.T) {
 	vc, _ := testGetValidCloud(t)
 	response, supported := vc.Instances()
-	expectedSupported := true
-	expectedResponse := vc.instances
+	expectedSupported := false
+	expectedResponse := cloudprovider.Instances(nil)
 	if supported != expectedSupported {
 		t.Errorf("supported returned %v instead of expected %v", supported, expectedSupported)
 	}
@@ -144,8 +146,8 @@ func TestRoutes(t *testing.T) {
 func TestProviderName(t *testing.T) {
 	vc, _ := testGetValidCloud(t)
 	name := vc.ProviderName()
-	if name != providerName {
-		t.Errorf("returned %s instead of expected %s", name, providerName)
+	if name != ProviderName {
+		t.Errorf("returned %s instead of expected %s", name, ProviderName)
 	}
 }
 
@@ -161,13 +163,6 @@ func TestHasClusterID(t *testing.T) {
 
 // builds an Equinix Metal client
 func constructClient(authToken string, baseURL *string) *packngo.Client {
-	/*
-		tr := &http.Transport{
-			MaxIdleConns:       10,
-			IdleConnTimeout:    30 * time.Second,
-			DisableCompression: true,
-		}
-	*/
 	client := retryablehttp.NewClient()
 
 	// client.Transport = logging.NewTransport("EquinixMetal", client.Transport)
