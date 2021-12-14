@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/component-base/version"
 	"k8s.io/klog/v2"
 )
 
@@ -96,7 +97,7 @@ func init() {
 
 		// set up our client and create the cloud interface
 		client := packngo.NewClientWithAuth("cloud-provider-equinix-metal", metalConfig.AuthToken, nil)
-		client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", VERSION, client.UserAgent)
+		client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), client.UserAgent)
 		cloud, err := newCloud(metalConfig, client)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create new cloud handler: %v", err)
