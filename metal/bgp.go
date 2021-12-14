@@ -106,7 +106,7 @@ func (b *bgp) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateM
 			klog.V(2).Infof("bgp.reconcileNodes(): enabling BGP on node %s", node.Name)
 			// ensure BGP is enabled for the node
 			if err := ensureNodeBGPEnabled(id, b.client); err != nil {
-				klog.Errorf("could not ensure BGP enabled for node %s: %v", node.Name, err)
+				return fmt.Errorf("could not ensure BGP enabled for node %s: %v", node.Name, err)
 			}
 			klog.V(2).Infof("bgp.reconcileNodes(): bgp enabled on node %s", node.Name)
 

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/empty"
@@ -124,7 +125,7 @@ func (l *loadBalancers) serviceReconciler() serviceReconciler {
 }
 
 // reconcileNodes given a node, update the metallb load balancer by
-// by adding it to or removing it from the known metallb configmap
+// by adding it to or removing it from any known loadbalancer implementation
 func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
 	var (
 		peer *packngo.BGPNeighbor
@@ -148,7 +149,8 @@ func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mo
 			// get the node provider ID
 			id := node.Spec.ProviderID
 			if id == "" {
-				return fmt.Errorf("no provider ID given for node %s", node.Name)
+				klog.Errorf("no provider ID given for node %s, skipping", node.Name)
+				continue
 			}
 			if peer, err = getNodeBGPConfig(id, l.client); err != nil || peer == nil {
 				klog.Errorf("loadbalancers.reconcileNodes(): could not add metallb node peer address for node %s: %v", node.Name, err)
@@ -166,7 +168,8 @@ func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mo
 			// get the node provider ID
 			id := node.Spec.ProviderID
 			if id == "" {
-				return fmt.Errorf("no provider ID given for node %s", node.Name)
+				klog.Errorf("no provider ID given for node %s, skipping", node.Name)
+				continue
 			}
 			if peer, err = getNodeBGPConfig(id, l.client); err != nil || peer == nil {
 				klog.Errorf("loadbalancers.reconcileNodes(): could not get node peer address for node %s: %v", node.Name, err)
@@ -185,7 +188,7 @@ func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mo
 			return fmt.Errorf("error syncing nodes: %v", err)
 		}
 	}
-	klog.V(2).Infof("loadbalancers.reconcileNodes(): config changed, done")
+	klog.V(2).Infof("loadbalancers.reconcileNodes(): done")
 	return nil
 }
 
@@ -222,14 +225,20 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 	switch mode {
 	case ModeAdd:
 		// ADDITION
+		var failed []string
 		for _, svc := range validSvcs {
 			klog.V(2).Infof("loadbalancer.reconcileServices(): add: service %s", svc.Name)
 			if err := l.addService(ctx, svc, ips); err != nil {
-				return err
+				klog.Errorf("failed to add service %s: %v", svc.Name, err)
+				failed = append(failed, svc.Name)
 			}
+		}
+		if len(failed) > 0 {
+			return fmt.Errorf("failed to add services for: %s", strings.Join(failed, ","))
 		}
 	case ModeRemove:
 		// REMOVAL
+		var failed []string
 		for _, svc := range validSvcs {
 			svcName := serviceRep(svc)
 			svcTag := serviceTag(svc)
@@ -250,7 +259,9 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: for %s EIP ID %s", svcName, ipReservation.ID)
 			_, err = l.client.ProjectIPs.Remove(ipReservation.ID)
 			if err != nil {
-				return fmt.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
+				klog.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
+				failed = append(failed, ipReservation.String())
+				continue
 			}
 			// remove it from the configmap
 			svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
@@ -260,6 +271,9 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 			}
 			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: removed service %s from implementation", svcName)
 		}
+		if len(failed) > 0 {
+			return fmt.Errorf("failed to remove IP address reservations from project: %v", strings.Join(failed, ","))
+		}
 	case ModeSync:
 		// what we have to do:
 		// 1. get all of the services that are of type=LoadBalancer
@@ -268,10 +282,12 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 		// 4. get each EIP in the configmap, check if it is in our list; if not, delete
 
 		// add each service that is in the known list
+		var failedAdd []string
 		for _, svc := range validSvcs {
 			klog.V(2).Infof("loadbalancer.reconcileServices(): sync: service %s", svc.Name)
 			if err := l.addService(ctx, svc, ips); err != nil {
-				return err
+				klog.Errorf("failed to add service %s: %v", svc.Name, err)
+				failedAdd = append(failedAdd, svc.Name)
 			}
 		}
 
@@ -315,6 +331,7 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 		// remove any EIPs that do not have a reservation
 
 		klog.V(5).Infof("loadbalancer.reconcileServices(): sync: all reservations with emTag %#v", ipReservations)
+		var failedRemove []string
 		for _, ipReservation := range ipReservations {
 			var foundTag bool
 			for _, tag := range ipReservation.Tags {
@@ -328,9 +345,20 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 				// delete the reservation
 				_, err = l.client.ProjectIPs.Remove(ipReservation.ID)
 				if err != nil {
-					return fmt.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
+					failedRemove = append(failedRemove, ipReservation.String())
+					klog.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
 				}
 			}
+		}
+		var errMsg []string
+		if len(failedAdd) > 0 {
+			errMsg = append(errMsg, fmt.Sprintf("failed to add IP reservations for: %s", strings.Join(failedAdd, ",")))
+		}
+		if len(failedRemove) > 0 {
+			errMsg = append(errMsg, fmt.Sprintf("failed to remove IP reservations for: %s", strings.Join(failedRemove, ",")))
+		}
+		if len(errMsg) > 0 {
+			return fmt.Errorf("%s", strings.Join(errMsg, ","))
 		}
 	}
 	return nil
