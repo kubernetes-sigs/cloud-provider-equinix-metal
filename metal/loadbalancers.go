@@ -124,7 +124,8 @@ func (l *loadBalancers) serviceReconciler() serviceReconciler {
 	return l.reconcileServices
 }
 
-// reconcileNodes given a node, update the metallb load balancer by
+// reconcileNodes prepares and applies changes to the loadbalancer implementation
+// given a set of nodes and a mode of reconciliation (add, remove, or sync) 
 // by adding it to or removing it from any known loadbalancer implementation
 func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
 	var (
