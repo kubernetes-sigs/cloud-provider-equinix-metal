@@ -6,14 +6,20 @@ PACKAGE_NAME?=github.com/equinix/cloud-provider-equinix-metal
 GIT_VERSION?=$(shell git log -1 --format="%h")
 VERSION?=$(GIT_VERSION)
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
+MOST_RECENT_RELEASE_TAG ?= $(shell git describe --abbrev=0  2>/dev/null || true)
+ifeq (,$(MOST_RECENT_RELEASE_TAG))
+MOST_RECENT_RELEASE_TAG = v0.0.0
+endif
 ifneq (,$(RELEASE_TAG))
-VERSION := $(RELEASE_TAG)-$(VERSION)
+VERSION := $(RELEASE_TAG)
+else
+VERSION := $(MOST_RECENT_RELEASE_TAG)-$(VERSION)
 endif
 GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
 BUILD_TAG ?= latest
 TAGGED_IMAGE ?= $(BUILD_IMAGE):$(BUILD_TAG)
 TAGGED_ARCH_IMAGE ?= $(TAGGED_IMAGE)-$(ARCH)
-LDFLAGS ?= -ldflags '-extldflags "-static" -X "$(PACKAGE_NAME)/version.VERSION=$(VERSION)"'
+LDFLAGS ?= -ldflags '-extldflags "-static" -X "k8s.io/component-base/version.gitVersion=$(VERSION)"'
 
 # which arches can we support
 ARCHES=arm64 amd64
