@@ -88,7 +88,8 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 		m.inProcess = false
 	}()
 	if m.eipTag == "" {
-		return errors.New("control plane loadbalancer elastic ip tag is empty. Nothing to do")
+		klog.Info("control plane loadbalancer elastic ip tag is empty. Nothing to do")
+		return nil
 	}
 	ipList, _, err := m.ipResSvr.List(m.projectID, &packngo.ListOptions{
 		Includes: []string{"assignments"},
@@ -100,7 +101,7 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 	if controlPlaneEndpoint == nil {
 		// IP NOT FOUND nothing to do here.
 		klog.Errorf("elastic IP not found. Please verify you have one with the expected tag: %s", m.eipTag)
-		return err
+		return nil
 	}
 	if len(controlPlaneEndpoint.Assignments) > 1 {
 		return fmt.Errorf("the elastic ip %s has more than one node assigned to it and this is currently not supported. Fix it manually unassigning devices", controlPlaneEndpoint.ID)
@@ -108,8 +109,9 @@ func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes 
 	healthCheckURL := fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort)
 	klog.Infof("healthcheck elastic ip %s", healthCheckURL)
 	req, err := http.NewRequest("GET", healthCheckURL, nil)
+	// we should not have an error constructing the request
 	if err != nil {
-		return err
+		return fmt.Errorf("error constructing GET request for %s: %v", healthCheckURL, err)
 	}
 	resp, err := m.httpClient.Do(req)
 	// if there was no error, ensure we close
@@ -224,7 +226,8 @@ func newControlPlaneEndpointManager(eipTag, projectID string, deviceIPSrv packng
 // the `default/kubernetes` service
 func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svcs []*v1.Service, mode UpdateMode) error {
 	if m.eipTag == "" {
-		return errors.New("elastic ip tag is empty. Nothing to do")
+		klog.V(2).Info("controlplane endpoint manager: elastic ip tag is empty. Nothing to do")
+		return nil
 	}
 
 	var err error
