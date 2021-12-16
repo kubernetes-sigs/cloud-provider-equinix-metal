@@ -13,6 +13,7 @@ import (
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/kubevip"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/metallb"
 	"github.com/packethost/packngo"
+	"github.com/pkg/errors"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,18 +26,20 @@ const (
 )
 
 type loadBalancers struct {
-	client            *packngo.Client
-	k8sclient         kubernetes.Interface
-	project           string
-	metro             string
-	facility          string
-	clusterID         string
-	implementor       loadbalancers.LB
-	implementorConfig string
+	client                *packngo.Client
+	k8sclient             kubernetes.Interface
+	project               string
+	metro                 string
+	facility              string
+	clusterID             string
+	implementor           loadbalancers.LB
+	implementorConfig     string
+	eipMetroAnnotation    string
+	eipFacilityAnnotation string
 }
 
-func newLoadBalancers(client *packngo.Client, projectID, metro, facility string, config string) *loadBalancers {
-	return &loadBalancers{client, nil, projectID, metro, facility, "", nil, config}
+func newLoadBalancers(client *packngo.Client, projectID, metro, facility string, config, eipMetroAnnotation, eipFacilityAnnotation string) *loadBalancers {
+	return &loadBalancers{client, nil, projectID, metro, facility, "", nil, config, eipMetroAnnotation, eipFacilityAnnotation}
 }
 
 func (l *loadBalancers) name() string {
@@ -368,6 +371,8 @@ func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Servic
 func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []packngo.IPAddressReservation) error {
 	svcName := serviceRep(svc)
 	svcTag := serviceTag(svc)
+	svcRegion := serviceAnnotation(svc, l.eipMetroAnnotation)
+	svcZone := serviceAnnotation(svc, l.eipFacilityAnnotation)
 	clsTag := clusterTag(l.clusterID)
 	svcIP := svc.Spec.LoadBalancerIP
 
@@ -388,6 +393,12 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 			// if we did not find an IP reserved, create a request
 			klog.V(2).Infof("no IP assignment found for %s, requesting", svcName)
 			// create a request
+			// our logic as to where to create the IP:
+			// 1. if metro is set globally, use it; else
+			// 2. if facility is set globally, use it; else
+			// 3. if Service.Metadata.Labels["topology.kubernetes.io/region"] is set, use it; else
+			// 4. if Service.Metadata.Labels["topology.kubernetes.io/zone"] is set, use it; else
+			// 5. Return error, cannot set an EIP
 			facility := l.facility
 			metro := l.metro
 			req := packngo.IPReservationRequest{
@@ -401,11 +412,17 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 				},
 				FailOnApprovalRequired: true,
 			}
-			if metro != "" {
+			switch {
+			case svcRegion != "":
+				req.Metro = &svcRegion
+			case svcZone != "":
+				req.Facility = &svcZone
+			case metro != "":
 				req.Metro = &metro
-			}
-			if facility != "" {
+			case facility != "":
 				req.Facility = &facility
+			default:
+				return errors.New("unable to create load balancer when no IP, region or zone specified, either globally or on service")
 			}
 
 			ipReservation, _, err = l.client.ProjectIPs.Request(l.project, &req)
@@ -455,6 +472,16 @@ func serviceRep(svc *v1.Service) string {
 		return ""
 	}
 	return fmt.Sprintf("%s/%s", svc.Namespace, svc.Name)
+}
+
+func serviceAnnotation(svc *v1.Service, annotation string) string {
+	if svc == nil {
+		return ""
+	}
+	if svc.ObjectMeta.Annotations == nil {
+		return ""
+	}
+	return svc.ObjectMeta.Annotations[annotation]
 }
 
 func serviceTag(svc *v1.Service) string {

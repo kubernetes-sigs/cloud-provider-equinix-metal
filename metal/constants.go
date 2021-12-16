@@ -12,6 +12,8 @@ const (
 	DefaultAnnotationSrcIP              = "metal.equinix.com/bgp-peers-{{n}}-src-ip"
 	DefaultAnnotationBGPPass            = "metal.equinix.com/bgp-peers-{{n}}-bgp-pass"
 	DefaultAnnotationNetworkIPv4Private = "metal.equinix.com/network-4-private"
+	DefaultAnnotationEIPMetro           = "metal.equinix.com/eip-metro"
+	DefaultAnnotationEIPFacility        = "metal.equinix.com/eip-facility"
 	DefaultLocalASN                     = 65000
 	DefaultPeerASN                      = 65530
 )
