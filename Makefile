@@ -19,7 +19,7 @@ GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
 BUILD_TAG ?= latest
 TAGGED_IMAGE ?= $(BUILD_IMAGE):$(BUILD_TAG)
 TAGGED_ARCH_IMAGE ?= $(TAGGED_IMAGE)-$(ARCH)
-LDFLAGS ?= -ldflags '-extldflags "-static" -X "k8s.io/component-base/version.gitVersion=$(VERSION)"'
+LDFLAGS ?= -ldflags '-extldflags "-static" -X "k8s.io/component-base/version.gitVersion=$(VERSION)" -X "k8s.io/component-base/version/verflag.programName=Cloud Provider Equinix Metal"'
 
 # which arches can we support
 ARCHES=arm64 amd64
