@@ -2,7 +2,6 @@ package metal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -18,10 +17,8 @@ import (
 )
 
 type instances struct {
-	client            *packngo.Client
-	k8sclient         kubernetes.Interface
-	project           string
-	annotationNetwork string
+	client  *packngo.Client
+	project string
 }
 
 var (
@@ -29,8 +26,8 @@ var (
 	_ cloudprovider.InstancesV2 = (*instances)(nil)
 )
 
-func newInstances(client *packngo.Client, projectID, annotationNetwork string) *instances {
-	return &instances{client: client, project: projectID, annotationNetwork: annotationNetwork}
+func newInstances(client *packngo.Client, projectID string) *instances {
+	return &instances{client: client, project: projectID}
 }
 
 // cloudService implementation
@@ -38,11 +35,10 @@ func (i *instances) name() string {
 	return "instances"
 }
 func (i *instances) init(k8sclient kubernetes.Interface) error {
-	i.k8sclient = k8sclient
 	return nil
 }
 func (i *instances) nodeReconciler() nodeReconciler {
-	return i.reconcileNodes
+	return nil
 }
 func (i *instances) serviceReconciler() serviceReconciler {
 	return nil
@@ -326,88 +322,4 @@ func (i *instances) deviceFromProviderID(providerID string) (*packngo.Device, er
 // providerIDFromDevice returns a providerID from a device
 func providerIDFromDevice(device *packngo.Device) string {
 	return fmt.Sprintf("%s://%s", ProviderName, device.ID)
-}
-
-// reconcileNodes ensures each node has the annotations it needs
-func (i *instances) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
-	nodeNames := []string{}
-	for _, node := range nodes {
-		nodeNames = append(nodeNames, node.Name)
-	}
-	klog.V(2).Infof("devices.reconcileNodes(): called for nodes %v", nodeNames)
-	// whether adding or syncing, we just enable bgp. Nothing to do when we remove.
-	switch mode {
-	case ModeAdd, ModeSync:
-		for _, node := range nodes {
-			klog.V(2).Infof("instances.reconcileNodes(): add node %s", node.Name)
-			// get the node provider ID
-			if node.Spec.ProviderID == "" {
-				return fmt.Errorf("no provider ID given")
-			}
-			id, err := deviceIDFromProviderID(node.Spec.ProviderID)
-			if err != nil {
-				return fmt.Errorf("unable to get device ID from providerID: %v", err)
-			}
-
-			// add annotations
-			klog.V(2).Infof("instances.reconcileNodes(): setting annotations on node %s", node.Name)
-			// get the network info
-			network, err := getNodePrivateNetwork(id, i.client)
-			if err != nil || network == "" {
-				klog.Errorf("instances.reconcileNodes(): could not get private network info for node %s: %v", node.Name, err)
-			} else {
-				newAnnotations := make(map[string]string)
-				oldAnnotations := node.Annotations
-				if oldAnnotations == nil {
-					oldAnnotations = make(map[string]string)
-				}
-				val, ok := oldAnnotations[i.annotationNetwork]
-				if !ok || val != network {
-					newAnnotations[i.annotationNetwork] = network
-				}
-
-				// patch the node with the new annotations
-				if len(newAnnotations) > 0 {
-					mergePatch, _ := json.Marshal(map[string]interface{}{
-						"metadata": map[string]interface{}{
-							"annotations": newAnnotations,
-						},
-					})
-
-					if err := patchUpdatedNode(ctx, node.Name, mergePatch, i.k8sclient); err != nil {
-						klog.Errorf("instances.reconcileNodes(): failed to save updated node with annotations %s: %v", node.Name, err)
-					} else {
-						klog.V(2).Infof("instances.reconcileNodes(): annotations set on node %s", node.Name)
-					}
-				} else {
-					klog.V(2).Infof("instances.reconcileNodes(): no change to annotations for %s", node.Name)
-				}
-			}
-		}
-	case ModeRemove:
-		klog.V(2).Info("instances.reconcileNodes(): nothing to do for removing nodes")
-	}
-	klog.V(2).Info("instances.reconcileNodes(): complete")
-	return nil
-}
-
-// getNodePrivateNetwork use the Equinix Metal API to get the CIDR of the private network given a providerID.
-func getNodePrivateNetwork(deviceID string, client *packngo.Client) (string, error) {
-	device, _, err := client.Devices.Get(deviceID, &packngo.GetOptions{Includes: []string{"ip_addresses.parent_block,parent_block"}})
-
-	if err != nil {
-		return "", err
-	}
-	for _, net := range device.Network {
-		// we only want the private, management, ipv4 network
-		if net.Public || !net.Management || net.AddressFamily != 4 {
-			continue
-		}
-		parent := net.ParentBlock
-		if parent == nil || parent.Network == "" || parent.CIDR == 0 {
-			return "", fmt.Errorf("no network information provided for private address %s", net.String())
-		}
-		return fmt.Sprintf("%s/%d", parent.Network, parent.CIDR), nil
-	}
-	return "", nil
 }

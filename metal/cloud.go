@@ -68,15 +68,15 @@ type cloud struct {
 var _ cloudprovider.Interface = (*cloud)(nil)
 
 func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
-	i := newInstances(client, metalConfig.ProjectID, metalConfig.AnnotationNetworkIPv4Private)
+	i := newInstances(client, metalConfig.ProjectID)
 	return &cloud{
 		client:                      client,
 		metro:                       metalConfig.Metro,
 		facility:                    metalConfig.Facility,
 		instances:                   i,
 		zones:                       newZones(client, metalConfig.ProjectID),
-		loadBalancer:                newLoadBalancers(client, metalConfig.ProjectID, metalConfig.Metro, metalConfig.Facility, metalConfig.LoadBalancerSetting, metalConfig.AnnotationEIPMetro, metalConfig.AnnotationEIPMetro),
-		bgp:                         newBGP(client, metalConfig.ProjectID, metalConfig.LocalASN, metalConfig.BGPPass, metalConfig.AnnotationLocalASN, metalConfig.AnnotationPeerASN, metalConfig.AnnotationPeerIP, metalConfig.AnnotationSrcIP, metalConfig.AnnotationBGPPass, metalConfig.BGPNodeSelector),
+		loadBalancer:                newLoadBalancers(client, metalConfig.ProjectID, metalConfig.Metro, metalConfig.Facility, metalConfig.LoadBalancerSetting, metalConfig.LocalASN, metalConfig.BGPPass, metalConfig.AnnotationNetworkIPv4Private, metalConfig.AnnotationLocalASN, metalConfig.AnnotationPeerASN, metalConfig.AnnotationPeerIP, metalConfig.AnnotationSrcIP, metalConfig.AnnotationBGPPass, metalConfig.AnnotationEIPMetro, metalConfig.AnnotationEIPMetro, metalConfig.BGPNodeSelector),
+		bgp:                         newBGP(client, metalConfig.ProjectID, metalConfig.LocalASN, metalConfig.BGPPass),
 		controlPlaneEndpointManager: newControlPlaneEndpointManager(metalConfig.EIPTag, metalConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, metalConfig.APIServerPort),
 	}, nil
 }
@@ -107,7 +107,8 @@ func init() {
 
 // services get those elements that are initializable
 func (c *cloud) services() []cloudService {
-	return []cloudService{c.loadBalancer, c.instances, c.zones, c.bgp, c.controlPlaneEndpointManager}
+	// only controlPlaneEndpointManager still does reconcilers
+	return []cloudService{c.controlPlaneEndpointManager, c.loadBalancer, c.bgp}
 }
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn goroutines
@@ -156,7 +157,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 // TODO unimplemented
 func (c *cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	klog.V(5).Info("called LoadBalancer")
-	return nil, false
+	return c.loadBalancer, c.loadBalancer != nil
 }
 
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.

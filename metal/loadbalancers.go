@@ -4,8 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
@@ -17,6 +20,8 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -34,12 +39,26 @@ type loadBalancers struct {
 	clusterID             string
 	implementor           loadbalancers.LB
 	implementorConfig     string
+	localASN              int
+	bgpPass               string
+	annotationNetwork     string
+	annotationLocalASN    string
+	annotationPeerASN     string
+	annotationPeerIP      string
+	annotationSrcIP       string
+	annotationBgpPass     string
 	eipMetroAnnotation    string
 	eipFacilityAnnotation string
+	nodeSelector          labels.Selector
 }
 
-func newLoadBalancers(client *packngo.Client, projectID, metro, facility string, config, eipMetroAnnotation, eipFacilityAnnotation string) *loadBalancers {
-	return &loadBalancers{client, nil, projectID, metro, facility, "", nil, config, eipMetroAnnotation, eipFacilityAnnotation}
+func newLoadBalancers(client *packngo.Client, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector string) *loadBalancers {
+	selector := labels.Everything()
+	if nodeSelector != "" {
+		selector, _ = labels.Parse(nodeSelector)
+	}
+
+	return &loadBalancers{client, nil, projectID, metro, facility, "", nil, config, localASN, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, selector}
 }
 
 func (l *loadBalancers) name() string {
@@ -91,284 +110,267 @@ func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 }
 
 // implementation of cloudprovider.LoadBalancer
-// we do this via metallb, not directly, so none of this works... for now.
 
+// GetLoadBalancer returns whether the specified load balancer exists, and
+// if so, what its status is.
+// Implementations must treat the *v1.Service parameter as read-only and not modify it.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
-	return nil, false, nil
+	svcName := serviceRep(service)
+	svcTag := serviceTag(service)
+	clsTag := clusterTag(l.clusterID)
+	svcIP := service.Spec.LoadBalancerIP
+
+	var svcIPCidr string
+
+	// get IP address reservations and check if they any exists for this svc
+	ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
+	if err != nil {
+		return nil, false, fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
+	}
+
+	ipReservation := ipReservationByAllTags([]string{svcTag, emTag, clsTag}, ips)
+
+	klog.V(2).Infof("GetLoadBalancer(): remove: %s with existing IP assignment %s", svcName, svcIP)
+
+	// get the IPs and see if there is anything to clean up
+	if ipReservation == nil {
+		return nil, false, nil
+	}
+	svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
+	return &v1.LoadBalancerStatus{
+		Ingress: []v1.LoadBalancerIngress{
+			{IP: svcIPCidr},
+		},
+	}, true, nil
 }
+
+// GetLoadBalancerName returns the name of the load balancer. Implementations must treat the
+// *v1.Service parameter as read-only and not modify it.
 func (l *loadBalancers) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
-	return ""
+	svcTag := serviceTag(service)
+	clsTag := clusterTag(l.clusterID)
+	return fmt.Sprintf("%s:%s:%s", emTag, svcTag, clsTag)
 }
+
+// EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
+// Implementations must treat the *v1.Service and *v1.Node
+// parameters as read-only and not modify them.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
-	return nil, nil
+	klog.V(2).Infof("EnsureLoadBalancer(): add: service %s/%s", service.Namespace, service.Name)
+	// get IP address reservations and check if they any exists for this svc
+	ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
+	}
+	ipCidr, err := l.addService(ctx, service, ips, filterNodes(nodes, l.nodeSelector))
+	if err != nil {
+		return nil, fmt.Errorf("failed to add service %s: %v", service.Name, err)
+	}
+	// get the IP only
+	ip := strings.SplitN(ipCidr, "/", 2)
+
+	return &v1.LoadBalancerStatus{
+		Ingress: []v1.LoadBalancerIngress{
+			{IP: ip[0]},
+		},
+	}, nil
 }
+
+// UpdateLoadBalancer updates hosts under the specified load balancer.
+// Implementations must treat the *v1.Service and *v1.Node
+// parameters as read-only and not modify them.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (l *loadBalancers) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	return nil
+	klog.V(2).Infof("UpdateLoadBalancer(): service %s", service.Name)
+	// get IP address reservations and check if they any exists for this svc
+
+	var n []loadbalancers.Node
+	for _, node := range filterNodes(nodes, l.nodeSelector) {
+		klog.V(2).Infof("UpdateLoadBalancer(): %s", node.Name)
+		// get the node provider ID
+		id := node.Spec.ProviderID
+		if id == "" {
+			return fmt.Errorf("no provider ID given for node %s, skipping", node.Name)
+		}
+		// ensure BGP is enabled for the node
+		if err := ensureNodeBGPEnabled(id, l.client); err != nil {
+			klog.Errorf("could not ensure BGP enabled for node %s: %v", node.Name, err)
+			continue
+		}
+		klog.V(2).Infof("bgp enabled on node %s", node.Name)
+		// ensure the node has the correct annotations
+		if err := l.annotateNode(ctx, node); err != nil {
+			return fmt.Errorf("failed to annotate node %s: %v", node.Name, err)
+		}
+		var (
+			peer *packngo.BGPNeighbor
+			err  error
+		)
+		if peer, err = getNodeBGPConfig(id, l.client); err != nil || peer == nil {
+			return fmt.Errorf("could not add metallb node peer address for node %s: %v", node.Name, err)
+		}
+		n = append(n, loadbalancers.Node{
+			Name:     node.Name,
+			LocalASN: peer.CustomerAs,
+			PeerASN:  peer.PeerAs,
+			SourceIP: peer.CustomerIP,
+			Peers:    peer.PeerIps,
+			Password: peer.Md5Password,
+		})
+	}
+	return l.implementor.UpdateService(ctx, service.Name, n)
 }
+
+// EnsureLoadBalancerDeleted deletes the specified load balancer if it
+// exists, returning nil if the load balancer specified either didn't exist or
+// was successfully deleted.
+// This construction is useful because many cloud providers' load balancers
+// have multiple underlying components, meaning a Get could say that the LB
+// doesn't exist even if some part of it is still laying around.
+// Implementations must treat the *v1.Service parameter as read-only and not modify it.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
-	return nil
-}
+	// REMOVAL
+	svcName := serviceRep(service)
+	svcTag := serviceTag(service)
+	clsTag := clusterTag(l.clusterID)
+	svcIP := service.Spec.LoadBalancerIP
 
-// utility funcs
+	var svcIPCidr string
 
-func (l *loadBalancers) nodeReconciler() nodeReconciler {
-	if l.implementor == nil {
-		klog.V(2).Info("loadBalancers disabled, not enabling nodeReconciler")
-		return nil
-	}
-	return l.reconcileNodes
-}
-
-func (l *loadBalancers) serviceReconciler() serviceReconciler {
-	if l.implementor == nil {
-		klog.V(2).Info("loadBalancers disabled, not enabling serviceReconciler")
-		return nil
-	}
-	return l.reconcileServices
-}
-
-// reconcileNodes prepares and applies changes to the loadbalancer implementation
-// given a set of nodes and a mode of reconciliation (add, remove, or sync)
-func (l *loadBalancers) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
-	var (
-		peer *packngo.BGPNeighbor
-		err  error
-	)
-	klog.V(2).Infof("loadbalancers.reconcileNodes(): called for nodes %v", nodes)
-
-	// are we adding, removing or syncing the node?
-	switch mode {
-	case ModeRemove:
-		for _, node := range nodes {
-			klog.V(2).Infof("loadbalancers.reconcileNodes(): reconciling remove node %s", node.Name)
-			if err := l.implementor.RemoveNode(ctx, node.Name); err != nil {
-				klog.V(2).Infof("loadbalancers.reconcileNodes(): error removing node %s: %v", node.Name, err)
-				continue
-			}
-		}
-	case ModeAdd:
-		for _, node := range nodes {
-			klog.V(2).Infof("loadbalancers.reconcileNodes(): reconciling add node %s", node.Name)
-			// get the node provider ID
-			id := node.Spec.ProviderID
-			if id == "" {
-				klog.Errorf("no provider ID given for node %s, skipping", node.Name)
-				continue
-			}
-			if peer, err = getNodeBGPConfig(id, l.client); err != nil || peer == nil {
-				klog.Errorf("loadbalancers.reconcileNodes(): could not add metallb node peer address for node %s: %v", node.Name, err)
-				continue
-			}
-			if err := l.implementor.AddNode(ctx, node.Name, peer.CustomerAs, peer.PeerAs, peer.Md5Password, peer.CustomerIP, peer.PeerIps...); err != nil {
-				klog.V(2).Infof("loadbalancers.reconcileNodes(): error adding node %s: %v", node.Name, err)
-				continue
-			}
-		}
-	case ModeSync:
-		// make sure the list of nodes exactly matches between the provided nodes and the ones in the configmap
-		goodMap := map[string]loadbalancers.Node{}
-		for _, node := range nodes {
-			// get the node provider ID
-			id := node.Spec.ProviderID
-			if id == "" {
-				klog.Errorf("no provider ID given for node %s, skipping", node.Name)
-				continue
-			}
-			if peer, err = getNodeBGPConfig(id, l.client); err != nil || peer == nil {
-				klog.Errorf("loadbalancers.reconcileNodes(): could not get node peer address for node %s: %v", node.Name, err)
-				continue
-			}
-			goodMap[node.Name] = loadbalancers.Node{
-				Name:     node.Name,
-				LocalASN: peer.CustomerAs,
-				PeerASN:  peer.PeerAs,
-				SourceIP: peer.CustomerIP,
-				Peers:    peer.PeerIps,
-				Password: peer.Md5Password,
-			}
-		}
-		if err := l.implementor.SyncNodes(ctx, goodMap); err != nil {
-			return fmt.Errorf("error syncing nodes: %v", err)
-		}
-	}
-	klog.V(2).Infof("loadbalancers.reconcileNodes(): done")
-	return nil
-}
-
-// reconcileServices add or remove services to have loadbalancers. If it adds a
-// service, then it requests a new IP reservation, with "fast-fail", i.e. if it
-// cannot create the IP reservation immediately, then it fails, rather than
-// waiting for human support. It tags the IP reservation so it can find it later.
-// Before trying to create one, it tries to find an IP reservation with the right tags.
-func (l *loadBalancers) reconcileServices(ctx context.Context, svcs []*v1.Service, mode UpdateMode) error {
-	klog.V(2).Infof("loadbalancer.reconcileServices(): %v starting", mode)
-	klog.V(5).Infof("loadbalancer.reconcileServices(): services %#v", svcs)
-
-	var err error
 	// get IP address reservations and check if they any exists for this svc
 	ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
 	}
 
-	validSvcs := []*v1.Service{}
-	for _, svc := range svcs {
-		// filter on type: only take those that are of type=LoadBalancer
-		if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
-			continue
-		}
-		// filter on name: do not try to manage the the service we created for EIP load balancer
-		if svc.ObjectMeta.Name == externalServiceName && svc.ObjectMeta.Namespace == externalServiceNamespace {
-			continue
-		}
-		validSvcs = append(validSvcs, svc)
+	ipReservation := ipReservationByAllTags([]string{svcTag, emTag, clsTag}, ips)
+
+	klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: %s with existing IP assignment %s", svcName, svcIP)
+
+	// get the IPs and see if there is anything to clean up
+	if ipReservation == nil {
+		klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: no IP reservation found for %s, nothing to delete", svcName)
+		return nil
 	}
-	klog.V(5).Infof("loadbalancer.reconcileServices(): valid services %#v", validSvcs)
+	// delete the reservation
+	klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s EIP ID %s", svcName, ipReservation.ID)
+	if _, err := l.client.ProjectIPs.Remove(ipReservation.ID); err != nil {
+		return fmt.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
+	}
+	// remove it from any implementation-specific parts
+	svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
+	klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s entry %s", svcName, svcIPCidr)
+	if err := l.implementor.RemoveService(ctx, svcName, svcIPCidr); err != nil {
+		return fmt.Errorf("error removing IP from configmap for %s: %v", svcName, err)
+	}
+	klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: removed service %s from implementation", svcName)
+	return nil
+}
 
-	switch mode {
-	case ModeAdd:
-		// ADDITION
-		var failed []string
-		for _, svc := range validSvcs {
-			klog.V(2).Infof("loadbalancer.reconcileServices(): add: service %s", svc.Name)
-			if err := l.addService(ctx, svc, ips); err != nil {
-				klog.Errorf("failed to add service %s: %v", svc.Name, err)
-				failed = append(failed, svc.Name)
-			}
-		}
-		if len(failed) > 0 {
-			return fmt.Errorf("failed to add services for: %s", strings.Join(failed, ","))
-		}
-	case ModeRemove:
-		// REMOVAL
-		var failed []string
-		for _, svc := range validSvcs {
-			svcName := serviceRep(svc)
-			svcTag := serviceTag(svc)
-			clsTag := clusterTag(l.clusterID)
-			svcIP := svc.Spec.LoadBalancerIP
+// utility funcs
 
-			var svcIPCidr string
-			ipReservation := ipReservationByAllTags([]string{svcTag, emTag, clsTag}, ips)
+func (l *loadBalancers) nodeReconciler() nodeReconciler {
+	return nil
+}
 
-			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: %s with existing IP assignment %s", svcName, svcIP)
+func (l *loadBalancers) serviceReconciler() serviceReconciler {
+	return nil
+}
 
-			// get the IPs and see if there is anything to clean up
-			if ipReservation == nil {
-				klog.V(2).Infof("loadbalancer.reconcileServices(): remove: no IP reservation found for %s, nothing to delete", svcName)
-				continue
-			}
-			// delete the reservation
-			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: for %s EIP ID %s", svcName, ipReservation.ID)
-			_, err = l.client.ProjectIPs.Remove(ipReservation.ID)
-			if err != nil {
-				klog.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
-				failed = append(failed, ipReservation.String())
-				continue
-			}
-			// remove it from the configmap
-			svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
-			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: for %s entry %s", svcName, svcIPCidr)
-			if err := l.implementor.RemoveService(ctx, svcIPCidr); err != nil {
-				return fmt.Errorf("error removing IP from configmap for %s: %v", svcName, err)
-			}
-			klog.V(2).Infof("loadbalancer.reconcileServices(): remove: removed service %s from implementation", svcName)
-		}
-		if len(failed) > 0 {
-			return fmt.Errorf("failed to remove IP address reservations from project: %v", strings.Join(failed, ","))
-		}
-	case ModeSync:
-		// what we have to do:
-		// 1. get all of the services that are of type=LoadBalancer
-		// 2. for each service, get its eip, if available. if it does not have one, create one for it.
-		// 3. for each EIP, ensure it exists in the configmap
-		// 4. get each EIP in the configmap, check if it is in our list; if not, delete
+// annotateNode ensure a node has the correct annotations.
+func (l *loadBalancers) annotateNode(ctx context.Context, node *v1.Node) error {
+	klog.V(2).Infof("annotateNode: %s", node.Name)
+	// get the node provider ID
+	id, err := deviceIDFromProviderID(node.Spec.ProviderID)
+	if err != nil {
+		return fmt.Errorf("unable to get device ID from providerID: %v", err)
+	}
 
-		// add each service that is in the known list
-		var failedAdd []string
-		for _, svc := range validSvcs {
-			klog.V(2).Infof("loadbalancer.reconcileServices(): sync: service %s", svc.Name)
-			if err := l.addService(ctx, svc, ips); err != nil {
-				klog.Errorf("failed to add service %s: %v", svc.Name, err)
-				failedAdd = append(failedAdd, svc.Name)
-			}
-		}
-
-		// remove any service that is not in the known list
-
-		// we need to get the addresses again, because we might have changed them
-		klog.V(5).Info("loadbalancer.reconcileServices(): sync: getting all IP reservations")
-		ips, _, err = l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
-		if err != nil {
-			return fmt.Errorf("unable to retrieve IP reservations for project %s: %v", l.project, err)
-		}
-		// get all EIP that have the equinix metal tag and are allocated to this cluster
-		ipReservations := ipReservationsByAllTags([]string{emTag, clusterTag(l.clusterID)}, ips)
-		// create a map of EIP to svcIP so we can get the CIDR
-		ipCidr := map[string]int{}
-		for _, ipr := range ipReservations {
-			ipCidr[ipr.Address] = ipr.CIDR
-		}
-
-		// create a map of all valid IPs
-		validTags := map[string]bool{}
-		validIPs := map[string]bool{}
-
-		for _, svc := range validSvcs {
-			validTags[serviceTag(svc)] = true
-			svcIP := svc.Spec.LoadBalancerIP
-			if svcIP != "" {
-				if cidr, ok := ipCidr[svcIP]; ok {
-					validIPs[fmt.Sprintf("%s/%d", svcIP, cidr)] = true
-				}
-			}
-		}
-
-		klog.V(2).Infof("loadbalancer.reconcileServices(): sync: valid tags %v", validTags)
-		klog.V(2).Infof("loadbalancer.reconcileServices(): sync: valid svc IPs %v", validIPs)
-
-		if err := l.implementor.SyncServices(ctx, validIPs); err != nil {
-			return err
-		}
-
-		// remove any EIPs that do not have a reservation
-
-		klog.V(5).Infof("loadbalancer.reconcileServices(): sync: all reservations with emTag %#v", ipReservations)
-		var failedRemove []string
-		for _, ipReservation := range ipReservations {
-			var foundTag bool
-			for _, tag := range ipReservation.Tags {
-				if _, ok := validTags[tag]; ok {
-					foundTag = true
-				}
-			}
-			// did we find a valid tag?
-			if !foundTag {
-				klog.V(2).Infof("loadbalancer.reconcileServices(): sync: removing reservation with service= tag but not in validTags list %#v", ipReservation)
-				// delete the reservation
-				_, err = l.client.ProjectIPs.Remove(ipReservation.ID)
-				if err != nil {
-					failedRemove = append(failedRemove, ipReservation.String())
-					klog.Errorf("failed to remove IP address reservation %s from project: %v", ipReservation.String(), err)
-				}
-			}
-		}
-		var errMsg []string
-		if len(failedAdd) > 0 {
-			errMsg = append(errMsg, fmt.Sprintf("failed to add IP reservations for: %s", strings.Join(failedAdd, ",")))
-		}
-		if len(failedRemove) > 0 {
-			errMsg = append(errMsg, fmt.Sprintf("failed to remove IP reservations for: %s", strings.Join(failedRemove, ",")))
-		}
-		if len(errMsg) > 0 {
-			return fmt.Errorf("%s", strings.Join(errMsg, ","))
+	// add annotations
+	// if it already has them, nothing needs to be done
+	annotations := node.Annotations
+	if annotations != nil {
+		if val, ok := annotations[l.annotationNetwork]; ok {
+			klog.V(2).Infof("annotateNode %s: already has annotation %s=%s", node.Name, l.annotationNetwork, val)
+			return nil
 		}
 	}
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	// get the network info
+	network, err := getNodePrivateNetwork(id, l.client)
+	if err != nil || network == "" {
+		return fmt.Errorf("could not get private network info for node %s: %v", node.Name, err)
+
+	}
+	annotations[l.annotationNetwork] = network
+
+	// get the bgp info
+	peer, err := getNodeBGPConfig(id, l.client)
+	switch {
+	case err != nil || peer == nil:
+		return fmt.Errorf("could not get BGP info for node %s: %v", node.Name, err)
+	case len(peer.PeerIps) == 0:
+		klog.Errorf("got BGP info for node %s but it had no peer IPs", node.Name)
+	default:
+		// the localASN and peerASN are the same across peers
+		localASN := strconv.Itoa(peer.CustomerAs)
+		peerASN := strconv.Itoa(peer.PeerAs)
+		bgpPass := base64.StdEncoding.EncodeToString([]byte(peer.Md5Password))
+
+		// we always set the peer IPs as a sorted list, so that 0, 1, n are
+		// consistent in ordering
+		pips := peer.PeerIps
+		sort.Strings(pips)
+		var (
+			i  int
+			ip string
+		)
+
+		// ensure all of the data we have is in the annotations, either
+		// adding or replacing
+		for i, ip = range pips {
+			annotationLocalASN := strings.Replace(l.annotationLocalASN, "{{n}}", strconv.Itoa(i), 1)
+			annotationPeerASN := strings.Replace(l.annotationPeerASN, "{{n}}", strconv.Itoa(i), 1)
+			annotationPeerIP := strings.Replace(l.annotationPeerIP, "{{n}}", strconv.Itoa(i), 1)
+			annotationSrcIP := strings.Replace(l.annotationSrcIP, "{{n}}", strconv.Itoa(i), 1)
+			annotationBgpPass := strings.Replace(l.annotationBgpPass, "{{n}}", strconv.Itoa(i), 1)
+
+			annotations[annotationLocalASN] = localASN
+			annotations[annotationPeerASN] = peerASN
+			annotations[annotationPeerIP] = ip
+			annotations[annotationSrcIP] = peer.CustomerIP
+			annotations[annotationBgpPass] = bgpPass
+		}
+	}
+
+	// TODO: ensure that any old ones that are not in the new data are removed
+	// for now, since there are consistently two upstream nodes, we will not bother
+	// it gets complex, because we need to match patterns. It is not worth the effort for now.
+
+	// patch the node with the new annotations
+	klog.V(2).Infof("annotateNode %s: %v", node.Name, annotations)
+
+	mergePatch, _ := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": annotations,
+		},
+	})
+
+	if _, err := l.k8sclient.CoreV1().Nodes().Patch(ctx, node.Name, k8stypes.MergePatchType, mergePatch, metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("Failed to patch node with annotations %s: %v", node.Name, err)
+	}
+	klog.V(2).Infof("annotateNode %s: complete", node.Name)
 	return nil
 }
 
 // addService add a single service; wraps the implementation
-func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []packngo.IPAddressReservation) error {
+func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []packngo.IPAddressReservation, nodes []*v1.Node) (string, error) {
 	svcName := serviceRep(svc)
 	svcTag := serviceTag(svc)
 	svcRegion := serviceAnnotation(svc, l.eipMetroAnnotation)
@@ -422,19 +424,19 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 			case facility != "":
 				req.Facility = &facility
 			default:
-				return errors.New("unable to create load balancer when no IP, region or zone specified, either globally or on service")
+				return "", errors.New("unable to create load balancer when no IP, region or zone specified, either globally or on service")
 			}
 
 			ipReservation, _, err = l.client.ProjectIPs.Request(l.project, &req)
 			if err != nil {
-				return fmt.Errorf("failed to request an IP for the load balancer: %v", err)
+				return "", fmt.Errorf("failed to request an IP for the load balancer: %v", err)
 			}
 		}
 
 		// if we have no IP from existing or a new reservation, log it and return
 		if ipReservation == nil {
 			klog.V(2).Infof("no IP to assign to service %s, will need to wait until it is allocated", svcName)
-			return nil
+			return "", nil
 		}
 
 		// we have an IP, either found from existing reservations or a new reservation.
@@ -447,14 +449,14 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 		existing, err := intf.Get(ctx, svc.Name, metav1.GetOptions{})
 		if err != nil || existing == nil {
 			klog.V(2).Infof("failed to get latest for service %s: %v", svcName, err)
-			return fmt.Errorf("failed to get latest for service %s: %v", svcName, err)
+			return "", fmt.Errorf("failed to get latest for service %s: %v", svcName, err)
 		}
 		existing.Spec.LoadBalancerIP = svcIP
 
 		_, err = intf.Update(ctx, existing, metav1.UpdateOptions{})
 		if err != nil {
 			klog.V(2).Infof("failed to update service %s: %v", svcName, err)
-			return fmt.Errorf("failed to update service %s: %v", svcName, err)
+			return "", fmt.Errorf("failed to update service %s: %v", svcName, err)
 		}
 		klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
 	}
@@ -464,7 +466,43 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 		cidr = ipReservation.CIDR
 	}
 	svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
-	return l.implementor.AddService(ctx, svcName, svcIPCidr)
+	// now need to pass it the nodes
+
+	var n []loadbalancers.Node
+	for _, node := range nodes {
+		// get the node provider ID
+		id := node.Spec.ProviderID
+		if id == "" {
+			klog.Errorf("no provider ID given for node %s, skipping", node.Name)
+			continue
+		}
+		// ensure BGP is enabled for the node
+		if err := ensureNodeBGPEnabled(id, l.client); err != nil {
+			klog.Errorf("could not ensure BGP enabled for node %s: %v", node.Name, err)
+			continue
+		}
+		klog.V(2).Infof("bgp enabled on node %s", node.Name)
+		// ensure the node has the correct annotations
+		if err := l.annotateNode(ctx, node); err != nil {
+			klog.Errorf("failed to annotate node %s: %v", node.Name, err)
+			continue
+		}
+		peer, err := getNodeBGPConfig(id, l.client)
+		if err != nil || peer == nil {
+			klog.Errorf("loadbalancers.addService(): could not get node peer address for node %s: %v", node.Name, err)
+			continue
+		}
+		n = append(n, loadbalancers.Node{
+			Name:     node.Name,
+			LocalASN: peer.CustomerAs,
+			PeerASN:  peer.PeerAs,
+			SourceIP: peer.CustomerIP,
+			Peers:    peer.PeerIps,
+			Password: peer.Md5Password,
+		})
+	}
+
+	return svcIPCidr, l.implementor.AddService(ctx, svcName, svcIPCidr, n)
 }
 
 func serviceRep(svc *v1.Service) string {
@@ -493,4 +531,36 @@ func serviceTag(svc *v1.Service) string {
 }
 func clusterTag(clusterID string) string {
 	return fmt.Sprintf("cluster=%s", clusterID)
+}
+
+// getNodePrivateNetwork use the Equinix Metal API to get the CIDR of the private network given a providerID.
+func getNodePrivateNetwork(deviceID string, client *packngo.Client) (string, error) {
+	device, _, err := client.Devices.Get(deviceID, &packngo.GetOptions{Includes: []string{"ip_addresses.parent_block,parent_block"}})
+
+	if err != nil {
+		return "", err
+	}
+	for _, net := range device.Network {
+		// we only want the private, management, ipv4 network
+		if net.Public || !net.Management || net.AddressFamily != 4 {
+			continue
+		}
+		parent := net.ParentBlock
+		if parent == nil || parent.Network == "" || parent.CIDR == 0 {
+			return "", fmt.Errorf("no network information provided for private address %s", net.String())
+		}
+		return fmt.Sprintf("%s/%d", parent.Network, parent.CIDR), nil
+	}
+	return "", nil
+}
+
+func filterNodes(nodes []*v1.Node, nodeSelector labels.Selector) []*v1.Node {
+	filteredNodes := []*v1.Node{}
+
+	for _, node := range nodes {
+		if nodeSelector.Matches(labels.Set(node.Labels)) {
+			filteredNodes = append(filteredNodes, node)
+		}
+	}
+	return filteredNodes
 }

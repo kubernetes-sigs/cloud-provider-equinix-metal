@@ -1,6 +1,10 @@
 package metallb
 
-import "math/rand"
+import (
+	"math/rand"
+	"sort"
+	"strings"
+)
 
 func genRandomString(l int) string {
 	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -69,8 +73,8 @@ func genSelectorRequirements() SelectorRequirements {
 	}
 }
 
-func genPeer() Peer {
-	return Peer{
+func genPeer(svcs ...string) Peer {
+	p := Peer{
 		MyASN:    uint32(rand.Intn(75000)),
 		ASN:      uint32(rand.Intn(75000)),
 		Addr:     genRandomString(10),
@@ -83,4 +87,13 @@ func genPeer() Peer {
 			genNodeSelector(),
 		},
 	}
+	if len(svcs) > 0 {
+		sort.Strings(svcs)
+		p.NodeSelectors = append(p.NodeSelectors, NodeSelector{
+			MatchLabels: map[string]string{
+				serviceNameKey: strings.Join(svcs, ","),
+			},
+		})
+	}
+	return p
 }
