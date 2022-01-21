@@ -47,11 +47,12 @@ There are two ways to get the packets to have the correct source address:
 #### BGP Software
 
 Some implementations of BGP software support setting a source address for BGP peering packets, including
-[bird](https://bird.network.cz) and [kube-vip](https://kube-vip.io).
+[bird](https://bird.network.cz), [kube-vip](https://kube-vip.io) and [metallb](http://metallb.universe.tf).
 
 CCM helps in this regard. It reads the information about the peers and the correct source address for the device from
-the Equinix Metal API, and then sets those as annotations on the host. Software that knows how to read those annotations,
-for example, kube-vip, will do the right thing. There will be no need to set static routes.
+the Equinix Metal API, and then sets those as annotations on the host, or passes them to the BGP software.
+Software that knows how to read those annotations, for example, kube-vip, will do the right thing, as will those that
+are configured to receive it directly, such as metallb. There will be no need to set static routes.
 
 #### Static Routes
 
@@ -348,6 +349,8 @@ If `kube-vip` management is enabled, then CCM does the following.
    * delete the Elastic IP reservation from Equinix Metal
 
 ##### MetalLB
+
+**Minimum Version**: MetalLB [version 0.11.0](https://metallb.universe.tf/release-notes/#version-0-11-0)
 
 When [MetalLB](https://metallb.universe.tf) is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
 the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancing, without

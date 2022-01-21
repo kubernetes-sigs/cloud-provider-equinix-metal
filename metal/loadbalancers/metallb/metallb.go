@@ -114,6 +114,7 @@ func (l *LB) AddNode(ctx context.Context, nodeName string, localASN, peerASN int
 			ASN:           uint32(peerASN),
 			Password:      password,
 			Addr:          peer,
+			SrcAddr:       srcIP,
 			NodeSelectors: []NodeSelector{ns},
 		}
 		if config.AddPeer(&p) {
