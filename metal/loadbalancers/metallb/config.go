@@ -30,6 +30,7 @@ type Peer struct {
 	ASN           uint32         `yaml:"peer-asn"`
 	Addr          string         `yaml:"peer-address"`
 	Port          uint16         `yaml:"peer-port"`
+	SrcAddr       string         `yaml:"source-address"`
 	HoldTime      string         `yaml:"hold-time"`
 	RouterID      string         `yaml:"router-id"`
 	NodeSelectors []NodeSelector `yaml:"node-selectors"`
