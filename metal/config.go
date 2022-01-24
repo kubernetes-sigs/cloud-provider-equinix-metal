@@ -26,6 +26,8 @@ const (
 	envVarAnnotationSrcIP              = "METAL_ANNOTATION_SRC_IP"
 	envVarAnnotationBGPPass            = "METAL_ANNOTATION_BGP_PASS"
 	envVarAnnotationNetworkIPv4Private = "METAL_ANNOTATION_NETWORK_IPV4_PRIVATE"
+	envVarAnnotationEIPMetro           = "METAL_ANNOTATION_EIP_METRO"
+	envVarAnnotationEIPFacility        = "METAL_ANNOTATION_EIP_FACILITY"
 	envVarEIPTag                       = "METAL_EIP_TAG"
 	envVarAPIServerPort                = "METAL_API_SERVER_PORT"
 	envVarBGPNodeSelector              = "METAL_BGP_NODE_SELECTOR"
@@ -48,6 +50,8 @@ type Config struct {
 	AnnotationSrcIP              string  `json:"annotationSrcIP,omitEmpty"`
 	AnnotationBGPPass            string  `json:"annotationBGPPass,omitEmpty"`
 	AnnotationNetworkIPv4Private string  `json:"annotationNetworkIPv4Private,omitEmpty"`
+	AnnotationEIPMetro           string  `json:"annotationEIPMetro,omitEmpty"`
+	AnnotationEIPFacility        string  `json:"annotationEIPFacility,omitEmpty"`
 	EIPTag                       string  `json:"eipTag,omitEmpty"`
 	APIServerPort                int32   `json:"apiServerPort,omitEmpty"`
 	BGPNodeSelector              string  `json:"bgpNodeSelector,omitEmpty"`
@@ -133,14 +137,6 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 		return config, fmt.Errorf("environment variable %q is required", projectIDName)
 	}
 
-	// if facility was not defined, retrieve it from our metadata
-	if facility == "" && metro == "" {
-		metadata, err := GetAndParseMetadata("")
-		if err != nil {
-			return config, fmt.Errorf("metro and facility not set in environment variable %q and %q or config file, and error reading metadata: %v", facilityName, metroName, err)
-		}
-		metro = metadata.Metro
-	}
 	config.Facility = facility
 	config.Metro = metro
 
@@ -196,6 +192,18 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	annotationNetworkIPv4Private := os.Getenv(envVarAnnotationNetworkIPv4Private)
 	if annotationNetworkIPv4Private != "" {
 		config.AnnotationNetworkIPv4Private = annotationNetworkIPv4Private
+	}
+
+	config.AnnotationEIPMetro = DefaultAnnotationEIPMetro
+	annotationEIPMetro := os.Getenv(envVarAnnotationEIPMetro)
+	if annotationEIPMetro != "" {
+		config.AnnotationEIPMetro = annotationEIPMetro
+	}
+
+	config.AnnotationEIPFacility = DefaultAnnotationEIPFacility
+	annotationEIPFacility := os.Getenv(envVarAnnotationEIPFacility)
+	if annotationEIPFacility != "" {
+		config.AnnotationEIPFacility = annotationEIPFacility
 	}
 
 	if rawConfig.EIPTag != "" {
