@@ -270,17 +270,18 @@ func deviceByName(client *packngo.Client, projectID string, nodeName types.NodeN
 	}
 	devices, _, err := client.Devices.List(projectID, nil)
 	if err != nil {
+		klog.V(2).Infof("error listing devices for project %s: %v", projectID, err)
 		return nil, err
 	}
 
 	for _, device := range devices {
 		if device.Hostname == string(nodeName) {
-			klog.V(2).Infof("Found device for nodeName %s", nodeName)
-			klog.V(3).Infof("%#v", device)
+			klog.V(2).Infof("Found device %s for nodeName %s", device.ID, nodeName)
 			return &device, nil
 		}
 	}
 
+	klog.V(2).Infof("No device found for nodeName %s", nodeName)
 	return nil, cloudprovider.InstanceNotFound
 }
 
