@@ -2,7 +2,7 @@
 
 Thanks for your interest in improving this project! Before we get technical,
 make sure you have reviewed the [code of conduct](code-of-conduct.md),
-[Developer Certificate of Origin](DCO), and [OWNERS](OWNERS.md) files. Code will
+[Developer Certificate of Origin](https://developercertificate.org/), and [OWNERS](OWNERS.md) files. Code will
 be licensed according to [LICENSE](LICENSE).
 
 ## Pull Requests
