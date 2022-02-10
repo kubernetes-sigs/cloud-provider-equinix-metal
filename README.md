@@ -228,7 +228,6 @@ to system pods that have reasonable need to access them.
 
 The Kubernetes CCM for Equinix Metal deploys as a `Deployment` into your cluster with a replica of `1`. It provides the following services:
 
-* lists available zones, returning Equinix Metal regions
 * lists and retrieves instances by ID, returning Equinix Metal servers
 * manages load balancers
 

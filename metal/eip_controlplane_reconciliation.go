@@ -12,7 +12,10 @@ import (
 	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 )
 
@@ -48,29 +51,87 @@ type controlPlaneEndpointManager struct {
 	apiServerPort     int32 // node on which the EIP is listening
 	nodeAPIServerPort int32 // port on which the api server is listening on the control plane nodes
 	eipTag            string
-	instances         cloudInstances
+	instances         cloudprovider.InstancesV2
 	deviceIPSrv       packngo.DeviceIPService
 	ipResSvr          packngo.ProjectIPService
 	projectID         string
 	httpClient        *http.Client
 	k8sclient         kubernetes.Interface
+	stop              <-chan struct{}
 }
 
-func (m *controlPlaneEndpointManager) name() string {
-	return "controlPlaneEndpointManager"
-}
-
-func (m *controlPlaneEndpointManager) init(k8sclient kubernetes.Interface) error {
-	m.k8sclient = k8sclient
+func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan struct{}, eipTag, projectID string, deviceIPSrv packngo.DeviceIPService, ipResSvr packngo.ProjectIPService, i *instances, apiServerPort int32) (*controlPlaneEndpointManager, error) {
+	m := &controlPlaneEndpointManager{
+		httpClient: &http.Client{
+			Timeout: time.Second * 5,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}},
+		eipTag:        eipTag,
+		projectID:     projectID,
+		instances:     i,
+		ipResSvr:      ipResSvr,
+		deviceIPSrv:   deviceIPSrv,
+		apiServerPort: apiServerPort,
+		k8sclient:     k8sclient,
+		stop:          stop,
+	}
 	klog.V(2).Info("controlPlaneEndpointManager.init(): enabling BGP on project")
-	return nil
-}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-stop
+		cancel()
+	}()
 
-func (m *controlPlaneEndpointManager) nodeReconciler() nodeReconciler {
-	return m.reconcileNodes
-}
-func (m *controlPlaneEndpointManager) serviceReconciler() serviceReconciler {
-	return m.reconcileServices
+	sharedInformer := informers.NewSharedInformerFactory(k8sclient, checkLoopTimerSeconds*time.Second)
+	var watchers []cache.SharedIndexInformer
+	var name = "controlplaneEndpointManager"
+
+	// register to capture all new services
+	servicesInformer := sharedInformer.Core().V1().Services().Informer()
+	servicesInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			svc := obj.(*v1.Service)
+			if err := m.reconcileServices(ctx, []*v1.Service{svc}, ModeAdd); err != nil {
+				klog.Errorf("%s failed to update and sync service for add %s/%s: %v", name, svc.Namespace, svc.Name, err)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			svc := obj.(*v1.Service)
+			if err := m.reconcileServices(ctx, []*v1.Service{svc}, ModeRemove); err != nil {
+				klog.Errorf("%s failed to update and sync service for remove %s/%s: %v", name, svc.Namespace, svc.Name, err)
+			}
+		},
+	})
+
+	if servicesInformer != nil {
+		watchers = append(watchers, servicesInformer)
+	}
+
+	nodesInformer := sharedInformer.Core().V1().Nodes().Informer()
+	nodesInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			n := obj.(*v1.Node)
+			if err := m.reconcileNodes(ctx, []*v1.Node{n}, ModeAdd); err != nil {
+				klog.Errorf("%s failed to update and sync node for add %s for handler: %v", name, n.Name, err)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			n := obj.(*v1.Node)
+			if err := m.reconcileNodes(ctx, []*v1.Node{n}, ModeRemove); err != nil {
+				klog.Errorf("%s failed to update and sync node for remove %s for handler: %v", name, n.Name, err)
+			}
+		},
+	})
+	if nodesInformer != nil {
+		watchers = append(watchers, nodesInformer)
+	}
+
+	if err := startWatchers(ctx, watchers); err != nil {
+		return nil, fmt.Errorf("watchers initialization failed: %v", err)
+	}
+	return m, nil
+
 }
 
 func (m *controlPlaneEndpointManager) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
@@ -206,22 +267,6 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 	return errors.New("ccm didn't find a good candidate for IP allocation. Cluster is unhealthy")
 }
 
-func newControlPlaneEndpointManager(eipTag, projectID string, deviceIPSrv packngo.DeviceIPService, ipResSvr packngo.ProjectIPService, i cloudInstances, apiServerPort int32) *controlPlaneEndpointManager {
-	return &controlPlaneEndpointManager{
-		httpClient: &http.Client{
-			Timeout: time.Second * 5,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			}},
-		eipTag:        eipTag,
-		projectID:     projectID,
-		instances:     i,
-		ipResSvr:      ipResSvr,
-		deviceIPSrv:   deviceIPSrv,
-		apiServerPort: apiServerPort,
-	}
-}
-
 // reconcileServices ensure that our Elastic IP is assigned as `externalIPs` for
 // the `default/kubernetes` service
 func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svcs []*v1.Service, mode UpdateMode) error {
@@ -351,7 +396,7 @@ func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svc
 			}
 		} else {
 			klog.V(2).Infof("service %s did not exist, creating", externalServiceName)
-			if updatedService, err = svcIntf.Create(ctx, externalService, metav1.CreateOptions{}); err != nil {
+			if _, err := svcIntf.Create(ctx, externalService, metav1.CreateOptions{}); err != nil {
 				klog.Errorf("failed to create service: %v", err)
 				return fmt.Errorf("failed to create service: %v", err)
 			}
@@ -378,7 +423,7 @@ func (m *controlPlaneEndpointManager) reconcileServices(ctx context.Context, svc
 	}
 	// every sync should find default/kubernetes
 	if mode == ModeSync {
-		return fmt.Errorf("Service default/kubernetes not found")
+		return fmt.Errorf("service default/kubernetes not found")
 	}
 	return nil
 }

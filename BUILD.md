@@ -98,10 +98,10 @@ the initialization functions, as above, as well as registers the Equinix Metal p
 
 The `cloud struct` itself is created via `newCloud()`, also in [cloud.go](./metal/cloud.go). This
 initializes the `struct` with the `packngo.Client`, as well as `struct`s for each of the sub-components
-that are supported: [Zones](https://godoc.org/k8s.io/cloud-provider#Zones) and [Instances](https://godoc.org/k8s.io/cloud-provider#Instances). The specific logic for each of these is contained in its own file:
+that are supported: [LoadBalancer](https://pkg.go.dev/k8s.io/cloud-provider#LoadBalancer) and [InstancesV2](https://pkg.go.dev/k8s.io/cloud-provider#InstancesV2). The specific logic for each of these is contained in its own file:
 
-* `Instances`: [devices.go](./metal/devices.go)
-* `Zones`: [facilities.go](./metal/facilities.go)
+* `InstancesV2`: [devices.go](./metal/devices.go)
+* `LoadBalancer`: [loadbalancers.go](./metal/loadbalancers.go)
 
 The other calls to `cloud` return `nil`, indicating they are not supported.
 

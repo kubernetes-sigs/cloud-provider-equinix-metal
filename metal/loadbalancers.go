@@ -26,10 +26,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const (
-	bufferSize = 4096
-)
-
 type loadBalancers struct {
 	client                *packngo.Client
 	k8sclient             kubernetes.Interface
@@ -52,52 +48,46 @@ type loadBalancers struct {
 	nodeSelector          labels.Selector
 }
 
-func newLoadBalancers(client *packngo.Client, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector string) *loadBalancers {
+func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, stop <-chan struct{}, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector string) (*loadBalancers, error) {
 	selector := labels.Everything()
 	if nodeSelector != "" {
 		selector, _ = labels.Parse(nodeSelector)
 	}
 
-	return &loadBalancers{client, nil, projectID, metro, facility, "", nil, config, localASN, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, selector}
-}
+	l := &loadBalancers{client, k8sclient, projectID, metro, facility, "", nil, config, localASN, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, selector}
 
-func (l *loadBalancers) name() string {
-	return "loadbalancer"
-}
-func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
-	klog.V(2).Info("loadBalancers.init(): started")
 	// parse the implementor config and see what kind it is - allow for no config
 	if l.implementorConfig == "" {
 		klog.V(2).Info("loadBalancers.init(): no loadbalancer implementation config, skipping")
-		return nil
+		return nil, nil
 	}
 
 	l.k8sclient = k8sclient
 	// get the UID of the kube-system namespace
 	systemNamespace, err := k8sclient.CoreV1().Namespaces().Get(context.Background(), "kube-system", metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get kube-system namespace: %v", err)
+		return nil, fmt.Errorf("failed to get kube-system namespace: %v", err)
 	}
 	if systemNamespace == nil {
-		return fmt.Errorf("kube-system namespace is missing unexplainably")
+		return nil, fmt.Errorf("kube-system namespace is missing unexplainably")
 	}
 
 	u, err := url.Parse(l.implementorConfig)
 	if err != nil {
-		return fmt.Errorf("invalid config: %v", err)
+		return nil, fmt.Errorf("invalid config: %v", err)
 	}
-	config := u.Path
+	lbconfig := u.Path
 	var impl loadbalancers.LB
 	switch u.Scheme {
 	case "kube-vip":
 		klog.Info("loadbalancer implementation enabled: kube-vip")
-		impl = kubevip.NewLB(k8sclient, config)
+		impl = kubevip.NewLB(k8sclient, lbconfig)
 	case "metallb":
 		klog.Info("loadbalancer implementation enabled: metallb")
-		impl = metallb.NewLB(k8sclient, config)
+		impl = metallb.NewLB(k8sclient, lbconfig)
 	case "empty":
 		klog.Info("loadbalancer implementation enabled: empty, bgp only")
-		impl = empty.NewLB(k8sclient, config)
+		impl = empty.NewLB(k8sclient, lbconfig)
 	default:
 		klog.Info("loadbalancer implementation disabled")
 		impl = nil
@@ -106,7 +96,7 @@ func (l *loadBalancers) init(k8sclient kubernetes.Interface) error {
 	l.clusterID = string(systemNamespace.UID)
 	l.implementor = impl
 	klog.V(2).Info("loadBalancers.init(): complete")
-	return nil
+	return l, nil
 }
 
 // implementation of cloudprovider.LoadBalancer
@@ -272,14 +262,6 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 
 // utility funcs
 
-func (l *loadBalancers) nodeReconciler() nodeReconciler {
-	return nil
-}
-
-func (l *loadBalancers) serviceReconciler() serviceReconciler {
-	return nil
-}
-
 // annotateNode ensure a node has the correct annotations.
 func (l *loadBalancers) annotateNode(ctx context.Context, node *v1.Node) error {
 	klog.V(2).Infof("annotateNode: %s", node.Name)
@@ -363,7 +345,7 @@ func (l *loadBalancers) annotateNode(ctx context.Context, node *v1.Node) error {
 	})
 
 	if _, err := l.k8sclient.CoreV1().Nodes().Patch(ctx, node.Name, k8stypes.MergePatchType, mergePatch, metav1.PatchOptions{}); err != nil {
-		return fmt.Errorf("Failed to patch node with annotations %s: %v", node.Name, err)
+		return fmt.Errorf("failed to patch node with annotations %s: %v", node.Name, err)
 	}
 	klog.V(2).Infof("annotateNode %s: complete", node.Name)
 	return nil
