@@ -31,13 +31,12 @@ func (cfg *ConfigFile) Bytes() ([]byte, error) {
 }
 
 // AddPeer adds a peer. If a matching peer already exists, do not change anything
-// Returns if anything changed
+// Returns if anything changed.
 func (cfg *ConfigFile) AddPeer(add *Peer) bool {
 	// ignore empty peer; nothing to add
 	if add == nil {
 		return false
 	}
-	var found bool
 
 	// go through the peers and see if we have one that matches
 	// definition of a match is:
@@ -46,15 +45,41 @@ func (cfg *ConfigFile) AddPeer(add *Peer) bool {
 	// - Addr matches
 	// - NodeSelectors all match (but order is ignored)
 	for _, peer := range cfg.Peers {
-		if !peer.Equal(add) {
-			continue
+		if peer.Equal(add) {
+			return false
 		}
-		// they were equal, so we found a matcher
-		found = true
 	}
-	if found {
+	cfg.Peers = append(cfg.Peers, *add)
+	return true
+}
+
+// AddPeerByService adds a peer for a specific service.
+// If a matching peer already exists with the service, do not change anything.
+// If a matching peer already exists but does not have the service, add it.
+// Returns if anything changed.
+func (cfg *ConfigFile) AddPeerByService(add *Peer, svc string) bool {
+	var found bool
+	// ignore empty peer; nothing to add
+	if add == nil {
 		return false
 	}
+
+	// go through the peers and see if we have one that matches
+	// definition of a match is:
+	// - MyASN matches
+	// - ASN matches
+	// - Addr matches
+	// - NodeSelectors all match (but order is ignored)
+	for _, peer := range cfg.Peers {
+		if peer.EqualIgnoreService(add) {
+			found = true
+			peer.AddService(svc)
+		}
+	}
+	if found {
+		return true
+	}
+	add.AddService(svc)
 	cfg.Peers = append(cfg.Peers, *add)
 	return true
 }
@@ -75,9 +100,34 @@ func (cfg *ConfigFile) RemovePeer(remove *Peer) {
 	cfg.Peers = peers
 }
 
-// RemovePeerBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
+// RemovePeersByService remove peers from a particular service.
+// For any peers that have this services in the special MatchLabel, remove
+// the service from the label. If there are no services left on a peer, remove the
+// peer entirely.
+func (cfg *ConfigFile) RemovePeersByService(svc string) bool {
+	var changed bool
+	// go through the peers and see if we have a match
+	peers := make([]Peer, 0)
+	// remove that one, keep all others
+	for _, peer := range cfg.Peers {
+		// get the services for which this peer works
+		peerChanged, size := peer.RemoveService(svc)
+
+		// if not changed, or it has at least one service left, we can keep this node
+		if !peerChanged || size >= 1 {
+			peers = append(peers, peer)
+		}
+		if peerChanged || size <= 0 {
+			changed = true
+		}
+	}
+	cfg.Peers = peers
+	return changed
+}
+
+// RemovePeersBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
 // Returns if anything changed.
-func (cfg *ConfigFile) RemovePeerBySelector(remove *NodeSelector) bool {
+func (cfg *ConfigFile) RemovePeersBySelector(remove *NodeSelector) bool {
 	if remove == nil {
 		return false
 	}
@@ -253,6 +303,8 @@ func (n NodeSelectors) Less(i, j int) bool {
 func (n NodeSelectors) Swap(i, j int) {
 	n[i], n[j] = n[j], n[i]
 }
+
+// Equal return true if two sets of NodeSelectors are identical
 func (n NodeSelectors) Equal(o NodeSelectors) bool {
 	// not matched if the node selectors are of the wrong length
 	if len(n) != len(o) {
@@ -262,6 +314,43 @@ func (n NodeSelectors) Equal(o NodeSelectors) bool {
 	// copy so that our sort does not affect the original
 	n1 := n[:]
 	o1 := o[:]
+	sort.Sort(n1)
+	sort.Sort(o1)
+	for i, p := range n1 {
+		if !p.Equal(&o1[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualIgnoreService return true if two sets of NodeSelectors are identical,
+// except that the NodeSelector containing the special service label is ignored
+// in the first one.
+func (n NodeSelectors) EqualIgnoreService(o NodeSelectors) bool {
+	// create a new NodeSelectors that ignores a NodeSelector
+	// whose sole entry is a MatchLabels for the special service one.
+	var ns1, os1 NodeSelectors
+	for _, ns := range n {
+		if len(ns.MatchLabels) == 1 && len(ns.MatchExpressions) == 0 && ns.MatchLabels[serviceNameKey] != "" {
+			continue
+		}
+		ns1 = append(ns1, ns)
+	}
+	for _, ns := range o {
+		if len(ns.MatchLabels) == 1 && len(ns.MatchExpressions) == 0 && ns.MatchLabels[serviceNameKey] != "" {
+			continue
+		}
+		os1 = append(os1, ns)
+	}
+	// not matched if the node selectors are of the wrong length
+	if len(ns1) != len(os1) {
+		return false
+	}
+
+	// copy so that our sort does not affect the original
+	n1 := ns1[:]
+	o1 := os1[:]
 	sort.Sort(n1)
 	sort.Sort(o1)
 	for i, p := range n1 {
@@ -362,6 +451,7 @@ func (s SelectorRequirementsSlice) Equal(o SelectorRequirementsSlice) bool {
 	return true
 }
 
+// Equal return true if a peer is identical
 func (p *Peer) Equal(o *Peer) bool {
 	if o == nil {
 		return false
@@ -374,6 +464,111 @@ func (p *Peer) Equal(o *Peer) bool {
 
 	var pns, ons NodeSelectors = p.NodeSelectors, o.NodeSelectors
 	return pns.Equal(ons)
+}
+
+// EqualIgnoreService return true if a peer is identical except
+// for the special service label. Will only check for it in the current Peer
+// p, and not the "other" peer in the parameter.
+func (p *Peer) EqualIgnoreService(o *Peer) bool {
+	if o == nil {
+		return false
+	}
+	// not matched if any field is mismatched
+	if p.MyASN != o.MyASN || p.ASN != o.ASN || p.Addr != o.Addr || p.Port != o.Port || p.HoldTime != o.HoldTime ||
+		p.Password != o.Password || p.RouterID != o.RouterID {
+		return false
+	}
+
+	var pns, ons NodeSelectors = p.NodeSelectors, o.NodeSelectors
+	return pns.EqualIgnoreService(ons)
+}
+
+// Services list of services that this peer supports
+func (p *Peer) Services() []string {
+	for _, ns := range p.NodeSelectors {
+		for k, v := range ns.MatchLabels {
+			if k == serviceNameKey {
+				return strings.Split(v, ",")
+			}
+		}
+	}
+	return nil
+}
+
+// AddService ensures that the provided service is in the list of linked services.
+func (p *Peer) AddService(svc string) bool {
+	var (
+		found       bool
+		services    = map[string]bool{}
+		serviceList []string
+	)
+	for _, ns := range p.NodeSelectors {
+		for k, v := range ns.MatchLabels {
+			if k != serviceNameKey {
+				continue
+			}
+			found = true
+			for _, s := range strings.Split(v, ",") {
+				// if it already had it, nothing to do, nothing change
+				if s == svc {
+					return false
+				}
+				services[s] = true
+			}
+			services[svc] = true
+			for k := range services {
+				serviceList = append(serviceList, k)
+			}
+			sort.Strings(serviceList)
+			ns.MatchLabels[serviceNameKey] = strings.Join(serviceList, ",")
+			break
+		}
+	}
+	// if we did not find it, add it
+	if !found {
+		p.NodeSelectors = append(p.NodeSelectors, NodeSelector{
+			MatchLabels: map[string]string{
+				serviceNameKey: svc,
+			},
+		})
+	}
+	return true
+}
+
+// RemoveService removes a given service from the peer. Returns whether or not it was
+// changed, and how many services are left for this peer.
+func (p *Peer) RemoveService(svc string) (bool, int) {
+	var (
+		found bool
+		size  int
+	)
+	for _, ns := range p.NodeSelectors {
+		for k, v := range ns.MatchLabels {
+			if k != serviceNameKey {
+				continue
+			}
+			var (
+				services    = map[string]bool{}
+				serviceList []string
+			)
+			for _, s := range strings.Split(v, ",") {
+				// if it already had it, nothing to do, nothing change
+				if s != svc {
+					services[s] = true
+				} else {
+					found = true
+				}
+			}
+			for k := range services {
+				serviceList = append(serviceList, k)
+			}
+			sort.Strings(serviceList)
+			size = len(serviceList)
+			ns.MatchLabels[serviceNameKey] = strings.Join(serviceList, ",")
+			break
+		}
+	}
+	return found, size
 }
 
 func (p *Peer) Duplicate() Peer {

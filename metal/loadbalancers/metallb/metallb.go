@@ -16,6 +16,7 @@ import (
 
 const (
 	hostnameKey      = "kubernetes.io/hostname"
+	serviceNameKey   = "nomatch.metal.equinix.com/service-name"
 	defaultNamespace = "metallb-system"
 	defaultName      = "config"
 )
@@ -29,12 +30,8 @@ type LB struct {
 func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	var configmapnamespace, configmapname string
 	// it may have an extra slash at the beginning or end, so get rid of it
-	if strings.HasPrefix(config, "/") {
-		config = config[1:]
-	}
-	if strings.HasSuffix(config, "/") {
-		config = config[:len(config)-1]
-	}
+	config = strings.TrimPrefix(config, "/")
+	config = strings.TrimSuffix(config, "/")
 	cmparts := strings.SplitN(config, "/", 2)
 	if len(cmparts) >= 2 {
 		configmapnamespace, configmapname = cmparts[0], cmparts[1]
@@ -56,69 +53,78 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	}
 }
 
-func (l *LB) AddService(ctx context.Context, svc, ip string) error {
+func (l *LB) AddService(ctx context.Context, svc, ip string, nodes []loadbalancers.Node) error {
 	config, err := l.getConfigMap(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
 	}
 
 	// Update the service and configmap and save them
-	return mapIP(ctx, config, ip, svc, l.configMapName, l.configMapInterface)
-}
-
-func (l *LB) RemoveService(ctx context.Context, ip string) error {
-	config, err := l.getConfigMap(ctx)
+	err = mapIP(ctx, config, ip, svc, l.configMapName, l.configMapInterface)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
+		return fmt.Errorf("unable to map IP to service: %v", err)
 	}
-
-	return unmapIP(ctx, config, ip, l.configMapName, l.configMapInterface)
-}
-
-func (l *LB) SyncServices(ctx context.Context, ips map[string]bool) error {
-	config, err := l.getConfigMap(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
-	}
-
-	// get all IPs registered in the configmap; remove those not in our valid list
-	configIPs := getServiceAddresses(config)
-	klog.V(2).Infof("metallb.SyncServices(): actual configmap IPs %v", configIPs)
-	for _, ip := range configIPs {
-		if _, ok := ips[ip]; !ok {
-			klog.V(2).Infof("metallb.SyncServices(): removing from configmap ip %s not in valid list", ip)
-			if err := unmapIP(ctx, config, ip, l.configMapName, l.configMapInterface); err != nil {
-				return fmt.Errorf("error removing IP from configmap %s: %v", ip, err)
-			}
-		}
+	if err := l.addNodes(ctx, svc, nodes); err != nil {
+		return fmt.Errorf("failed to add nodes: %v", err)
 	}
 	return nil
 }
 
-// AddNode add a node with the provided name, srcIP, and bgp information
-func (l *LB) AddNode(ctx context.Context, nodeName string, localASN, peerASN int, password, srcIP string, peers ...string) error {
+func (l *LB) RemoveService(ctx context.Context, svc, ip string) error {
 	config, err := l.getConfigMap(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
 	}
 
-	ns := NodeSelector{
-		MatchLabels: map[string]string{
-			hostnameKey: nodeName,
-		},
+	// unmap the EIP
+	if err := unmapIP(ctx, config, ip, l.configMapName, l.configMapInterface); err != nil {
+		return fmt.Errorf("failed to remove IP: %v", err)
 	}
+
+	// remove any node entries for this service
+	// go through the peers and see if we have one with our hostname.
+	if config.RemovePeersByService(svc) {
+		return saveUpdatedConfigMap(ctx, l.configMapInterface, l.configMapName, config)
+	}
+	return nil
+}
+
+func (l *LB) UpdateService(ctx context.Context, svc string, nodes []loadbalancers.Node) error {
+	// find the service whose name matches the requested svc
+
+	// ensure nodes are correct
+	if err := l.addNodes(ctx, svc, nodes); err != nil {
+		return fmt.Errorf("failed to add nodes: %v", err)
+	}
+	return nil
+}
+
+// addNodes add one or more nodes with the provided name, srcIP, and bgp information
+func (l *LB) addNodes(ctx context.Context, svc string, nodes []loadbalancers.Node) error {
+	config, err := l.getConfigMap(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
+	}
+
 	var changed bool
-	for _, peer := range peers {
-		p := Peer{
-			MyASN:         uint32(localASN),
-			ASN:           uint32(peerASN),
-			Password:      password,
-			Addr:          peer,
-			SrcAddr:       srcIP,
-			NodeSelectors: []NodeSelector{ns},
+	for _, node := range nodes {
+		ns := []NodeSelector{
+			{MatchLabels: map[string]string{
+				hostnameKey: node.Name,
+			}},
 		}
-		if config.AddPeer(&p) {
-			changed = true
+		for _, peer := range node.Peers {
+			p := Peer{
+				MyASN:         uint32(node.LocalASN),
+				ASN:           uint32(node.PeerASN),
+				Password:      node.Password,
+				Addr:          peer,
+				SrcAddr:       node.SourceIP,
+				NodeSelectors: ns,
+			}
+			if config.AddPeerByService(&p, svc) {
+				changed = true
+			}
 		}
 	}
 	if changed {
@@ -140,47 +146,11 @@ func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
 		},
 	}
 	var changed bool
-	if config.RemovePeerBySelector(&selector) {
+	if config.RemovePeersBySelector(&selector) {
 		changed = true
 	}
 	if changed {
 		return saveUpdatedConfigMap(ctx, l.configMapInterface, l.configMapName, config)
-	}
-	return nil
-}
-
-// SyncNodes ensure that the list of nodes is only those with the matched names
-func (l *LB) SyncNodes(ctx context.Context, nodes map[string]loadbalancers.Node) error {
-	config, err := l.getConfigMap(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
-	}
-
-	// first remove every node from the configmap that is not in the provided nodes
-	configNodes := getNodes(config)
-	for _, node := range configNodes {
-		if _, ok := nodes[node]; !ok {
-			klog.V(2).Infof("metallb.SyncNodes(): removing node from configmap: %s", node)
-			if err := l.RemoveNode(ctx, node); err != nil {
-				klog.V(2).Infof("metallb.SyncNodes(): error removing node %s: %v", node, err)
-				continue
-			}
-		}
-	}
-	// now see if any nodes are missing
-	// get the list of nodes afresh
-	configNodes = getNodes(config)
-	configMap := map[string]bool{}
-	for _, node := range configNodes {
-		configMap[node] = true
-	}
-	for _, node := range nodes {
-		if _, ok := configMap[node.Name]; !ok {
-			if err := l.AddNode(ctx, node.Name, node.LocalASN, node.PeerASN, node.Password, node.SourceIP, node.Peers...); err != nil {
-				klog.V(2).Infof("loadbalancers.reconcileNodes(): error adding node %s: %v", node.Name, err)
-				continue
-			}
-		}
 	}
 	return nil
 }
@@ -252,30 +222,4 @@ func saveUpdatedConfigMap(ctx context.Context, cmi typedv1.ConfigMapInterface, n
 	_, err = cmi.Patch(ctx, name, k8stypes.MergePatchType, mergePatch, metav1.PatchOptions{})
 
 	return err
-}
-
-// getServiceAddresses get the IPs of services in the metallb configmap
-func getServiceAddresses(config *ConfigFile) []string {
-	ips := []string{}
-	pools := config.Pools
-	for _, p := range pools {
-		ips = append(ips, p.Addresses...)
-	}
-	return ips
-}
-
-// getNodes get the names of nodes in the metallb configmap
-func getNodes(config *ConfigFile) []string {
-	nodes := []string{}
-	peers := config.Peers
-	for _, p := range peers {
-		for _, selector := range p.NodeSelectors {
-			for k, v := range selector.MatchLabels {
-				if k == hostnameKey {
-					nodes = append(nodes, v)
-				}
-			}
-		}
-	}
-	return nodes
 }

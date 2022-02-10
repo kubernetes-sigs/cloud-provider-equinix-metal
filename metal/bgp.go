@@ -1,57 +1,31 @@
 package metal
 
 import (
-	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/packethost/packngo"
 	"github.com/pkg/errors"
 
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
 
 type bgp struct {
-	project            string
-	client             *packngo.Client
-	k8sclient          kubernetes.Interface
-	localASN           int
-	bgpPass            string
-	annotationLocalASN string
-	annotationPeerASN  string
-	annotationPeerIP   string
-	annotationSrcIP    string
-	annotationBgpPass  string
-	nodeSelector       labels.Selector
+	project   string
+	client    *packngo.Client
+	k8sclient kubernetes.Interface
+	localASN  int
+	bgpPass   string
 }
 
-func newBGP(client *packngo.Client, project string, localASN int, bgpPass string, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass string, nodeSelector string) *bgp {
-
-	selector := labels.Everything()
-	if nodeSelector != "" {
-		selector, _ = labels.Parse(nodeSelector)
-	}
+func newBGP(client *packngo.Client, project string, localASN int, bgpPass string) *bgp {
 
 	return &bgp{
-		project:            project,
-		client:             client,
-		localASN:           localASN,
-		bgpPass:            bgpPass,
-		annotationLocalASN: annotationLocalASN,
-		annotationPeerASN:  annotationPeerASN,
-		annotationPeerIP:   annotationPeerIP,
-		annotationSrcIP:    annotationSrcIP,
-		annotationBgpPass:  annotationBgpPass,
-		nodeSelector:       selector,
+		project:  project,
+		client:   client,
+		localASN: localASN,
+		bgpPass:  bgpPass,
 	}
 }
 
@@ -69,136 +43,9 @@ func (b *bgp) init(k8sclient kubernetes.Interface) error {
 	return nil
 }
 func (b *bgp) nodeReconciler() nodeReconciler {
-	return b.reconcileNodes
-}
-func (b *bgp) serviceReconciler() serviceReconciler {
 	return nil
 }
-
-// reconcileNodes ensures each node has the annotations showing the peer address
-// and ASN. MetalLB currently does not use this, although it is in process, see
-// http://github.com/metallb/metallb/pull/593 . Once that is in, we will not
-// need to update the configmap.
-func (b *bgp) reconcileNodes(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error {
-	filteredNodes := []*v1.Node{}
-
-	for _, node := range nodes {
-		if b.nodeSelector.Matches(labels.Set(node.Labels)) {
-			filteredNodes = append(filteredNodes, node)
-		}
-	}
-
-	nodeNames := []string{}
-	for _, node := range filteredNodes {
-		nodeNames = append(nodeNames, node.Name)
-	}
-	klog.V(2).Infof("bgp.reconcileNodes(): called for nodes %v", nodeNames)
-	// whether adding or syncing, we just enable bgp. Nothing to do when we remove.
-	switch mode {
-	case ModeAdd, ModeSync:
-		for _, node := range filteredNodes {
-			klog.V(2).Infof("bgp.reconcileNodes(): add node %s", node.Name)
-			// get the node provider ID
-			id := node.Spec.ProviderID
-			if id == "" {
-				return fmt.Errorf("no provider ID given")
-			}
-			klog.V(2).Infof("bgp.reconcileNodes(): enabling BGP on node %s", node.Name)
-			// ensure BGP is enabled for the node
-			if err := ensureNodeBGPEnabled(id, b.client); err != nil {
-				return fmt.Errorf("could not ensure BGP enabled for node %s: %v", node.Name, err)
-			}
-			klog.V(2).Infof("bgp.reconcileNodes(): bgp enabled on node %s", node.Name)
-
-			// add annotations for bgp
-			klog.V(2).Infof("bgp.reconcileNodes(): setting annotations on node %s", node.Name)
-			// get the bgp info
-			peer, err := getNodeBGPConfig(id, b.client)
-			switch {
-			case err != nil || peer == nil:
-				klog.Errorf("bgp.reconcileNodes(): could not get BGP info for node %s: %v", node.Name, err)
-			case len(peer.PeerIps) == 0:
-				klog.Errorf("bgp.reconcileNodes(): got BGP info for node %s but it had no peer IPs", node.Name)
-			default:
-				// the localASN and peerASN are the same across peers
-				localASN := strconv.Itoa(peer.CustomerAs)
-				peerASN := strconv.Itoa(peer.PeerAs)
-				bgpPass := base64.StdEncoding.EncodeToString([]byte(peer.Md5Password))
-
-				// we always set the peer IPs as a sorted list, so that 0, 1, n are
-				// consistent in ordering
-				pips := peer.PeerIps
-				sort.Strings(pips)
-				var (
-					i  int
-					ip string
-				)
-				oldAnnotations := node.Annotations
-				if oldAnnotations == nil {
-					oldAnnotations = make(map[string]string)
-				}
-				newAnnotations := make(map[string]string)
-
-				// ensure all of the data we have is in the annotations, either
-				// adding or replacing
-				for i, ip = range pips {
-					annotationLocalASN := strings.Replace(b.annotationLocalASN, "{{n}}", strconv.Itoa(i), 1)
-					annotationPeerASN := strings.Replace(b.annotationPeerASN, "{{n}}", strconv.Itoa(i), 1)
-					annotationPeerIP := strings.Replace(b.annotationPeerIP, "{{n}}", strconv.Itoa(i), 1)
-					annotationSrcIP := strings.Replace(b.annotationSrcIP, "{{n}}", strconv.Itoa(i), 1)
-					annotationBgpPass := strings.Replace(b.annotationBgpPass, "{{n}}", strconv.Itoa(i), 1)
-
-					val, ok := oldAnnotations[annotationLocalASN]
-					if !ok || val != localASN {
-						newAnnotations[annotationLocalASN] = localASN
-					}
-
-					val, ok = oldAnnotations[annotationPeerASN]
-					if !ok || val != peerASN {
-						newAnnotations[annotationPeerASN] = peerASN
-					}
-
-					val, ok = oldAnnotations[annotationPeerIP]
-					if !ok || val != ip {
-						newAnnotations[annotationPeerIP] = ip
-					}
-
-					val, ok = oldAnnotations[annotationSrcIP]
-					if !ok || val != peer.CustomerIP {
-						newAnnotations[annotationSrcIP] = peer.CustomerIP
-					}
-					val, ok = oldAnnotations[annotationBgpPass]
-					if !ok || val != bgpPass {
-						newAnnotations[annotationBgpPass] = bgpPass
-					}
-				}
-
-				// TODO: ensure that any old ones that are not in the new data are removed
-				// for now, since there are consistently two upstream nodes, we will not bother
-				// it gets complex, because we need to match patterns. It is not worth the effort for now.
-
-				// patch the node with the new annotations
-				if len(newAnnotations) > 0 {
-					mergePatch, _ := json.Marshal(map[string]interface{}{
-						"metadata": map[string]interface{}{
-							"annotations": newAnnotations,
-						},
-					})
-
-					if err := patchUpdatedNode(ctx, node.Name, mergePatch, b.k8sclient); err != nil {
-						klog.Errorf("bgp.reconcileNodes(): failed to save updated node with annotations %s: %v", node.Name, err)
-					} else {
-						klog.V(2).Infof("bgp.reconcileNodes(): annotations set on node %s", node.Name)
-					}
-				} else {
-					klog.V(2).Infof("bgp.reconcileNodes(): no change to annotations for %s", node.Name)
-				}
-			}
-		}
-	case ModeRemove:
-		klog.V(2).Info("bgp.reconcileNodes(): nothing to do for removing nodes")
-	}
-	klog.V(2).Info("bgp.reconcileNodes(): complete")
+func (b *bgp) serviceReconciler() serviceReconciler {
 	return nil
 }
 
@@ -266,12 +113,4 @@ func getNodeBGPConfig(providerID string, client *packngo.Client) (peer *packngo.
 		}
 	}
 	return nil, errors.New("no matching ipv4 neighbour found")
-}
-
-// patchUpdatedNode apply a patch to the node
-func patchUpdatedNode(ctx context.Context, name string, patch []byte, client kubernetes.Interface) error {
-	if _, err := client.CoreV1().Nodes().Patch(ctx, name, k8stypes.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
-		return fmt.Errorf("Failed to patch node %s: %v", name, err)
-	}
-	return nil
 }

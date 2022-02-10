@@ -65,7 +65,7 @@ func createServicesWatcher(ctx context.Context, informer informers.SharedInforme
 		DeleteFunc: func(obj interface{}) {
 			svc := obj.(*v1.Service)
 			for _, csvc := range cloudServices {
-				if handler := csvc.serviceReconciler(); svc != nil {
+				if handler := csvc.serviceReconciler(); handler != nil {
 					if err := handler(ctx, []*v1.Service{svc}, ModeRemove); err != nil {
 						klog.Errorf("%s failed to update and sync service for remove %s/%s: %v", csvc.name(), svc.Namespace, svc.Name, err)
 					}

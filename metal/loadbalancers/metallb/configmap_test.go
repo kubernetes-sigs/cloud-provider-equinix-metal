@@ -1,6 +1,7 @@
 package metallb
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -29,6 +30,58 @@ func TestConfigFileAddPeer(t *testing.T) {
 		cfg.AddPeer(&tt.peer)
 		if len(cfg.Peers) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
+		}
+	}
+}
+
+func TestConfigFileAddPeerByService(t *testing.T) {
+	peers := []Peer{
+		genPeer("a"),
+		genPeer("a"),
+	}
+	cfg := ConfigFile{
+		Peers: peers,
+	}
+
+	tests := []struct {
+		peer             Peer
+		total            int
+		index            int
+		addService       string
+		expectedServices []string
+		message          string
+	}{
+		{peers[0], len(peers), 0, "a", []string{"a"}, "add existing peer with existing service"},
+		{peers[1], len(peers), 1, "b", []string{"a", "b"}, "add existing peer with new service"},
+		{genPeer(), len(peers) + 1, len(peers), "c", []string{"c"}, "add new peer"},
+	}
+
+	for i, tt := range tests {
+		// get a clean set of peers
+		cfg.Peers = peers[:]
+		cfg.AddPeerByService(&tt.peer, tt.addService)
+		// make sure the number of peers is as expected
+		if len(cfg.Peers) != tt.total {
+			t.Fatalf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
+		}
+		// make sure the particular peer has the right services annotated
+		p := cfg.Peers[tt.index]
+		// get the correct node selector
+		var found bool
+		for _, ns := range p.NodeSelectors {
+			for k, v := range ns.MatchLabels {
+				if k == serviceNameKey {
+					found = true
+					// look for the desired service
+					svcs := strings.Split(v, ",")
+					if !reflect.DeepEqual(svcs, tt.expectedServices) {
+						t.Fatalf("%d: mismatched services, actual %v, expected %v", i, svcs, tt.expectedServices)
+					}
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("%d: could not find node selector with the right services label: %s", i, serviceNameKey)
 		}
 	}
 }
@@ -62,7 +115,57 @@ func TestConfigFileRemovePeer(t *testing.T) {
 	}
 }
 
-func TestConfigFileRemovePeerBySelector(t *testing.T) {
+func TestConfigFileRemovePeersByService(t *testing.T) {
+	services := [][]string{
+		{"a"},
+		{"a", "b"},
+		{"c"},
+	}
+
+	tests := []struct {
+		left    [][]string
+		svc     string
+		message string
+	}{
+		{services[0:2], "c", "remove lone service from existing peer"},
+		{services, "b", "remove non-lone service from existent peer"},
+		{services[1:3], "a", "remove service from multiple peers"},
+		{services[:], "d", "remove service from non-existent peer"},
+	}
+
+	for i, tt := range tests {
+		// get a clean set of peers
+		var peers []Peer
+		for _, list := range services {
+			peers = append(peers, genPeer(list...))
+		}
+		cfg := ConfigFile{
+			Peers: peers,
+		}
+		cfg.RemovePeersByService(tt.svc)
+		if len(cfg.Peers) != len(tt.left) {
+			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), len(tt.left), tt.message)
+		}
+		// make sure no peer has the removed service annotated
+		for _, p := range cfg.Peers {
+			for _, ns := range p.NodeSelectors {
+				for k, v := range ns.MatchLabels {
+					if k == serviceNameKey {
+						// look for the desired service
+						svcs := strings.Split(v, ",")
+						for _, s := range svcs {
+							if s == tt.svc {
+								t.Errorf("%d: still has service '%s' after removal, list: %s", i, tt.svc, svcs)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestConfigFileRemovePeersBySelector(t *testing.T) {
 	peers := []Peer{
 		genPeer(),
 		genPeer(),
@@ -84,7 +187,7 @@ func TestConfigFileRemovePeerBySelector(t *testing.T) {
 	for i, tt := range tests {
 		// get a clean set of peers
 		cfg.Peers = peers[:]
-		cfg.RemovePeerBySelector(&tt.selector)
+		cfg.RemovePeersBySelector(&tt.selector)
 		if len(cfg.Peers) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
 		}
@@ -154,10 +257,7 @@ func TestConfigFileRemoveAddressPool(t *testing.T) {
 	unjoinedPoolOld.Name = "oldName"
 	unjoinedPoolNew := joinedPool.Duplicate()
 	unjoinedPoolNew.Name = "newName"
-	var modifiedPools []AddressPool
-	for _, pool := range pools {
-		modifiedPools = append(modifiedPools, pool)
-	}
+	modifiedPools := pools[:]
 	modifiedPools[2] = unjoinedPoolNew
 
 	tests := []struct {

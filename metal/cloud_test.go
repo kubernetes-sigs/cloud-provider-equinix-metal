@@ -74,8 +74,8 @@ func TestLoadBalancer(t *testing.T) {
 	vc, _ := testGetValidCloud(t)
 	response, supported := vc.LoadBalancer()
 	var (
-		expectedSupported = false
-		expectedResponse  cloudprovider.LoadBalancer // defaults to nil
+		expectedSupported = true
+		expectedResponse  = response
 	)
 	if supported != expectedSupported {
 		t.Errorf("supported returned %v instead of expected %v", supported, expectedSupported)
