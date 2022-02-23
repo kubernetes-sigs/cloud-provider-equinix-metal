@@ -11,7 +11,6 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 )
@@ -28,20 +27,6 @@ var (
 
 func newInstances(client *packngo.Client, projectID string) *instances {
 	return &instances{client: client, project: projectID}
-}
-
-// cloudService implementation
-func (i *instances) name() string {
-	return "instances"
-}
-func (i *instances) init(k8sclient kubernetes.Interface) error {
-	return nil
-}
-func (i *instances) nodeReconciler() nodeReconciler {
-	return nil
-}
-func (i *instances) serviceReconciler() serviceReconciler {
-	return nil
 }
 
 // cloudprovider.Instances interface implementation

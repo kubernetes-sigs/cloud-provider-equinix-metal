@@ -362,7 +362,7 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		exists, err := inst.InstanceExists(nil, testNode(tt.id, nodeName))
+		exists, err := inst.InstanceExists(context.TODO(), testNode(tt.id, nodeName))
 		switch {
 		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 			t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)

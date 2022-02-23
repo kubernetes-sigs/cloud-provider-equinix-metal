@@ -19,34 +19,22 @@ type bgp struct {
 	bgpPass   string
 }
 
-func newBGP(client *packngo.Client, project string, localASN int, bgpPass string) *bgp {
+func newBGP(client *packngo.Client, k8sclient kubernetes.Interface, stop <-chan struct{}, project string, localASN int, bgpPass string) (*bgp, error) {
 
-	return &bgp{
-		project:  project,
-		client:   client,
-		localASN: localASN,
-		bgpPass:  bgpPass,
+	b := &bgp{
+		client:    client,
+		k8sclient: k8sclient,
+		project:   project,
+		localASN:  localASN,
+		bgpPass:   bgpPass,
 	}
-}
-
-func (b *bgp) name() string {
-	return "bgp"
-}
-func (b *bgp) init(k8sclient kubernetes.Interface) error {
-	b.k8sclient = k8sclient
 	// enable BGP
 	klog.V(2).Info("bgp.init(): enabling BGP on project")
 	if err := b.enableBGP(); err != nil {
-		return fmt.Errorf("failed to enable BGP on project %s: %v", b.project, err)
+		return nil, fmt.Errorf("failed to enable BGP on project %s: %v", b.project, err)
 	}
 	klog.V(2).Info("bgp.init(): BGP enabled")
-	return nil
-}
-func (b *bgp) nodeReconciler() nodeReconciler {
-	return nil
-}
-func (b *bgp) serviceReconciler() serviceReconciler {
-	return nil
+	return b, nil
 }
 
 // enableBGP enable bgp on the project

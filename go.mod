@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/go-hclog v0.12.0 // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.6
-	github.com/packethost/packet-api-server v0.0.0-20200706140707-f0f79ef89944
+	github.com/packethost/packet-api-server v0.0.0-20220212175623-ae51b225eb75
 	github.com/packethost/packngo v0.20.0
 	github.com/pallinder/go-randomdata v1.2.0
 	github.com/pkg/errors v0.9.1

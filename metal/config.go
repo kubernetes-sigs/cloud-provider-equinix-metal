@@ -44,17 +44,17 @@ type Config struct {
 	Facility                     string  `json:"facility,omitempty"`
 	LocalASN                     int     `json:"localASN,omitempty"`
 	BGPPass                      string  `json:"bgpPass,omitempty"`
-	AnnotationLocalASN           string  `json:"annotationLocalASN,omitEmpty"`
-	AnnotationPeerASN            string  `json:"annotationPeerASN,omitEmpty"`
-	AnnotationPeerIP             string  `json:"annotationPeerIP,omitEmpty"`
-	AnnotationSrcIP              string  `json:"annotationSrcIP,omitEmpty"`
-	AnnotationBGPPass            string  `json:"annotationBGPPass,omitEmpty"`
-	AnnotationNetworkIPv4Private string  `json:"annotationNetworkIPv4Private,omitEmpty"`
-	AnnotationEIPMetro           string  `json:"annotationEIPMetro,omitEmpty"`
-	AnnotationEIPFacility        string  `json:"annotationEIPFacility,omitEmpty"`
-	EIPTag                       string  `json:"eipTag,omitEmpty"`
-	APIServerPort                int32   `json:"apiServerPort,omitEmpty"`
-	BGPNodeSelector              string  `json:"bgpNodeSelector,omitEmpty"`
+	AnnotationLocalASN           string  `json:"annotationLocalASN,omitempty"`
+	AnnotationPeerASN            string  `json:"annotationPeerASN,omitempty"`
+	AnnotationPeerIP             string  `json:"annotationPeerIP,omitempty"`
+	AnnotationSrcIP              string  `json:"annotationSrcIP,omitempty"`
+	AnnotationBGPPass            string  `json:"annotationBGPPass,omitempty"`
+	AnnotationNetworkIPv4Private string  `json:"annotationNetworkIPv4Private,omitempty"`
+	AnnotationEIPMetro           string  `json:"annotationEIPMetro,omitempty"`
+	AnnotationEIPFacility        string  `json:"annotationEIPFacility,omitempty"`
+	EIPTag                       string  `json:"eipTag,omitempty"`
+	APIServerPort                int32   `json:"apiServerPort,omitempty"`
+	BGPNodeSelector              string  `json:"bgpNodeSelector,omitempty"`
 }
 
 // String converts the Config structure to a string, while masking hidden fields.

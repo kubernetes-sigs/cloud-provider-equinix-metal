@@ -1,16 +1,11 @@
 package metal
 
 import (
-	"context"
 	"fmt"
 	"io"
 
 	"github.com/packethost/packngo"
 
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/component-base/version"
 	"k8s.io/klog/v2"
@@ -24,40 +19,18 @@ const (
 	deprecatedProviderName string = "packet"
 
 	// ConsumerToken token for metal consumer
-	ConsumerToken         string = "cloud-provider-equinix-metal"
-	checkLoopTimerSeconds        = 60
+	ConsumerToken string = "cloud-provider-equinix-metal"
+
+	// checkLoopTimerSeconds how often to resync the kubernetes informers, in seconds
+	checkLoopTimerSeconds = 60
 )
-
-type nodeReconciler func(ctx context.Context, nodes []*v1.Node, mode UpdateMode) error
-type serviceReconciler func(ctx context.Context, services []*v1.Service, mode UpdateMode) error
-
-// cloudService an internal service that can be initialize and report a name
-type cloudService interface {
-	name() string
-	init(k8sclient kubernetes.Interface) error
-	nodeReconciler() nodeReconciler
-	serviceReconciler() serviceReconciler
-}
-
-type cloudInstances interface {
-	cloudprovider.InstancesV2
-	cloudService
-}
-type cloudLoadBalancers interface {
-	cloudprovider.LoadBalancer
-	cloudService
-}
-type cloudZones interface {
-	cloudprovider.Zones
-	cloudService
-}
 
 // cloud implements cloudprovider.Interface
 type cloud struct {
 	client                      *packngo.Client
-	instances                   cloudInstances
-	zones                       cloudZones
-	loadBalancer                cloudLoadBalancers
+	config                      Config
+	instances                   cloudprovider.InstancesV2
+	loadBalancer                cloudprovider.LoadBalancer
 	metro                       string
 	facility                    string
 	controlPlaneEndpointManager *controlPlaneEndpointManager
@@ -68,16 +41,9 @@ type cloud struct {
 var _ cloudprovider.Interface = (*cloud)(nil)
 
 func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
-	i := newInstances(client, metalConfig.ProjectID)
 	return &cloud{
-		client:                      client,
-		metro:                       metalConfig.Metro,
-		facility:                    metalConfig.Facility,
-		instances:                   i,
-		zones:                       newZones(client, metalConfig.ProjectID),
-		loadBalancer:                newLoadBalancers(client, metalConfig.ProjectID, metalConfig.Metro, metalConfig.Facility, metalConfig.LoadBalancerSetting, metalConfig.LocalASN, metalConfig.BGPPass, metalConfig.AnnotationNetworkIPv4Private, metalConfig.AnnotationLocalASN, metalConfig.AnnotationPeerASN, metalConfig.AnnotationPeerIP, metalConfig.AnnotationSrcIP, metalConfig.AnnotationBGPPass, metalConfig.AnnotationEIPMetro, metalConfig.AnnotationEIPMetro, metalConfig.BGPNodeSelector),
-		bgp:                         newBGP(client, metalConfig.ProjectID, metalConfig.LocalASN, metalConfig.BGPPass),
-		controlPlaneEndpointManager: newControlPlaneEndpointManager(metalConfig.EIPTag, metalConfig.ProjectID, client.DeviceIPs, client.ProjectIPs, i, metalConfig.APIServerPort),
+		client: client,
+		config: metalConfig,
 	}, nil
 }
 
@@ -100,15 +66,10 @@ func init() {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create new cloud handler: %v", err)
 		}
+		// note that this is not fully initialized until it calls cloud.Initialize()
 
 		return cloud, nil
 	})
-}
-
-// services get those elements that are initializable
-func (c *cloud) services() []cloudService {
-	// only controlPlaneEndpointManager still does reconcilers
-	return []cloudService{c.controlPlaneEndpointManager, c.loadBalancer, c.bgp}
 }
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn goroutines
@@ -116,40 +77,29 @@ func (c *cloud) services() []cloudService {
 func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
 	klog.V(5).Info("called Initialize")
 	clientset := clientBuilder.ClientOrDie("cloud-provider-equinix-metal-shared-informers")
-	sharedInformer := informers.NewSharedInformerFactory(clientset, 0)
-	// if we have services that want to reconcile, we will start node loop
-	services := c.services()
-	for _, elm := range services {
-		if err := elm.init(clientset); err != nil {
-			klog.Fatalf("could not initialize %s: %v", elm.name(), err)
-		}
+
+	// initialize the individual services
+	i := newInstances(c.client, c.config.ProjectID)
+	epm, err := newControlPlaneEndpointManager(clientset, stop, c.config.EIPTag, c.config.ProjectID, c.client.DeviceIPs, c.client.ProjectIPs, i, c.config.APIServerPort)
+	if err != nil {
+		klog.Fatalf("could not initialize ControlPlaneEndpointManager: %v", err)
+	}
+	bgp, err := newBGP(c.client, clientset, stop, c.config.ProjectID, c.config.LocalASN, c.config.BGPPass)
+	if err != nil {
+		klog.Fatalf("could not initialize BGP: %v", err)
+	}
+	lb, err := newLoadBalancers(c.client, clientset, stop, c.config.ProjectID, c.config.Metro, c.config.Facility, c.config.LoadBalancerSetting, c.config.LocalASN, c.config.BGPPass, c.config.AnnotationNetworkIPv4Private, c.config.AnnotationLocalASN, c.config.AnnotationPeerASN, c.config.AnnotationPeerIP, c.config.AnnotationSrcIP, c.config.AnnotationBGPPass, c.config.AnnotationEIPMetro, c.config.AnnotationEIPMetro, c.config.BGPNodeSelector)
+	if err != nil {
+		klog.Fatalf("could not initialize LoadBalancers: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-stop
-		cancel()
-	}()
+	c.metro = c.config.Metro
+	c.facility = c.config.Facility
+	c.loadBalancer = lb
+	c.bgp = bgp
+	c.instances = i
+	c.controlPlaneEndpointManager = epm
 
-	var watchers []cache.SharedIndexInformer
-	nodesWatcher, err := createNodesWatcher(ctx, sharedInformer, services)
-	if err != nil {
-		klog.Fatalf("nodes watcher initialization failed: %v", err)
-	}
-	if nodesWatcher != nil {
-		watchers = append(watchers, nodesWatcher)
-	}
-	servicesWatcher, err := createServicesWatcher(ctx, sharedInformer, services)
-	if err != nil {
-		klog.Fatalf("services watcher initialization failed: %v", err)
-	}
-	if servicesWatcher != nil {
-		watchers = append(watchers, servicesWatcher)
-	}
-	if err := startWatchers(ctx, watchers); err != nil {
-		klog.Fatalf("watchers initialization failed: %v", err)
-	}
-	go timerLoop(ctx, sharedInformer, services)
 	klog.Info("Initialize of cloud provider complete")
 }
 
@@ -173,9 +123,10 @@ func (c *cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
 }
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.
+// DEPRECATED. Will not be called if InstancesV2 is implemented
 func (c *cloud) Zones() (cloudprovider.Zones, bool) {
 	klog.V(5).Info("called Zones")
-	return c.zones, true
+	return nil, false
 }
 
 // Clusters returns a clusters interface.  Also returns true if the interface is supported, false otherwise.
