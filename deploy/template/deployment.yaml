@@ -91,6 +91,7 @@ rules:
   - list
   - watch
   - update
+  - patch
 - apiGroups:
   # reason: so ccm can read and update nodes and annotations
   - ""
