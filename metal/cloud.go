@@ -51,7 +51,7 @@ func init() {
 		metalConfig, err := getMetalConfig(config)
 		// register the provider
 		if err != nil {
-			return nil, fmt.Errorf("provider config error: %v", err)
+			return nil, fmt.Errorf("provider config error: %w", err)
 		}
 
 		// report the config
@@ -62,7 +62,7 @@ func init() {
 		client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), client.UserAgent)
 		cloud, err := newCloud(metalConfig, client)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create new cloud handler: %v", err)
+			return nil, fmt.Errorf("failed to create new cloud handler: %w", err)
 		}
 		// note that this is not fully initialized until it calls cloud.Initialize()
 

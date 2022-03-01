@@ -1,12 +1,11 @@
 package metal
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/packethost/packngo"
-	"github.com/pkg/errors"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -31,7 +30,7 @@ func newBGP(client *packngo.Client, k8sclient kubernetes.Interface, project stri
 	// enable BGP
 	klog.V(2).Info("bgp.init(): enabling BGP on project")
 	if err := b.enableBGP(); err != nil {
-		return nil, fmt.Errorf("failed to enable BGP on project %s: %v", b.project, err)
+		return nil, fmt.Errorf("failed to enable BGP on project %s: %w", b.project, err)
 	}
 	klog.V(2).Info("bgp.init(): BGP enabled")
 	return b, nil
@@ -92,7 +91,7 @@ func getNodeBGPConfig(providerID string, client *packngo.Client) (peer *packngo.
 	}
 	neighbours, _, err := client.Devices.ListBGPNeighbors(id, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get device neighbours for device %s: %v", id, err)
+		return nil, fmt.Errorf("failed to get device neighbours for device %s: %w", id, err)
 	}
 	// we need the ipv4 neighbour
 	for _, n := range neighbours {
