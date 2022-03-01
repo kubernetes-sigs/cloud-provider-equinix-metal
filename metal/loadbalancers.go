@@ -48,7 +48,7 @@ type loadBalancers struct {
 	nodeSelector          labels.Selector
 }
 
-func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, stop <-chan struct{}, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector string) (*loadBalancers, error) {
+func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector string) (*loadBalancers, error) {
 	selector := labels.Everything()
 	if nodeSelector != "" {
 		selector, _ = labels.Parse(nodeSelector)
@@ -62,7 +62,6 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, st
 		return nil, nil
 	}
 
-	l.k8sclient = k8sclient
 	// get the UID of the kube-system namespace
 	systemNamespace, err := k8sclient.CoreV1().Namespaces().Get(context.Background(), "kube-system", metav1.GetOptions{})
 	if err != nil {
@@ -511,6 +510,7 @@ func serviceTag(svc *v1.Service) string {
 	hash := sha256.Sum256([]byte(serviceRep(svc)))
 	return fmt.Sprintf("service=%s", base64.StdEncoding.EncodeToString(hash[:]))
 }
+
 func clusterTag(clusterID string) string {
 	return fmt.Sprintf("cluster=%s", clusterID)
 }

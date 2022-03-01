@@ -19,7 +19,7 @@ type bgp struct {
 	bgpPass   string
 }
 
-func newBGP(client *packngo.Client, k8sclient kubernetes.Interface, stop <-chan struct{}, project string, localASN int, bgpPass string) (*bgp, error) {
+func newBGP(client *packngo.Client, k8sclient kubernetes.Interface, project string, localASN int, bgpPass string) (*bgp, error) {
 
 	b := &bgp{
 		client:    client,

@@ -31,7 +31,6 @@ const (
 	envVarEIPTag                       = "METAL_EIP_TAG"
 	envVarAPIServerPort                = "METAL_API_SERVER_PORT"
 	envVarBGPNodeSelector              = "METAL_BGP_NODE_SELECTOR"
-	defaultLoadBalancerConfigMap       = "metallb-system:config"
 )
 
 // Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different Equinix Metal API endpoint
@@ -113,10 +112,6 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	// rule for processing: any setting in env var overrides setting from file
 	if loadBalancerSetting != "" {
 		config.LoadBalancerSetting = loadBalancerSetting
-	}
-	// and set for default
-	if config.LoadBalancerSetting == "" {
-		config.LoadBalancerSetting = defaultLoadBalancerConfigMap
 	}
 
 	facility := os.Getenv(facilityName)
