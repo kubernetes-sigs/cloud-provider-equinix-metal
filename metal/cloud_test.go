@@ -74,7 +74,7 @@ func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
 		},
 	}
 	// ensure we have a single region
-	backend.CreateFacility(validZoneName, validZoneCode)
+	_, _ = backend.CreateFacility(validZoneName, validZoneCode)
 	ts := httptest.NewServer(fake.CreateHandler())
 
 	url, _ := url.Parse(ts.URL)
