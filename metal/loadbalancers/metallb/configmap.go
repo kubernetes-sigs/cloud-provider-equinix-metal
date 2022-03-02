@@ -20,7 +20,7 @@ const (
 func ParseConfig(bs []byte) (*ConfigFile, error) {
 	var raw ConfigFile
 	if err := yaml.Unmarshal(bs, &raw); err != nil {
-		return nil, fmt.Errorf("could not parse config: %s", err)
+		return nil, fmt.Errorf("could not parse config: %w", err)
 	}
 
 	return &raw, nil

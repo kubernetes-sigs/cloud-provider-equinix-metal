@@ -1,8 +1,6 @@
 package metal
 
 const (
-	configMapResource                   = "configmaps"
-	hostnameKey                         = "kubernetes.io/hostname"
 	emIdentifier                        = "cloud-provider-equinix-metal-auto"
 	emTag                               = "usage=" + emIdentifier
 	ccmIPDescription                    = "Equinix Metal Kubernetes CCM auto-generated for Load Balancer"

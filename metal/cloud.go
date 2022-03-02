@@ -31,8 +31,6 @@ type cloud struct {
 	config                      Config
 	instances                   cloudprovider.InstancesV2
 	loadBalancer                cloudprovider.LoadBalancer
-	metro                       string
-	facility                    string
 	controlPlaneEndpointManager *controlPlaneEndpointManager
 	// holds our bgp service handler
 	bgp *bgp
@@ -53,7 +51,7 @@ func init() {
 		metalConfig, err := getMetalConfig(config)
 		// register the provider
 		if err != nil {
-			return nil, fmt.Errorf("provider config error: %v", err)
+			return nil, fmt.Errorf("provider config error: %w", err)
 		}
 
 		// report the config
@@ -64,7 +62,7 @@ func init() {
 		client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), client.UserAgent)
 		cloud, err := newCloud(metalConfig, client)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create new cloud handler: %v", err)
+			return nil, fmt.Errorf("failed to create new cloud handler: %w", err)
 		}
 		// note that this is not fully initialized until it calls cloud.Initialize()
 
@@ -84,17 +82,15 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	if err != nil {
 		klog.Fatalf("could not initialize ControlPlaneEndpointManager: %v", err)
 	}
-	bgp, err := newBGP(c.client, clientset, stop, c.config.ProjectID, c.config.LocalASN, c.config.BGPPass)
+	bgp, err := newBGP(c.client, clientset, c.config.ProjectID, c.config.LocalASN, c.config.BGPPass)
 	if err != nil {
 		klog.Fatalf("could not initialize BGP: %v", err)
 	}
-	lb, err := newLoadBalancers(c.client, clientset, stop, c.config.ProjectID, c.config.Metro, c.config.Facility, c.config.LoadBalancerSetting, c.config.LocalASN, c.config.BGPPass, c.config.AnnotationNetworkIPv4Private, c.config.AnnotationLocalASN, c.config.AnnotationPeerASN, c.config.AnnotationPeerIP, c.config.AnnotationSrcIP, c.config.AnnotationBGPPass, c.config.AnnotationEIPMetro, c.config.AnnotationEIPMetro, c.config.BGPNodeSelector)
+	lb, err := newLoadBalancers(c.client, clientset, c.config.ProjectID, c.config.Metro, c.config.Facility, c.config.LoadBalancerSetting, c.config.LocalASN, c.config.BGPPass, c.config.AnnotationNetworkIPv4Private, c.config.AnnotationLocalASN, c.config.AnnotationPeerASN, c.config.AnnotationPeerIP, c.config.AnnotationSrcIP, c.config.AnnotationBGPPass, c.config.AnnotationEIPMetro, c.config.AnnotationEIPMetro, c.config.BGPNodeSelector)
 	if err != nil {
 		klog.Fatalf("could not initialize LoadBalancers: %v", err)
 	}
 
-	c.metro = c.config.Metro
-	c.facility = c.config.Facility
 	c.loadBalancer = lb
 	c.bgp = bgp
 	c.instances = i
@@ -104,7 +100,6 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 }
 
 // LoadBalancer returns a balancer interface. Also returns true if the interface is supported, false otherwise.
-// TODO unimplemented
 func (c *cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	klog.V(5).Info("called LoadBalancer")
 	return c.loadBalancer, c.loadBalancer != nil

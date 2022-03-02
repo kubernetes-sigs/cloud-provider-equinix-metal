@@ -56,16 +56,16 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 func (l *LB) AddService(ctx context.Context, svc, ip string, nodes []loadbalancers.Node) error {
 	config, err := l.getConfigMap(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
+		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
 	}
 
 	// Update the service and configmap and save them
 	err = mapIP(ctx, config, ip, svc, l.configMapName, l.configMapInterface)
 	if err != nil {
-		return fmt.Errorf("unable to map IP to service: %v", err)
+		return fmt.Errorf("unable to map IP to service: %w", err)
 	}
 	if err := l.addNodes(ctx, svc, nodes); err != nil {
-		return fmt.Errorf("failed to add nodes: %v", err)
+		return fmt.Errorf("failed to add nodes: %w", err)
 	}
 	return nil
 }
@@ -73,12 +73,12 @@ func (l *LB) AddService(ctx context.Context, svc, ip string, nodes []loadbalance
 func (l *LB) RemoveService(ctx context.Context, svc, ip string) error {
 	config, err := l.getConfigMap(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
+		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
 	}
 
 	// unmap the EIP
 	if err := unmapIP(ctx, config, ip, l.configMapName, l.configMapInterface); err != nil {
-		return fmt.Errorf("failed to remove IP: %v", err)
+		return fmt.Errorf("failed to remove IP: %w", err)
 	}
 
 	// remove any node entries for this service
@@ -94,7 +94,7 @@ func (l *LB) UpdateService(ctx context.Context, svc string, nodes []loadbalancer
 
 	// ensure nodes are correct
 	if err := l.addNodes(ctx, svc, nodes); err != nil {
-		return fmt.Errorf("failed to add nodes: %v", err)
+		return fmt.Errorf("failed to add nodes: %w", err)
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func (l *LB) UpdateService(ctx context.Context, svc string, nodes []loadbalancer
 func (l *LB) addNodes(ctx context.Context, svc string, nodes []loadbalancers.Node) error {
 	config, err := l.getConfigMap(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
+		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
 	}
 
 	var changed bool
@@ -137,7 +137,7 @@ func (l *LB) addNodes(ctx context.Context, svc string, nodes []loadbalancers.Nod
 func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
 	config, err := l.getConfigMap(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %v", l.configMapNamespace, l.configMapName, err)
+		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
 	}
 	// go through the peers and see if we have one with our hostname.
 	selector := NodeSelector{
@@ -158,7 +158,7 @@ func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
 func (l *LB) getConfigMap(ctx context.Context) (*ConfigFile, error) {
 	cm, err := l.configMapInterface.Get(ctx, l.configMapName, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("unable to get metallb configmap %s: %v", l.configMapName, err)
+		return nil, fmt.Errorf("unable to get metallb configmap %s: %w", l.configMapName, err)
 	}
 	// ignore checking if it exists; if not, it gives a blank string, which ParseConfig can handle anyways
 	configData := cm.Data["config"]
@@ -200,7 +200,7 @@ func updateMapIP(ctx context.Context, config *ConfigFile, addr, svcName, configm
 	klog.V(2).Info("config changed, updating")
 	if err := saveUpdatedConfigMap(ctx, cmInterface, configmapname, config); err != nil {
 		klog.V(2).Infof("error updating configmap: %v", err)
-		return fmt.Errorf("failed to update configmap: %v", err)
+		return fmt.Errorf("failed to update configmap: %w", err)
 	}
 	return nil
 }
@@ -208,7 +208,7 @@ func updateMapIP(ctx context.Context, config *ConfigFile, addr, svcName, configm
 func saveUpdatedConfigMap(ctx context.Context, cmi typedv1.ConfigMapInterface, name string, cfg *ConfigFile) error {
 	b, err := cfg.Bytes()
 	if err != nil {
-		return fmt.Errorf("error converting configfile data to bytes: %v", err)
+		return fmt.Errorf("error converting configfile data to bytes: %w", err)
 	}
 
 	mergePatch, _ := json.Marshal(map[string]interface{}{

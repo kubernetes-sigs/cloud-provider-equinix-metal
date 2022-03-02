@@ -31,7 +31,6 @@ const (
 	envVarEIPTag                       = "METAL_EIP_TAG"
 	envVarAPIServerPort                = "METAL_API_SERVER_PORT"
 	envVarBGPNodeSelector              = "METAL_BGP_NODE_SELECTOR"
-	defaultLoadBalancerConfigMap       = "metallb-system:config"
 )
 
 // Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different Equinix Metal API endpoint
@@ -88,11 +87,11 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	var config, rawConfig Config
 	configBytes, err := ioutil.ReadAll(providerConfig)
 	if err != nil {
-		return config, fmt.Errorf("failed to read configuration : %v", err)
+		return config, fmt.Errorf("failed to read configuration : %w", err)
 	}
 	err = json.Unmarshal(configBytes, &rawConfig)
 	if err != nil {
-		return config, fmt.Errorf("failed to process json of configuration file at path %s: %v", providerConfig, err)
+		return config, fmt.Errorf("failed to process json of configuration file at path %s: %w", providerConfig, err)
 	}
 
 	// read env vars; if not set, use rawConfig
@@ -113,10 +112,6 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	// rule for processing: any setting in env var overrides setting from file
 	if loadBalancerSetting != "" {
 		config.LoadBalancerSetting = loadBalancerSetting
-	}
-	// and set for default
-	if config.LoadBalancerSetting == "" {
-		config.LoadBalancerSetting = defaultLoadBalancerConfigMap
 	}
 
 	facility := os.Getenv(facilityName)
@@ -146,7 +141,7 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	case localASN != "":
 		localASNNo, err := strconv.Atoi(localASN)
 		if err != nil {
-			return config, fmt.Errorf("env var %s must be a number, was %s: %v", envVarLocalASN, localASN, err)
+			return config, fmt.Errorf("env var %s must be a number, was %s: %w", envVarLocalASN, localASN, err)
 		}
 		config.LocalASN = localASNNo
 	case rawConfig.LocalASN != 0:
@@ -219,7 +214,7 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	case apiServer != "":
 		apiServerNo, err := strconv.Atoi(apiServer)
 		if err != nil {
-			return config, fmt.Errorf("env var %s must be a number, was %s: %v", envVarAPIServerPort, apiServer, err)
+			return config, fmt.Errorf("env var %s must be a number, was %s: %w", envVarAPIServerPort, apiServer, err)
 		}
 		config.APIServerPort = int32(apiServerNo)
 	case rawConfig.APIServerPort != 0:
