@@ -29,8 +29,8 @@ const (
 type cloud struct {
 	client                      *packngo.Client
 	config                      Config
-	instances                   cloudprovider.InstancesV2
-	loadBalancer                cloudprovider.LoadBalancer
+	instances                   *instances
+	loadBalancer                *loadBalancers
 	controlPlaneEndpointManager *controlPlaneEndpointManager
 	// holds our bgp service handler
 	bgp *bgp

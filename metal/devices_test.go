@@ -27,7 +27,7 @@ func testNode(providerID, nodeName string) *v1.Node {
 }
 
 func TestNodeAddresses(t *testing.T) {
-	vc, backend := testGetValidCloud(t)
+	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	if inst == nil {
 		t.Fatal("inst is nil")
@@ -87,7 +87,7 @@ func TestNodeAddresses(t *testing.T) {
 	}
 }
 func TestNodeAddressesByProviderID(t *testing.T) {
-	vc, backend := testGetValidCloud(t)
+	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
 	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
@@ -146,7 +146,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 
 /*
 func TestInstanceID(t *testing.T) {
-	vc, backend := testGetValidCloud(t)
+	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
 	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
@@ -180,7 +180,7 @@ func TestInstanceID(t *testing.T) {
 }
 */
 func TestInstanceType(t *testing.T) {
-	vc, backend := testGetValidCloud(t)
+	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
 	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
@@ -223,7 +223,7 @@ func TestInstanceType(t *testing.T) {
 }
 
 func TestInstanceZone(t *testing.T) {
-	vc, backend := testGetValidCloud(t)
+	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
 	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
@@ -274,7 +274,7 @@ func TestInstanceZone(t *testing.T) {
 
 /*
 func TestInstanceTypeByProviderID(t *testing.T) {
-	vc, backend := testGetValidCloud(t)
+	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.Instances()
 	devName := testGetNewDevName()
 	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
@@ -306,7 +306,7 @@ func TestInstanceTypeByProviderID(t *testing.T) {
 }
 
 func TestAddSSHKeyToAllInstances(t *testing.T) {
-	vc, _ := testGetValidCloud(t)
+	vc, _ := testGetValidCloud(t, "")
 	inst, _ := vc.Instances()
 	err := inst.AddSSHKeyToAllInstances(nil, "", nil)
 	if err != cloudprovider.NotImplemented {
@@ -315,7 +315,7 @@ func TestAddSSHKeyToAllInstances(t *testing.T) {
 }
 
 func TestCurrentNodeName(t *testing.T) {
-	vc, _ := testGetValidCloud(t)
+	vc, _ := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	var (
 		devName       = testGetNewDevName()
@@ -340,7 +340,7 @@ func TestCurrentNodeName(t *testing.T) {
 */
 
 func TestInstanceExistsByProviderID(t *testing.T) {
-	vc, backend := testGetValidCloud(t)
+	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
 	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
@@ -373,7 +373,7 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 }
 
 func TestInstanceShutdownByProviderID(t *testing.T) {
-	vc, backend := testGetValidCloud(t)
+	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
 	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
