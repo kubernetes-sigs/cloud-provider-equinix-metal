@@ -28,11 +28,6 @@ const (
 	validPlanName   = "Bill by the hour"
 )
 
-var (
-	validCloud *cloud
-	backend    *store.Memory
-)
-
 // mockControllerClientBuilder mock implementation of https://pkg.go.dev/k8s.io/cloud-provider#ControllerClientBuilder
 // so we can pass it to cloud.Initialize()
 type mockControllerClientBuilder struct {
@@ -60,13 +55,9 @@ func (a *apiServerError) Error(err error) {
 }
 
 // create a valid cloud with a client
-func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
-	// if we already have it, it is fine
-	if validCloud != nil {
-		return validCloud, backend
-	}
+func testGetValidCloud(t *testing.T, LoadBalancerSetting string) (*cloud, *store.Memory) {
 	// mock endpoint so our client can handle it
-	backend = store.NewMemory()
+	backend := store.NewMemory()
 	fake := emServer.PacketServer{
 		Store: backend,
 		ErrorHandler: &apiServerError{
@@ -84,17 +75,66 @@ func testGetValidCloud(t *testing.T) (*cloud, *store.Memory) {
 
 	// now just need to create a client
 	config := Config{
-		ProjectID: uuid.New().String(),
+		ProjectID:           uuid.New().String(),
+		LoadBalancerSetting: LoadBalancerSetting,
 	}
 	c, _ := newCloud(config, client)
 	ccb := &mockControllerClientBuilder{}
 	c.Initialize(ccb, nil)
-	validCloud = c.(*cloud)
-	return validCloud, backend
+
+	return c.(*cloud), backend
 }
 
-func TestLoadBalancer(t *testing.T) {
-	vc, _ := testGetValidCloud(t)
+func TestLoadBalancerDefaultDisabled(t *testing.T) {
+	vc, _ := testGetValidCloud(t, "")
+	response, supported := vc.LoadBalancer()
+	var (
+		expectedSupported = false
+		expectedResponse  = response
+	)
+	if supported != expectedSupported {
+		t.Errorf("supported returned %v instead of expected %v", supported, expectedSupported)
+	}
+	if response != expectedResponse {
+		t.Errorf("value returned %v instead of expected %v", response, expectedResponse)
+	}
+}
+
+func TestLoadBalancerMetalLB(t *testing.T) {
+	t.Skip("Test needs a k8s client to work")
+	vc, _ := testGetValidCloud(t, "metallb:///metallb-system/config")
+	response, supported := vc.LoadBalancer()
+	var (
+		expectedSupported = true
+		expectedResponse  = response
+	)
+	if supported != expectedSupported {
+		t.Errorf("supported returned %v instead of expected %v", supported, expectedSupported)
+	}
+	if response != expectedResponse {
+		t.Errorf("value returned %v instead of expected %v", response, expectedResponse)
+	}
+}
+
+func TestLoadBalancerEmpty(t *testing.T) {
+	t.Skip("Test needs a k8s client to work")
+	vc, _ := testGetValidCloud(t, "empty://")
+	response, supported := vc.LoadBalancer()
+	var (
+		expectedSupported = true
+		expectedResponse  = response
+	)
+	if supported != expectedSupported {
+		t.Errorf("supported returned %v instead of expected %v", supported, expectedSupported)
+	}
+	if response != expectedResponse {
+		t.Errorf("value returned %v instead of expected %v", response, expectedResponse)
+	}
+}
+
+func TestLoadBalancerKubeVIP(t *testing.T) {
+	t.Skip("Test needs a k8s client to work")
+	vc, _ := testGetValidCloud(t, "kube-vip://")
 	response, supported := vc.LoadBalancer()
 	var (
 		expectedSupported = true
@@ -109,7 +149,7 @@ func TestLoadBalancer(t *testing.T) {
 }
 
 func TestInstances(t *testing.T) {
-	vc, _ := testGetValidCloud(t)
+	vc, _ := testGetValidCloud(t, "")
 	response, supported := vc.Instances()
 	expectedSupported := false
 	expectedResponse := cloudprovider.Instances(nil)
@@ -122,7 +162,7 @@ func TestInstances(t *testing.T) {
 }
 
 func TestClusters(t *testing.T) {
-	vc, _ := testGetValidCloud(t)
+	vc, _ := testGetValidCloud(t, "")
 	response, supported := vc.Clusters()
 	var (
 		expectedSupported = false
@@ -138,7 +178,7 @@ func TestClusters(t *testing.T) {
 }
 
 func TestRoutes(t *testing.T) {
-	vc, _ := testGetValidCloud(t)
+	vc, _ := testGetValidCloud(t, "")
 	response, supported := vc.Routes()
 	var (
 		expectedSupported = false
@@ -153,7 +193,7 @@ func TestRoutes(t *testing.T) {
 
 }
 func TestProviderName(t *testing.T) {
-	vc, _ := testGetValidCloud(t)
+	vc, _ := testGetValidCloud(t, "")
 	name := vc.ProviderName()
 	if name != ProviderName {
 		t.Errorf("returned %s instead of expected %s", name, ProviderName)
@@ -161,7 +201,7 @@ func TestProviderName(t *testing.T) {
 }
 
 func TestHasClusterID(t *testing.T) {
-	vc, _ := testGetValidCloud(t)
+	vc, _ := testGetValidCloud(t, "")
 	cid := vc.HasClusterID()
 	expectedCid := true
 	if cid != expectedCid {
