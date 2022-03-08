@@ -11,7 +11,7 @@ fullnameOverride: ""
 
 image:
   # -- Name of the image repository to pull the container image from.
-  repository: equinix/cloud-provider-equinix-metal
+  repository: ghcr.io/equinix/cloud-provider-equinix-metal
 
   # -- [Image pull policy](https://kubernetes.io/docs/concepts/containers/images/#updating-images) for updating already existing images on a node.
   pullPolicy: IfNotPresent

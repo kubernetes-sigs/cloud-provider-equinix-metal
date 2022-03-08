@@ -37,7 +37,7 @@ spec:
           effect: NoSchedule
           operator: Exists
       containers:
-      - image: equinix/cloud-provider-equinix-metal:RELEASE_TAG
+      - image: RELEASE_IMG
         name: cloud-provider-equinix-metal
         imagePullPolicy: Always
         command:
