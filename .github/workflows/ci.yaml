@@ -102,6 +102,7 @@ jobs:
       run: |
         SHOULD_PUSH=true
         [[ "$GITHUB_ACTOR" == "dependabot[bot]" ]] && SHOULD_PUSH=false
+        [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && SHOULD_PUSH=false
         echo "::set-output name=should-push::${SHOULD_PUSH}"
 
     - name: Log in to ghcr.io
