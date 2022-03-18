@@ -7,4 +7,4 @@ linters:
 run:
   # Timeout for analysis, e.g. 30s, 5m.
   # Default: 1m
-  timeout: 2m
+  timeout: 5m
