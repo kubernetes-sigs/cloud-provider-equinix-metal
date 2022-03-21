@@ -77,8 +77,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	clientset := clientBuilder.ClientOrDie("cloud-provider-equinix-metal-shared-informers")
 
 	// initialize the individual services
-	i := newInstances(c.client, c.config.ProjectID)
-	epm, err := newControlPlaneEndpointManager(clientset, stop, c.config.EIPTag, c.config.ProjectID, c.client.DeviceIPs, c.client.ProjectIPs, i, c.config.APIServerPort)
+	epm, err := newControlPlaneEndpointManager(clientset, stop, c.config.EIPTag, c.config.ProjectID, c.client.DeviceIPs, c.client.ProjectIPs, c.config.APIServerPort, c.config.EIPHealthCheckUseHostIP)
 	if err != nil {
 		klog.Fatalf("could not initialize ControlPlaneEndpointManager: %v", err)
 	}
@@ -93,7 +92,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 
 	c.loadBalancer = lb
 	c.bgp = bgp
-	c.instances = i
+	c.instances = newInstances(c.client, c.config.ProjectID)
 	c.controlPlaneEndpointManager = epm
 
 	klog.Info("Initialize of cloud provider complete")

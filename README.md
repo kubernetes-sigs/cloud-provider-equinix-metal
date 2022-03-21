@@ -216,6 +216,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Tag for control plane Elastic IP |    | `METAL_EIP_TAG` | `eipTag` | No control plane Elastic IP |
 | Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP |    | `METAL_BGP_NODE_SELECTOR` | `bgpNodeSelector` | All nodes |
+| Use host IP for Control Plane endpoint health checks | | `METAL_EIP_HEALTH_CHECK_USE_HOST_IP` | `eipHealthCheckUseHostIP` | false |
 
 <u>Security Warning</u>
 Including your project's BGP password, even base64-encoded, may have security implications. Because Equinix Metal
@@ -475,6 +476,8 @@ To enable CCM to manage the control plane EIP:
 1. When starting the CCM
    * set the [configuration][Configuration] for the control plane EIP tag, e.g. env var `METAL_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
    * (optional) set the port that the EIP should listen on; by default, or when set to `0`, it will use the same port as the `kube-apiserver` on the control plane nodes. This port can also be specified with `METAL_API_SERVER_PORT=<port>.`
+   * (optional) set the [configuration][Configuration] for using the host IP for control plane endpoint health checks. This is
+   needed when the EIP is configured as an loopback IP address, such as the case with [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet)
 
 In [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet) we
 create one for every cluster for example. Equinix Metal does not provide an as a
