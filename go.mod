@@ -3,7 +3,7 @@ module github.com/equinix/cloud-provider-equinix-metal
 go 1.17
 
 require (
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-retryablehttp v0.6.6
 	github.com/packethost/packet-api-server v0.0.0-20220212175623-ae51b225eb75
 	github.com/packethost/packngo v0.22.0
