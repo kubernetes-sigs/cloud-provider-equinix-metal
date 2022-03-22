@@ -1,12 +1,28 @@
-FROM alpine:3.15 as certs
+# syntax=docker/dockerfile:1.1-experimental
 
-RUN apk --update add ca-certificates
+# Copyright 2020 The Kubernetes Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-# builder
-FROM golang:1.17-alpine3.15 as build
+# Build the manager binary
+ARG GOVER=1.17.8
+FROM golang:${GOVER} as builder
 
-WORKDIR /go/src/app
-RUN apk --update add make git
+WORKDIR /workspace
+
+# Run this with docker build --build_arg $(go env GOPROXY) to override the goproxy
+ARG goproxy=https://proxy.golang.org
+ENV GOPROXY=$goproxy
 
 COPY go.mod .
 COPY go.sum .
@@ -14,17 +30,21 @@ RUN go mod download
 
 COPY . .
 
-RUN make build
-
-# Create Docker image of just the binary
-FROM scratch as runner
-
+# Build
+ARG ARCH
+ARG LDFLAGS
 ARG BINARY=cloud-provider-equinix-metal
-ARG TARGETARCH
-ARG OS=linux
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
+    go build -a -ldflags "${LDFLAGS} -extldflags '-static'" \
+    -o "${BINARY}" .
 
-COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=build /go/src/app/dist/bin/${BINARY}-${OS}-${TARGETARCH} ${BINARY}
+# because you cannot use ARG or ENV in CMD when in [] mode
 
-# because you cannot use ARG or ENV in CMD when in [] mode, and with "FROM scratch", we have no shell
+# Use distroless as minimal base image to package the manager binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+ARG BINARY=cloud-provider-equinix-metal
+COPY --from=builder /workspace/${BINARY} ./cloud-provider-equinix-metal
+USER nonroot:nonroot
 ENTRYPOINT ["./cloud-provider-equinix-metal"]

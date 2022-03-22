@@ -1,0 +1,11 @@
+.git
+.github
+.vscode
+.golangci.yml
+deploy/
+dist/
+docs/
+**/.md
+*.md
+.gitignore
+Makefile

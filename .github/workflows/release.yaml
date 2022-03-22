@@ -5,7 +5,7 @@ on:
     - 'v*'
 
 env:
-  IMAGE_NAME: "equinix/cloud-provider-equinix-metal"
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   images: # create images in docker hub
@@ -13,61 +13,120 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v2
-    - name: tagname
-      id: tagname
-      run: |
-        echo releasing ${GITHUB_REF#refs\/tags/}
-        echo ::set-output name=tag::${GITHUB_REF#refs\/tags/}
+      uses: actions/checkout@v3
     - name: Set up QEMU for cross-building
       uses: docker/setup-qemu-action@v1
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
-    - name: Login to DockerHub
+
+    - name: Build image urls
+      id: image-urls
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+      run: |
+        IMAGES=ghcr.io/${IMAGE_NAME}
+        [[ -n "$DOCKER_USERNAME" ]] && IMAGES=${IMAGES},${IMAGE_NAME}
+        [[ -n "$QUAY_USERNAME" ]] && IMAGES=${IMAGES},quay.io/${IMAGE_NAME}
+        echo "::set-output name=images::${IMAGES}"
+
+    - name: Docker manager metadata
+      id: meta
+      uses: docker/metadata-action@v3
+      with:
+        images: ${{ steps.image-urls.outputs.images }}
+        tags: |
+          type=ref,event=tag
+
+    - name: Log in to ghcr.io
       uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Log into DockerHub
+      uses: docker/login-action@v1
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      if: ${{ env.DOCKER_USERNAME != '' }}
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Log into quay.io
+      uses: docker/login-action@v1
+      env:
+        QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+      if: ${{ env.QUAY_USERNAME != '' }}
+      with:
+        registry: quay.io
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_PASSWORD }}
+
     - name: Build
       id: docker_build
       uses: docker/build-push-action@v2
+      env:
+        VERSION: ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
       with:
-        platforms: linux/amd64,linux/arm64
+        context: .
         push: true
-        tags: |
-          ${{ format('{0}:{1}', env.IMAGE_NAME, steps.tagname.outputs.tag) }}
-          ${{ format('{0}:{1}', env.IMAGE_NAME, 'latest') }}
+        build-args: |
+          BINARY=cloud-provider-equinix-metal
+          LDFLAGS=-X 'k8s.io/component-base/version.gitVersion=${{ env.VERSION }}' -X 'k8s.io/component-base/version/verflag.programName=Cloud Provider Equinix Metal'
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64,linux/arm64
+        cache-from: type=gha, scope=${{ github.workflow }}
+        cache-to: type=gha, mode=max, scope=${{ github.workflow }}
 
   release: # create a github actions release with necessary artifacts
     name: Release
     runs-on: ubuntu-latest
+    needs:
+    - images
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: tagname
-      id: tagname
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Build image urls
+      id: image-urls
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
       run: |
-        echo releasing ${GITHUB_REF#refs\/tags/}
-        echo ::set-output name=tag::${GITHUB_REF#refs\/tags/}
+        IMAGES=ghcr.io/${IMAGE_NAME}
+        [[ -n "$DOCKER_USERNAME" ]] && IMAGES=${IMAGES},${IMAGE_NAME}
+        [[ -n "$QUAY_USERNAME" ]] && IMAGES=${IMAGES},quay.io/${IMAGE_NAME}
+        echo "::set-output name=images::${IMAGES}"
+
+    - name: Docker manager metadata
+      id: meta
+      uses: docker/metadata-action@v3
+      with:
+        images: ${{ steps.image-urls.outputs.images }}
+        tags: |
+          type=ref,event=tag
+
     - name: release template
-      run: cat deploy/template/deployment.yaml | sed 's/RELEASE_TAG/'${{ steps.tagname.outputs.tag }}'/g' > /tmp/deployment.yaml
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+      env:
+        RELEASE_IMG: ghcr.io/${{ env.IMAGE_NAME }}:${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+      run: cat deploy/template/deployment.yaml | sed 's#RELEASE_IMG#${{ env.RELEASE_IMG }}#g' > /tmp/deployment.yaml
+    - name: Generate Release Notes
+      run: |
+        release_notes=$(gh api repos/{owner}/{repo}/releases/generate-notes -F tag_name=${{ github.ref }} --jq .body)
+        echo 'RELEASE_NOTES<<EOF' >> $GITHUB_ENV
+        echo "${release_notes}" >> $GITHUB_ENV
+        echo 'EOF' >> $GITHUB_ENV
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        OWNER: ${{ github.repository_owner }}
+        REPO: ${{ github.event.repository.name }}
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        files: /tmp/deployment.yaml
+        body: ${{ env.RELEASE_NOTES }}
         draft: false
         prerelease: false
-    - name: Upload Deployment Yaml Release Asset
-      id: upload-release-asset-deployment
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-        asset_path: /tmp/deployment.yaml
-        asset_name: deployment.yaml
-        asset_content_type: application/yaml

@@ -1,0 +1,10 @@
+linters:
+  disable-all: true
+  enable:
+  - gofmt
+  - govet
+  - revive
+run:
+  # Timeout for analysis, e.g. 30s, 5m.
+  # Default: 1m
+  timeout: 5m

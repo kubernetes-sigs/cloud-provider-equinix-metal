@@ -15,11 +15,11 @@ VERSION := $(RELEASE_TAG)
 else
 VERSION := $(MOST_RECENT_RELEASE_TAG)-$(VERSION)
 endif
-GO_FILES := $(shell find . -type f -not -path './vendor/*' -name '*.go')
 BUILD_TAG ?= latest
 TAGGED_IMAGE ?= $(BUILD_IMAGE):$(BUILD_TAG)
 TAGGED_ARCH_IMAGE ?= $(TAGGED_IMAGE)-$(ARCH)
-LDFLAGS ?= -ldflags '-extldflags "-static" -X "k8s.io/component-base/version.gitVersion=$(VERSION)" -X "k8s.io/component-base/version/verflag.programName=Cloud Provider Equinix Metal"'
+LDFLAGS_ARGS ?= -X 'k8s.io/component-base/version.gitVersion=$(VERSION)' -X 'k8s.io/component-base/version/verflag.programName=Cloud Provider Equinix Metal'
+LDFLAGS ?= -ldflags "$(LDFLAGS_ARGS) -extldflags '-static'"
 
 # which arches can we support
 ARCHES=arm64 amd64
@@ -48,7 +48,7 @@ OS ?= $(BUILDOS)
 
 # canonicalized names for target architecture
 ifeq ($(ARCH),aarch64)
-        override ARCH=arm64
+    override ARCH=arm64
 endif
 ifeq ($(ARCH),x86_64)
     override ARCH=amd64
@@ -65,6 +65,7 @@ export GO111MODULE=on
 DIST_DIR=./dist/bin
 DIST_BINARY = $(DIST_DIR)/$(BINARY)-$(OS)-$(ARCH)
 BUILD_CMD = CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH)
+RACE_CMD = CGO_ENABLED=1 GOOS=$(OS) GOARCH=$(ARCH)
 ifdef DOCKERBUILD
 BUILD_CMD = docker run --rm \
                 -e GOARCH=$(ARCH) \
@@ -78,12 +79,7 @@ endif
 GOBIN ?= $(shell go env GOPATH)/bin
 LINTER ?= $(GOBIN)/golangci-lint
 
-pkgs:
-ifndef PKG_LIST
-	$(eval PKG_LIST := $(shell $(BUILD_CMD) go list ./... | grep -v vendor))
-endif
-
-.PHONY: fmt fmt-check lint test vet golint tag version
+.PHONY: fmt lint test tag version
 
 $(DIST_DIR):
 	mkdir -p $@
@@ -94,39 +90,24 @@ tag: ## Report the git tag that would be used for the images
 version: ## Report the version that would be put in the binary
 	@echo $(VERSION)
 
-
-fmt-check: ## Check all source code formatting
-	@if [ -n "$(shell $(BUILD_CMD) gofmt -l ${GO_FILES})" ]; then \
-	  $(BUILD_CMD) gofmt -s -e -d ${GO_FILES}; \
-	  exit 1; \
-	fi
-
-fmt:   ## Format all source code files
-	$(BUILD_CMD) gofmt -w -s ${GO_FILES}
+fmt: golangci-lint  ## Format all source code files
+	@$(BUILD_CMD) $(LINTER) run --fix ./
 
 golangci-lint: $(LINTER)
 $(LINTER):
-	mkdir -p hacks && cd hacks && (go mod init hacks || true) && go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.27.0
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.44.2
 
-golint:
-ifeq (, $(shell which golint))
-	go get -u golang.org/x/lint/golint
-endif
+lint: golangci-lint ## Lint the files
+	@$(BUILD_CMD) $(LINTER) run ./
 
-lint: pkgs golangci-lint ## Lint the files
-	@$(BUILD_CMD) $(LINTER) run --disable-all --enable=golint ./ ./metal
-
-test: pkgs ## Run unit tests
-	@$(BUILD_CMD) go test -short ${PKG_LIST}
-
-vet: pkgs ## Vet the files
-	@$(BUILD_CMD) go vet ${PKG_LIST}
+test: ## Run unit tests
+	@$(BUILD_CMD) go test -short ./...
 
 ## Read about data race https://golang.org/doc/articles/race_detector.html
 ## to not test file for race use `// +build !race` at top
 ## Run data race detector
-race: pkgs
-	@$(BUILD_CMD) go test -race -short ${PKG_LIST}
+race:
+	@$(RACE_CMD) go test -race -short ./...
 
 help: ## Display this help screen
 	@printf "\033[36m%s\n" "For all commands that can be used with one or more OS architecture, set the target architecture with ARCH= and the OS with OS="
@@ -169,7 +150,7 @@ sub-image-%:
 	@$(MAKE) ARCH=$* image
 
 image: ## make the image for a single ARCH
-	docker buildx build --load -t $(TAGGED_ARCH_IMAGE) -f Dockerfile --platform $(OS)/$(ARCH) .
+	docker buildx build --load --build-arg LDFLAGS="$(LDFLAGS_ARGS)" -t $(TAGGED_ARCH_IMAGE) -f Dockerfile --platform $(OS)/$(ARCH) .
 	echo "Done. image is at $(TAGGED_ARCH_IMAGE)"
 
 push-all: $(addprefix push-arch-, $(ARCHES)) ## Push all built images.
@@ -210,8 +191,8 @@ clean: ## clean up all artifacts
 ###############################################################################
 .PHONY: ci build deploy
 ## Run what CI runs
-# race has an issue with alpine, see https://github.com/golang/go/issues/14481
 # image-all removed so can run ci locally
-ci: build-all fmt-check lint test vet # image-all race
+# race is a superset of test
+ci: build-all lint race # test image-all
 
 ccm: build deploy ## Build and deploy the ccm
