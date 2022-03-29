@@ -549,21 +549,29 @@ kube-vip has the ability to manage the Elastic IP and control plane load-balanci
 
 ## Core Control Loop
 
-On startup, the CCM executes the following core control loop:
+The CCM does not maintain its own control loop, instead relying on the services provided by
+[cloud-provider](https://pkg.go.dev/k8s.io/cloud-provider).
 
-1. List each node in the cluster using a kubernetes node lister
-   * for each node, call the node processing function in "sync" mode on each area, such as loadbalancers, bgp, devices, etc.
-1. List each service in the cluster using a kubernetes service lister
-   * for each node, if it is of `type=LoadBalancer`, call the service processing function in "sync" mode on each area, such as loadbalancers, bgp, devices, etc.
-1. Start a kubernetes informer for node changes, responding to node addition and removals
-   * for each node added, call the node processing function in "add" mode on each area
-   * for each node removed, call the node processing function in "remove" mode on each area
-1. Start a kubernetes informer for service changes, responding to service addition and removals of `type=LoadBalancer`
-   * for each service added, call the service processing function in "add" mode on each area
-   * for each service removed, call the service processing function in "remove" mode on each area
-1. Start an independent loop that checks every 30 seconds (configurable) for the following:
-   * list all nodes in the cluster using a kubernetes node lister, and call the node processing function in "sync" mode on each area
-   * list all services in the cluster of `type=LoadBalancer`, and call the service processing function in "sync" mode on each area
+On startup, the CCM:
+
+1. Implements the [cloud-provider interface](https://pkg.go.dev/k8s.io/cloud-provider#Interface), providing primarily the following API calls:
+   * `Initialize()`
+   * `InstancesV2()`
+   * `LoadBalancer()`
+1. In `Initialize`:
+   1. If BGP is configured, enable BGP on the project
+   1. If EIP control plane management is enabled, create an informer for `Service`, `Node` and `Endpoints`, updating the control plane EIP as needed.
+
+The CCM then relies on the cloud-provider control loop to call it:
+
+* whenever a `Node` is added, to get node metadata
+* whenever a `Service` of `type=LoadBalancer` is added, removed or updated
+* if EIP control plane management is enabled, via shared informers:
+  * whenever a control plane `Node` is added, removed or updated
+  * whenever the `default/kubernetes` service is added or updated
+  * whenever the endpoints behind the `default/kubernetes` service are added, updated or removed
+
+Further, it relies on the `resync` property of the above to ensure it always is up to date, and did not miss any events.
 
 ## BGP Configuration
 
