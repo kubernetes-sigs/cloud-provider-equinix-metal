@@ -47,6 +47,9 @@ spec:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
           operator: Exists
+        - key: "node.kubernetes.io/not-ready"
+          effect: NoSchedule
+          operator: Exists
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
