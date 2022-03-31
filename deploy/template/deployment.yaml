@@ -36,6 +36,10 @@ spec:
         - key: "node-role.kubernetes.io/control-plane"
           effect: NoSchedule
           operator: Exists
+        # Needed to let CCM come up and assign the EIP
+        - key: "node.kubernetes.io/not-ready"
+          effect: NoSchedule
+          operator: Exists
       containers:
       - image: RELEASE_IMG
         name: cloud-provider-equinix-metal
