@@ -84,6 +84,16 @@ func (c Config) Strings() []string {
 	return ret
 }
 
+func override(options ...string) string {
+	for _, val := range options {
+		if val != "" {
+			return val
+		}
+	}
+
+	return ""
+}
+
 func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	// get our token and project
 	var config, rawConfig Config
@@ -97,45 +107,23 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	}
 
 	// read env vars; if not set, use rawConfig
-	apiToken := os.Getenv(apiKeyName)
-	if apiToken == "" {
-		apiToken = rawConfig.AuthToken
-	}
-	config.AuthToken = apiToken
+	config.AuthToken = override(os.Getenv(apiKeyName), rawConfig.AuthToken)
 
-	projectID := os.Getenv(projectIDName)
-	if projectID == "" {
-		projectID = rawConfig.ProjectID
-	}
-	config.ProjectID = projectID
+	config.ProjectID = override(os.Getenv(projectIDName), rawConfig.ProjectID)
 
-	loadBalancerSetting := os.Getenv(loadBalancerSettingName)
-	config.LoadBalancerSetting = rawConfig.LoadBalancerSetting
-	// rule for processing: any setting in env var overrides setting from file
-	if loadBalancerSetting != "" {
-		config.LoadBalancerSetting = loadBalancerSetting
+	config.LoadBalancerSetting = override(os.Getenv(loadBalancerSettingName), rawConfig.LoadBalancerSetting)
+
+	config.Facility = override(os.Getenv(facilityName), rawConfig.Facility)
+
+	config.Metro = override(os.Getenv(metroName), rawConfig.Metro)
+
+	if config.AuthToken == "" {
+		return config, fmt.Errorf("environment variable %q is required if not in config file", apiKeyName)
 	}
 
-	facility := os.Getenv(facilityName)
-	if facility == "" {
-		facility = rawConfig.Facility
+	if config.ProjectID == "" {
+		return config, fmt.Errorf("environment variable %q is required if not in config file", projectIDName)
 	}
-
-	metro := os.Getenv(metroName)
-	if metro == "" {
-		metro = rawConfig.Metro
-	}
-
-	if apiToken == "" {
-		return config, fmt.Errorf("environment variable %q is required", apiKeyName)
-	}
-
-	if projectID == "" {
-		return config, fmt.Errorf("environment variable %q is required", projectIDName)
-	}
-
-	config.Facility = facility
-	config.Metro = metro
 
 	// get the local ASN
 	localASN := os.Getenv(envVarLocalASN)
@@ -152,64 +140,26 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 		config.LocalASN = DefaultLocalASN
 	}
 
-	bgpPass := os.Getenv(envVarBGPPass)
-	if bgpPass != "" {
-		config.BGPPass = bgpPass
-	}
+	config.BGPPass = override(os.Getenv(envVarBGPPass), rawConfig.BGPPass)
 
 	// set the annotations
-	config.AnnotationLocalASN = DefaultAnnotationNodeASN
-	annotationLocalASN := os.Getenv(envVarAnnotationLocalASN)
-	if annotationLocalASN != "" {
-		config.AnnotationLocalASN = annotationLocalASN
-	}
-	config.AnnotationPeerASN = DefaultAnnotationPeerASN
-	annotationPeerASN := os.Getenv(envVarAnnotationPeerASN)
-	if annotationPeerASN != "" {
-		config.AnnotationPeerASN = annotationPeerASN
-	}
-	config.AnnotationPeerIP = DefaultAnnotationPeerIP
-	annotationPeerIP := os.Getenv(envVarAnnotationPeerIP)
-	if annotationPeerIP != "" {
-		config.AnnotationPeerIP = annotationPeerIP
-	}
-	config.AnnotationSrcIP = DefaultAnnotationSrcIP
-	annotationSrcIP := os.Getenv(envVarAnnotationSrcIP)
-	if annotationSrcIP != "" {
-		config.AnnotationSrcIP = annotationSrcIP
-	}
+	config.AnnotationLocalASN = override(os.Getenv(envVarAnnotationLocalASN), rawConfig.AnnotationLocalASN, DefaultAnnotationNodeASN)
 
-	config.AnnotationBGPPass = DefaultAnnotationBGPPass
-	annotationBGPPass := os.Getenv(envVarAnnotationBGPPass)
-	if annotationBGPPass != "" {
-		config.AnnotationBGPPass = annotationBGPPass
-	}
+	config.AnnotationPeerASN = override(os.Getenv(envVarAnnotationPeerASN), rawConfig.AnnotationPeerASN, DefaultAnnotationPeerASN)
 
-	config.AnnotationNetworkIPv4Private = DefaultAnnotationNetworkIPv4Private
-	annotationNetworkIPv4Private := os.Getenv(envVarAnnotationNetworkIPv4Private)
-	if annotationNetworkIPv4Private != "" {
-		config.AnnotationNetworkIPv4Private = annotationNetworkIPv4Private
-	}
+	config.AnnotationPeerIP = override(os.Getenv(envVarAnnotationPeerIP), rawConfig.AnnotationPeerIP, DefaultAnnotationPeerIP)
 
-	config.AnnotationEIPMetro = DefaultAnnotationEIPMetro
-	annotationEIPMetro := os.Getenv(envVarAnnotationEIPMetro)
-	if annotationEIPMetro != "" {
-		config.AnnotationEIPMetro = annotationEIPMetro
-	}
+	config.AnnotationSrcIP = override(os.Getenv(envVarAnnotationSrcIP), rawConfig.AnnotationSrcIP, DefaultAnnotationSrcIP)
 
-	config.AnnotationEIPFacility = DefaultAnnotationEIPFacility
-	annotationEIPFacility := os.Getenv(envVarAnnotationEIPFacility)
-	if annotationEIPFacility != "" {
-		config.AnnotationEIPFacility = annotationEIPFacility
-	}
+	config.AnnotationBGPPass = override(os.Getenv(envVarAnnotationBGPPass), rawConfig.AnnotationBGPPass, DefaultAnnotationBGPPass)
 
-	if rawConfig.EIPTag != "" {
-		config.EIPTag = rawConfig.EIPTag
-	}
-	eipTag := os.Getenv(envVarEIPTag)
-	if eipTag != "" {
-		config.EIPTag = eipTag
-	}
+	config.AnnotationNetworkIPv4Private = override(os.Getenv(envVarAnnotationNetworkIPv4Private), rawConfig.AnnotationNetworkIPv4Private, DefaultAnnotationNetworkIPv4Private)
+
+	config.AnnotationEIPMetro = override(os.Getenv(envVarAnnotationEIPMetro), rawConfig.AnnotationEIPMetro, DefaultAnnotationEIPMetro)
+
+	config.AnnotationEIPFacility = override(os.Getenv(envVarAnnotationEIPFacility), rawConfig.AnnotationEIPFacility, DefaultAnnotationEIPFacility)
+
+	config.EIPTag = override(os.Getenv(envVarEIPTag), rawConfig.EIPTag)
 
 	apiServer := os.Getenv(envVarAPIServerPort)
 	switch {
@@ -226,10 +176,7 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 		config.APIServerPort = 0
 	}
 
-	config.BGPNodeSelector = rawConfig.BGPNodeSelector
-	if v := os.Getenv(envVarBGPNodeSelector); v != "" {
-		config.BGPNodeSelector = v
-	}
+	config.BGPNodeSelector = override(os.Getenv(envVarBGPNodeSelector), rawConfig.BGPNodeSelector)
 
 	if _, err := labels.Parse(config.BGPNodeSelector); err != nil {
 		return config, fmt.Errorf("BGP Node Selector must be valid Kubernetes selector: %w", err)
