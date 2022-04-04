@@ -411,6 +411,39 @@ CCM itself does **not** deploy the load-balancer or any part of it, including th
 modifies an existing `ConfigMap`. This can be deployed by the administrator separately, using the manifest
 provided in the releases page, or in any other manner.
 
+In order to instruct metallb which IPs to announce and from where, CCM takes direct responsibility for managing the
+metallb `ConfigMap`. As described above, this is normally at `metallb-system/config`. 
+
+You **should not** attempt to modify this `ConfigMap` separately, as CCM will modify it with each loop. Modifying it
+separately is likely to break metallb's functioning.
+
+In addition to the usual entries in the `ConfigMap`, CCM adds
+[nodeSelector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector) entries
+that are specifically structured to be ignored by metallb.
+
+For example:
+
+```yaml
+  node-selectors:
+  - match-labels:
+      kubernetes.io/hostname: dc-worker-1
+  - match-labels:
+      nomatch.metal.equinix.com/service-namespace: default
+      nomatch.metal.equinix.com/service-name: nginx-deployment
+  - match-labels:
+      nomatch.metal.equinix.com/service-namespace: ai
+      nomatch.metal.equinix.com/service-name: trainer
+```
+
+`node-selectors` are grouped together with a logical OR. The above thus means that it will match
+_any_ node that has any of the 3 sets of labels. The node with the hostname `dc-worker-1` will be matched,
+independent of the other selectors.
+
+The remaining selectros are used to allow CCM to track which services are being announced by which node.
+These are ignored, as long as no such labels exist on any nodes. This is why the labels are called the clearly
+non-matching names of `nomatch.metal.equinix.com/service-namespace` and
+`nomatch.metal.equinix.com/service-name`
+
 ##### empty
 
 When the `empty` option is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
