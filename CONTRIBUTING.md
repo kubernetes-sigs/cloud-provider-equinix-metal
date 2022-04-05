@@ -66,3 +66,16 @@ PACKNGO_DEBUG=1 make test
 ### Automation (CI/CD)
 
 All CI/CD is performed via github actions, see the files in [.github/workflows/](./.github/workflows).
+
+It is possible to test the github actions using your own fork of this repository, just make sure
+you have github actions support enabled in your repository settings.
+
+If you want to test publishing container images to quay.io, you will need to set the following secrets:
+- QUAY_ORG
+- QUAY_USERNAME
+- QUAY_PASSWORD
+
+If you want to test publishing container images to dockerhub, you will need to set the following secrets:
+- DOCKER_ORG
+- DOCKER_USERNAME
+- DOCKER_PASSWORD
