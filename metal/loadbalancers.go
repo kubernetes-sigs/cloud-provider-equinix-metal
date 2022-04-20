@@ -209,7 +209,7 @@ func (l *loadBalancers) UpdateLoadBalancer(ctx context.Context, clusterName stri
 			Password: peer.Md5Password,
 		})
 	}
-	return l.implementor.UpdateService(ctx, service.Name, n)
+	return l.implementor.UpdateService(ctx, service.Namespace, service.Name, n)
 }
 
 // EnsureLoadBalancerDeleted deletes the specified load balancer if it
@@ -252,7 +252,7 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 	// remove it from any implementation-specific parts
 	svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
 	klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s entry %s", svcName, svcIPCidr)
-	if err := l.implementor.RemoveService(ctx, svcName, svcIPCidr); err != nil {
+	if err := l.implementor.RemoveService(ctx, service.Namespace, service.Name, svcIPCidr); err != nil {
 		return fmt.Errorf("error removing IP from configmap for %s: %w", svcName, err)
 	}
 	klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: removed service %s from implementation", svcName)
@@ -483,7 +483,7 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 		})
 	}
 
-	return svcIPCidr, l.implementor.AddService(ctx, svcName, svcIPCidr, n)
+	return svcIPCidr, l.implementor.AddService(ctx, svc.Namespace, svc.Name, svcIPCidr, n)
 }
 
 func serviceRep(svc *v1.Service) string {

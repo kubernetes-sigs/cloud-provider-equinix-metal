@@ -57,7 +57,7 @@ func (cfg *ConfigFile) AddPeer(add *Peer) bool {
 // If a matching peer already exists with the service, do not change anything.
 // If a matching peer already exists but does not have the service, add it.
 // Returns if anything changed.
-func (cfg *ConfigFile) AddPeerByService(add *Peer, svc string) bool {
+func (cfg *ConfigFile) AddPeerByService(add *Peer, svcNamespace, svcName string) bool {
 	var found bool
 	// ignore empty peer; nothing to add
 	if add == nil {
@@ -70,16 +70,19 @@ func (cfg *ConfigFile) AddPeerByService(add *Peer, svc string) bool {
 	// - ASN matches
 	// - Addr matches
 	// - NodeSelectors all match (but order is ignored)
+	var peers []Peer
 	for _, peer := range cfg.Peers {
 		if peer.EqualIgnoreService(add) {
 			found = true
-			peer.AddService(svc)
+			peer.AddService(svcNamespace, svcName)
 		}
+		peers = append(peers, peer)
 	}
+	cfg.Peers = peers
 	if found {
 		return true
 	}
-	add.AddService(svc)
+	add.AddService(svcNamespace, svcName)
 	cfg.Peers = append(cfg.Peers, *add)
 	return true
 }
@@ -104,14 +107,14 @@ func (cfg *ConfigFile) RemovePeer(remove *Peer) {
 // For any peers that have this services in the special MatchLabel, remove
 // the service from the label. If there are no services left on a peer, remove the
 // peer entirely.
-func (cfg *ConfigFile) RemovePeersByService(svc string) bool {
+func (cfg *ConfigFile) RemovePeersByService(svcNamespace, svcName string) bool {
 	var changed bool
 	// go through the peers and see if we have a match
 	peers := make([]Peer, 0)
 	// remove that one, keep all others
 	for _, peer := range cfg.Peers {
 		// get the services for which this peer works
-		peerChanged, size := peer.RemoveService(svc)
+		peerChanged, size := peer.RemoveService(svcNamespace, svcName)
 
 		// if not changed, or it has at least one service left, we can keep this node
 		if !peerChanged || size >= 1 {
@@ -332,13 +335,13 @@ func (n NodeSelectors) EqualIgnoreService(o NodeSelectors) bool {
 	// whose sole entry is a MatchLabels for the special service one.
 	var ns1, os1 NodeSelectors
 	for _, ns := range n {
-		if len(ns.MatchLabels) == 1 && len(ns.MatchExpressions) == 0 && ns.MatchLabels[serviceNameKey] != "" {
+		if len(ns.MatchLabels) <= 2 && len(ns.MatchExpressions) == 0 && (ns.MatchLabels[serviceNameKey] != "" || ns.MatchLabels[serviceNamespaceKey] != "") {
 			continue
 		}
 		ns1 = append(ns1, ns)
 	}
 	for _, ns := range o {
-		if len(ns.MatchLabels) == 1 && len(ns.MatchExpressions) == 0 && ns.MatchLabels[serviceNameKey] != "" {
+		if len(ns.MatchLabels) <= 2 && len(ns.MatchExpressions) == 0 && (ns.MatchLabels[serviceNameKey] != "" || ns.MatchLabels[serviceNamespaceKey] != "") {
 			continue
 		}
 		os1 = append(os1, ns)
@@ -484,51 +487,67 @@ func (p *Peer) EqualIgnoreService(o *Peer) bool {
 }
 
 // Services list of services that this peer supports
-func (p *Peer) Services() []string {
+func (p *Peer) Services() []Resource {
+	var services []Resource
 	for _, ns := range p.NodeSelectors {
+		var name, namespace string
 		for k, v := range ns.MatchLabels {
-			if k == serviceNameKey {
-				return strings.Split(v, ",")
+			switch k {
+			case serviceNameKey:
+				name = v
+			case serviceNamespaceKey:
+				namespace = v
 			}
 		}
+		if name != "" && namespace != "" {
+			services = append(services, Resource{Namespace: namespace, Name: name})
+		}
 	}
-	return nil
+	return services
 }
 
 // AddService ensures that the provided service is in the list of linked services.
-func (p *Peer) AddService(svc string) bool {
+func (p *Peer) AddService(svcNamespace, svcName string) bool {
 	var (
-		found       bool
-		services    = map[string]bool{}
-		serviceList []string
+		services = []Resource{
+			{Namespace: svcNamespace, Name: svcName},
+		}
+		selectors []NodeSelector
 	)
 	for _, ns := range p.NodeSelectors {
+		var namespace, name string
 		for k, v := range ns.MatchLabels {
-			if k != serviceNameKey {
-				continue
+			switch k {
+			case serviceNameKey:
+				name = v
+			case serviceNamespaceKey:
+				namespace = v
 			}
-			found = true
-			for _, s := range strings.Split(v, ",") {
-				// if it already had it, nothing to do, nothing change
-				if s == svc {
-					return false
-				}
-				services[s] = true
+		}
+		// if this was not a service namespace/name selector, just add it
+		if name == "" && namespace == "" {
+			selectors = append(selectors, ns)
+		}
+		if name != "" && namespace != "" {
+			// if it already had it, nothing to do, nothing change
+			if svcNamespace == namespace && svcName == name {
+				return false
 			}
-			services[svc] = true
-			for k := range services {
-				serviceList = append(serviceList, k)
-			}
-			sort.Strings(serviceList)
-			ns.MatchLabels[serviceNameKey] = strings.Join(serviceList, ",")
-			break
+			services = append(services, Resource{Namespace: namespace, Name: name})
 		}
 	}
+	// replace the NodeSelectors with everything except for the services
+	p.NodeSelectors = selectors
+
+	// now add the services
+	sort.Sort(Resources(services))
+
 	// if we did not find it, add it
-	if !found {
+	for _, svc := range services {
 		p.NodeSelectors = append(p.NodeSelectors, NodeSelector{
 			MatchLabels: map[string]string{
-				serviceNameKey: svc,
+				serviceNamespaceKey: svc.Namespace,
+				serviceNameKey:      svc.Name,
 			},
 		})
 	}
@@ -537,36 +556,44 @@ func (p *Peer) AddService(svc string) bool {
 
 // RemoveService removes a given service from the peer. Returns whether or not it was
 // changed, and how many services are left for this peer.
-func (p *Peer) RemoveService(svc string) (bool, int) {
+func (p *Peer) RemoveService(svcNamespace, svcName string) (bool, int) {
 	var (
-		found bool
-		size  int
+		found     bool
+		size      int
+		services  = []Resource{}
+		selectors []NodeSelector
 	)
 	for _, ns := range p.NodeSelectors {
+		var name, namespace string
 		for k, v := range ns.MatchLabels {
-			if k != serviceNameKey {
-				continue
+			switch k {
+			case serviceNameKey:
+				name = v
+			case serviceNamespaceKey:
+				namespace = v
 			}
-			var (
-				services    = map[string]bool{}
-				serviceList []string
-			)
-			for _, s := range strings.Split(v, ",") {
-				// if it already had it, nothing to do, nothing change
-				if s != svc {
-					services[s] = true
-				} else {
-					found = true
-				}
-			}
-			for k := range services {
-				serviceList = append(serviceList, k)
-			}
-			sort.Strings(serviceList)
-			size = len(serviceList)
-			ns.MatchLabels[serviceNameKey] = strings.Join(serviceList, ",")
-			break
 		}
+		switch {
+		case name == "" && namespace == "":
+			selectors = append(selectors, ns)
+		case name == svcName && namespace == svcNamespace:
+			found = true
+		case name != "" && namespace != "" && (name != svcName || namespace != svcNamespace):
+			services = append(services, Resource{Namespace: namespace, Name: name})
+		}
+	}
+	// first put back all of the previous selectors except for the services
+	p.NodeSelectors = selectors
+	// then add all of the services
+	sort.Sort(Resources(services))
+	size = len(services)
+	for _, svc := range services {
+		p.NodeSelectors = append(p.NodeSelectors, NodeSelector{
+			MatchLabels: map[string]string{
+				serviceNamespaceKey: svc.Namespace,
+				serviceNameKey:      svc.Name,
+			},
+		})
 	}
 	return found, size
 }

@@ -1,7 +1,7 @@
 package metallb
 
 import (
-	"reflect"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -36,48 +36,55 @@ func TestConfigFileAddPeer(t *testing.T) {
 
 func TestConfigFileAddPeerByService(t *testing.T) {
 	peers := []Peer{
-		genPeer("a"),
-		genPeer("a"),
+		genPeer(Resource{"default", "a"}),
+		genPeer(Resource{"default", "a"}),
 	}
 	cfg := ConfigFile{
 		Peers: peers,
 	}
 
 	tests := []struct {
-		peer             Peer
-		total            int
-		index            int
-		addService       string
-		expectedServices []string
-		message          string
+		peer                Peer
+		total               int
+		index               int
+		addServiceNamespace string
+		addServicename      string
+		expectedServices    []string
+		message             string
 	}{
-		{peers[0], len(peers), 0, "a", []string{"a"}, "add existing peer with existing service"},
-		{peers[1], len(peers), 1, "b", []string{"a", "b"}, "add existing peer with new service"},
-		{genPeer(), len(peers) + 1, len(peers), "c", []string{"c"}, "add new peer"},
+		{peers[0], len(peers), 0, "default", "a", []string{"a"}, "add existing peer with existing service"},
+		{peers[1], len(peers), 1, "default", "b", []string{"a", "b"}, "add existing peer with new service"},
+		{genPeer(), len(peers) + 1, len(peers), "default", "c", []string{"c"}, "add new peer"},
 	}
 
 	for i, tt := range tests {
 		// get a clean set of peers
 		cfg.Peers = peers[:]
-		cfg.AddPeerByService(&tt.peer, tt.addService)
+		cfg.AddPeerByService(&tt.peer, tt.addServiceNamespace, tt.addServicename)
 		// make sure the number of peers is as expected
 		if len(cfg.Peers) != tt.total {
 			t.Fatalf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
 		}
 		// make sure the particular peer has the right services annotated
 		p := cfg.Peers[tt.index]
-		// get the correct node selector
-		var found bool
+
+		var (
+			svcs  []string
+			found bool
+		)
 		for _, ns := range p.NodeSelectors {
+			var namespace, name string
 			for k, v := range ns.MatchLabels {
-				if k == serviceNameKey {
-					found = true
-					// look for the desired service
-					svcs := strings.Split(v, ",")
-					if !reflect.DeepEqual(svcs, tt.expectedServices) {
-						t.Fatalf("%d: mismatched services, actual %v, expected %v", i, svcs, tt.expectedServices)
-					}
+				switch k {
+				case serviceNamespaceKey:
+					namespace = v
+				case serviceNameKey:
+					name = v
 				}
+				if namespace == tt.addServiceNamespace && name == tt.addServicename {
+					found = true
+				}
+				svcs = append(svcs, fmt.Sprintf("%s/%s", namespace, name))
 			}
 		}
 		if !found {
@@ -116,21 +123,22 @@ func TestConfigFileRemovePeer(t *testing.T) {
 }
 
 func TestConfigFileRemovePeersByService(t *testing.T) {
-	services := [][]string{
-		{"a"},
-		{"a", "b"},
-		{"c"},
+	services := [][]Resource{
+		{Resource{"default", "a"}},
+		{Resource{"default", "a"}, Resource{"default", "b"}},
+		{Resource{"default", "c"}},
 	}
 
 	tests := []struct {
-		left    [][]string
-		svc     string
-		message string
+		left         [][]Resource
+		svcNamespace string
+		svcName      string
+		message      string
 	}{
-		{services[0:2], "c", "remove lone service from existing peer"},
-		{services, "b", "remove non-lone service from existent peer"},
-		{services[1:3], "a", "remove service from multiple peers"},
-		{services[:], "d", "remove service from non-existent peer"},
+		{services[0:2], "default", "c", "remove lone service from existing peer"},
+		{services, "default", "b", "remove non-lone service from existent peer"},
+		{services[1:3], "default", "a", "remove service from multiple peers"},
+		{services[:], "default", "d", "remove service from non-existent peer"},
 	}
 
 	for i, tt := range tests {
@@ -142,24 +150,33 @@ func TestConfigFileRemovePeersByService(t *testing.T) {
 		cfg := ConfigFile{
 			Peers: peers,
 		}
-		cfg.RemovePeersByService(tt.svc)
+		cfg.RemovePeersByService(tt.svcNamespace, tt.svcName)
 		if len(cfg.Peers) != len(tt.left) {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), len(tt.left), tt.message)
 		}
 		// make sure no peer has the removed service annotated
 		for _, p := range cfg.Peers {
+			var (
+				svcs  []string
+				found bool
+			)
 			for _, ns := range p.NodeSelectors {
+				var namespace, name string
 				for k, v := range ns.MatchLabels {
-					if k == serviceNameKey {
-						// look for the desired service
-						svcs := strings.Split(v, ",")
-						for _, s := range svcs {
-							if s == tt.svc {
-								t.Errorf("%d: still has service '%s' after removal, list: %s", i, tt.svc, svcs)
-							}
-						}
+					switch k {
+					case serviceNamespaceKey:
+						namespace = v
+					case serviceNameKey:
+						name = v
 					}
+					if namespace == tt.svcNamespace && name == tt.svcName {
+						found = true
+					}
+					svcs = append(svcs, fmt.Sprintf("%s/%s", namespace, name))
 				}
+			}
+			if found {
+				t.Errorf("%d: still has service '%s/%s' after removal, list: %s", i, tt.svcNamespace, tt.svcName, svcs)
 			}
 		}
 	}
