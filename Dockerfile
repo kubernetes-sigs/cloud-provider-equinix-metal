@@ -16,7 +16,10 @@
 
 # Build the manager binary
 ARG GOVER=1.17.8
-FROM golang:${GOVER} as builder
+FROM --platform=$BUILDPLATFORM golang:${GOVER} as builder
+
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 
 WORKDIR /workspace
 
@@ -31,10 +34,10 @@ RUN go mod download
 COPY . .
 
 # Build
-ARG ARCH
+ARG TARGETARCH
 ARG LDFLAGS
 ARG BINARY=cloud-provider-equinix-metal
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
     go build -a -ldflags "${LDFLAGS} -extldflags '-static'" \
     -o "${BINARY}" .
 
