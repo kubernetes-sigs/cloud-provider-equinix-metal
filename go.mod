@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/google/uuid v1.3.0
-	github.com/hashicorp/go-retryablehttp v0.7.0
+	github.com/hashicorp/go-retryablehttp v0.7.1
 	github.com/packethost/packet-api-server v0.0.0-20220212175623-ae51b225eb75
 	github.com/packethost/packngo v0.22.0
 	github.com/pallinder/go-randomdata v1.2.0
