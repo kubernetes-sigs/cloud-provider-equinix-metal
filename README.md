@@ -656,23 +656,3 @@ If a loadbalancer is enabled, CCM creates an Equinix Metal Elastic IP (EIP) rese
 * `cluster=<clusterID>` where `<clusterID>` is the UID of the immutable `kube-system` namespace. We do this so that if someone runs two clusters in the same project, and there is one `Service` in each cluster with the same namespace and name, then the two EIPs will not conflict.
 
 IP addresses always are created `/32`.
-
-## Running Locally
-
-You can run the CCM locally on your laptop or VM, i.e. not in the cluster. This _dramatically_ speeds up development. To do so:
-
-1. Deploy everything except for the `Deployment` and, optionally, the `Secret`
-1. Build it for your local platform `make build`
-1. Set the environment variable `CCM_SECRET` to a file with the secret contents as a json, i.e. the content of the secret's `stringData`, e.g. `CCM_SECRET=ccm-secret.yaml`
-1. Set the environment variable `KUBECONFIG` to a kubeconfig file with sufficient access to the cluster, e.g. `KUBECONFIG=mykubeconfig`
-1. Set the environment variable `METAL_METRO_NAME` to the correct metro where the cluster is running, e.g. `METAL_METRO_NAME=ny` _OR_ set the environment variable `METAL_FACILITY_NAME` to the correct facility where the cluster is running, e.g. `METAL_FACILITY_NAME=ewr1`
-1. If you want to run the loadbalancer, and it is not yet deployed, run `kubectl apply -f deploy/loadbalancer.yaml`
-1. Enable the loadbalancer by setting the environment variable `METAL_LOAD_BALANCER=metallb://`
-1. If you want to use a managed Elastic IP for the control plane, create one using the Equinix Metal API or Web UI, tag it uniquely, and set the environment variable `METAL_EIP_TAG=<tag>`
-1. Run the command, e.g.:
-
-```
-METAL_METRO_NAME=${METAL_METRO_NAME} METAL_LOAD_BALANCER=metallb:// dist/bin/cloud-provider-equinix-metal-darwin-amd64 --cloud-provider=equinixmetal --leader-elect=false --authentication-skip-lookup=true --cloud-config=$CCM_SECRET --kubeconfig=$KUBECONFIG
-```
-
-For lots of extra debugging, add `--v=2` or even higher levels, e.g. `--v=5`.
