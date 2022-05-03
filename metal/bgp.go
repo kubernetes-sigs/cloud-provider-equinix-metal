@@ -49,6 +49,8 @@ func (b *bgp) enableBGP() error {
 	// - bgpConfig struct has non-blank ID
 	// - bgpConfig struct does not have Status=="disabled"
 	if err == nil && bgpConfig != nil && bgpConfig.ID != "" && strings.ToLower(bgpConfig.Status) != "disabled" {
+		b.localASN = bgpConfig.Asn
+		b.bgpPass = bgpConfig.Md5
 		return nil
 	}
 
