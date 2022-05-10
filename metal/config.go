@@ -72,7 +72,7 @@ func (c Config) Strings() []string {
 	if c.LoadBalancerSetting == "" {
 		ret = append(ret, "loadbalancer config: disabled")
 	} else {
-		ret = append(ret, fmt.Sprintf("load balancer config: ''%s", c.LoadBalancerSetting))
+		ret = append(ret, fmt.Sprintf("load balancer config: '%s'", c.LoadBalancerSetting))
 	}
 	ret = append(ret, fmt.Sprintf("metro: '%s'", c.Metro))
 	ret = append(ret, fmt.Sprintf("facility: '%s'", c.Facility))
