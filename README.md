@@ -208,8 +208,8 @@ This section lists each configuration option, and whether it can be set by each 
 | Facility in which to create LoadBalancer Elastic IPs, only if Metro is not set |    | `METAL_FACILITY_NAME` | `facility` | Service-specific annotation, else metro |
 | Base URL to Equinix API |    |    | `base-url` | Official Equinix Metal API |
 | Load balancer setting |   | `METAL_LOAD_BALANCER` | `loadbalancer` | none |
-| BGP ASN for cluster nodes when enabling BGP on the project |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
-| BGP passphrase to use when enabling BGP on the project |   | `METAL_BGP_PASS` | `bgpPass` | `""` |
+| BGP ASN for cluster nodes when enabling BGP on the project; if the project **already** has BGP enabled, will use the existing BGP local ASN from the project |   | `METAL_LOCAL_ASN` | `localASN` | `65000` |
+| BGP passphrase to use when enabling BGP on the project; if the project **already** has BGP enabled, will use the existing BGP pass from the project |   | `METAL_BGP_PASS` | `bgpPass` | `""` |
 | Kubernetes annotation to set node's BGP ASN, `{{n}}` replaced with ordinal index of peer |   | `METAL_ANNOTATION_LOCAL_ASN` | `annotationLocalASN` | `"metal.equinix.com/bgp-peers-{{n}}-node-asn"` |
 | Kubernetes annotation to set BGP peer's ASN, {{n}} replaced with ordinal index of peer |   | `METAL_ANNOTATION_PEER_ASN` | `annotationPeerASN` | `"metal.equinix.com/bgp-peers-{{n}}-peer-asn"` |
 | Kubernetes annotation to set BGP peer's IPs, {{n}} replaced with ordinal index of peer |   | `METAL_ANNOTATION_PEER_IP` | `annotationPeerIP` | `"metal.equinix.com/bgp-peers-{{n}}-peer-ip"` |
