@@ -90,17 +90,22 @@ done
 
 ### Kubernetes Binary Arguments
 
-Control plane binaries in your cluster must start with the correct flags:
-
-* `kubelet`: All kubelets in your cluster **MUST** set the flag `--cloud-provider=external`. This must be done for _every_ kubelet. Note that [k3s](https://k3s.io) sets its own CCM by default. If you want to use the CCM with k3s, you must disable the k3s CCM and enable this one, as `--disable-cloud-controller --kubelet-arg cloud-provider=external`.
-* `kube-apiserver` and `kube-controller-manager` must **NOT** set the flag `--cloud-provider`. They then will use no cloud provider natively, leaving room for the Equinix Metal CCM.
-
-**WARNING**: setting the kubelet flag `--cloud-provider=external` will taint all nodes in a cluster with `node.cloudprovider.kubernetes.io/uninitialized`.
-The CCM itself will untaint those nodes when it initializes them.
+In order for the CCM to work, you want Kubernetes to taint all nodes in a cluster with `node.cloudprovider.kubernetes.io/uninitialized`.
 Any pod that does not tolerate that taint will be unscheduled until the CCM is running.
+Specifically, the most important pod that tolerates the taint is the CCM itself, which
+will cause those nodes to be untainted when it initializes them.
+
+For Kubernetes <= v1.22, control plane binaries in your cluster must start with the correct flags. 
+
+* `kube-apiserver` and `kube-controller-manager` must **NOT** set the flag `--cloud-provider`. They then will use no cloud provider natively, leaving room for the Equinix Metal CCM.
+* `kubelet`: All kubelets in your cluster **MUST** set the flag `--cloud-provider=external`. This must be done for _every_ kubelet. Note that [k3s](https://k3s.io) sets its own CCM by default. If you want to use the CCM with k3s, you must disable the k3s CCM and enable this one, as `--disable-cloud-controller --kubelet-arg cloud-provider=external`.
 
 You **must** set the kubelet flag the first time you run the kubelet. Stopping the kubelet, adding it after,
 and then restarting it will not work.
+
+For Kubernetes >= v1.23, the `--cloud-provider=` flag is deprecated (v1.23) or removed (v1.24+).
+All nodes are started tainted, and require a CCM.
+You do not need to set these arguments, and doing so is an error.
 
 #### Kubernetes node names must match the device name
 
