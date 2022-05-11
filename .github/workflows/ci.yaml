@@ -38,7 +38,7 @@ jobs:
       with:
         go-version: 1.17
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@v3.1.0
+      uses: golangci/golangci-lint-action@v3.2.0
       with:
         version: v1.44.2
   test:
@@ -81,7 +81,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - name: Set up QEMU for cross-building
-      uses: docker/setup-qemu-action@v1
+      uses: docker/setup-qemu-action@v2
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
@@ -107,7 +107,7 @@ jobs:
         echo "::set-output name=should-push::${SHOULD_PUSH}"
 
     - name: Log in to ghcr.io
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       if: ${{ steps.should-push.outputs.should-push == 'true' }}
       with:
         registry: ghcr.io
@@ -115,7 +115,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Log into DockerHub
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       if: ${{ env.DOCKER_USERNAME != '' && steps.should-push.outputs.should-push == 'true' }}
@@ -124,7 +124,7 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
 
     - name: Log into quay.io
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       env:
         QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
       if: ${{ env.QUAY_USERNAME != '' && steps.should-push.outputs.should-push == 'true' }}
@@ -135,7 +135,7 @@ jobs:
 
     - name: Build
       id: docker_build
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       with:
         context: .
         push: ${{ steps.should-push.outputs.should-push == 'true' }}
