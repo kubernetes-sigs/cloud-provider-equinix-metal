@@ -46,15 +46,16 @@ type loadBalancers struct {
 	eipMetroAnnotation    string
 	eipFacilityAnnotation string
 	nodeSelector          labels.Selector
+	eipTag                string
 }
 
-func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector string) (*loadBalancers, error) {
+func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector, eipTag string) (*loadBalancers, error) {
 	selector := labels.Everything()
 	if nodeSelector != "" {
 		selector, _ = labels.Parse(nodeSelector)
 	}
 
-	l := &loadBalancers{client, k8sclient, projectID, metro, facility, "", nil, config, localASN, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, selector}
+	l := &loadBalancers{client, k8sclient, projectID, metro, facility, "", nil, config, localASN, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, selector, eipTag}
 
 	// parse the implementor config and see what kind it is - allow for no config
 	if l.implementorConfig == "" {
@@ -153,9 +154,17 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve IP reservations for project %s: %w", l.project, err)
 	}
-	ipCidr, err := l.addService(ctx, service, ips, filterNodes(nodes, l.nodeSelector))
-	if err != nil {
-		return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
+	var (
+		ipCidr string
+	)
+	// handling is completely different if it is the control plane vs a regular service of type=LoadBalancer
+	if service.Name == externalServiceName && service.Namespace == externalServiceNamespace {
+		ipCidr, err = l.retrieveIPByTag(ctx, service, ips, l.eipTag)
+	} else {
+		ipCidr, err = l.addService(ctx, service, ips, filterNodes(nodes, l.nodeSelector))
+		if err != nil {
+			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
+		}
 	}
 	// get the IP only
 	ip := strings.SplitN(ipCidr, "/", 2)
@@ -486,6 +495,54 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, ips []p
 	return svcIPCidr, l.implementor.AddService(ctx, svc.Namespace, svc.Name, svcIPCidr, n)
 }
 
+func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, ips []packngo.IPAddressReservation, tag string) (string, error) {
+	svcName := serviceRep(svc)
+	svcIP := svc.Spec.LoadBalancerIP
+	cidr := 32
+
+	var (
+		svcIPCidr string
+	)
+	ipReservation := ipReservationByAllTags([]string{tag}, ips)
+
+	klog.V(2).Infof("processing %s with existing IP assignment %s", svcName, svcIP)
+	// if it already has an IP, no need to get it one
+	if svcIP == "" {
+		klog.V(2).Infof("no IP assigned for service %s; searching reservations", svcName)
+
+		if ipReservation == nil {
+			// if we did not find an IP reserved, create a request
+			klog.V(2).Infof("no IP assignment found for %s, returning none", svcName)
+			return "", fmt.Errorf("no IP found with tag '%s", tag)
+		}
+
+		// we have an IP, map and assign it
+		svcIP = ipReservation.Address
+
+		// assign the IP and save it
+		klog.V(2).Infof("assigning IP %s to %s", svcIP, svcName)
+		intf := l.k8sclient.CoreV1().Services(svc.Namespace)
+		existing, err := intf.Get(ctx, svc.Name, metav1.GetOptions{})
+		if err != nil || existing == nil {
+			klog.V(2).Infof("failed to get latest for service %s: %v", svcName, err)
+			return "", fmt.Errorf("failed to get latest for service %s: %w", svcName, err)
+		}
+		existing.Spec.LoadBalancerIP = svcIP
+
+		_, err = intf.Update(ctx, existing, metav1.UpdateOptions{})
+		if err != nil {
+			klog.V(2).Infof("failed to update service %s: %v", svcName, err)
+			return "", fmt.Errorf("failed to update service %s: %w", svcName, err)
+		}
+		klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
+	}
+	if ipReservation != nil {
+		cidr = ipReservation.CIDR
+	}
+	svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
+
+	return svcIPCidr, nil
+}
 func serviceRep(svc *v1.Service) string {
 	if svc == nil {
 		return ""
