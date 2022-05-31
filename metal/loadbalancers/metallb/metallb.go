@@ -188,7 +188,7 @@ func updateMapIP(ctx context.Context, config *ConfigFile, addr, svcNamespace, sv
 		autoAssign := false
 		if !config.AddAddressPool(&AddressPool{
 			Protocol:   "bgp",
-			Name:       svcName,
+			Name:       fmt.Sprintf("%s/%s", svcNamespace, svcName),
 			Addresses:  []string{addr},
 			AutoAssign: &autoAssign,
 		}) {
