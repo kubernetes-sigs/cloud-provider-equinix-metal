@@ -10,6 +10,7 @@ import (
 	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cpapi "k8s.io/cloud-provider/api"
 )
 
 var (
@@ -17,6 +18,16 @@ var (
 )
 
 // testNode provides a simple Node object satisfying the lookup requirements of InstanceMetadata()
+func testNodeWithIP(providerID, nodeName, nodeIP string) *v1.Node {
+	node := testNode(providerID, nodeName)
+	if nodeIP != "" {
+		node.Annotations = map[string]string{
+			cpapi.AnnotationAlphaProvidedIPAddr: nodeIP,
+		}
+	}
+	return node
+}
+
 func testNode(providerID, nodeName string) *v1.Node {
 	return &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
@@ -42,6 +53,7 @@ func TestNodeAddresses(t *testing.T) {
 		testCreateAddress(false, true),  // public ipv4
 		testCreateAddress(true, true),   // public ipv6
 	}
+	kubeletNodeIP := testCreateAddress(false, false)
 	dev.Network = networks
 	err := backend.UpdateDevice(dev.ID, dev)
 	if err != nil {
@@ -50,6 +62,13 @@ func TestNodeAddresses(t *testing.T) {
 
 	validAddresses := []v1.NodeAddress{
 		{Type: v1.NodeHostName, Address: devName},
+		{Type: v1.NodeInternalIP, Address: networks[0].Address},
+		{Type: v1.NodeExternalIP, Address: networks[1].Address},
+	}
+
+	validAddressesWithProvidedIP := []v1.NodeAddress{
+		{Type: v1.NodeHostName, Address: devName},
+		{Type: v1.NodeInternalIP, Address: kubeletNodeIP.Address},
 		{Type: v1.NodeInternalIP, Address: networks[0].Address},
 		{Type: v1.NodeExternalIP, Address: networks[1].Address},
 	}
@@ -67,6 +86,7 @@ func TestNodeAddresses(t *testing.T) {
 		{"valid both", testNode("equinixmetal://"+dev.ID, devName), validAddresses, nil},
 		{"valid provider id", testNode("equinixmetal://"+dev.ID, nodeName), validAddresses, nil},
 		{"valid node name", testNode("", devName), validAddresses, nil},
+		{"with node IP", testNodeWithIP("equinixmetal://"+dev.ID, nodeName, kubeletNodeIP.Address), validAddressesWithProvidedIP, nil},
 	}
 
 	for i, tt := range tests {

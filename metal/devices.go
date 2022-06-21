@@ -12,6 +12,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	cpapi "k8s.io/cloud-provider/api"
 	"k8s.io/klog/v2"
 )
 
@@ -60,13 +61,19 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 	if err != nil {
 		return nil, err
 	}
-	nodeAddresses, err := nodeAddresses(device)
+	// was a node IP provided
+	var providedNodeIP string
+	if node.Annotations != nil {
+		providedNodeIP = node.Annotations[cpapi.AnnotationAlphaProvidedIPAddr]
+	}
+	nodeAddresses, err := nodeAddresses(device, providedNodeIP)
 	if err != nil {
 		// TODO(displague) we error on missing private and public ip. is that restrictive?
 
 		// TODO(displague) should we return the public addresses DNS name as the Type=Hostname NodeAddress type too?
 		return nil, err
 	}
+
 	var p, r, z string
 	if device.Plan != nil {
 		p = device.Plan.Slug
@@ -96,11 +103,25 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 	}, nil
 }
 
-func nodeAddresses(device *packngo.Device) ([]v1.NodeAddress, error) {
-	var addresses []v1.NodeAddress
-	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeHostName, Address: device.Hostname})
+func nodeAddresses(device *packngo.Device, providedNodeIP string) ([]v1.NodeAddress, error) {
+	var (
+		addresses           []v1.NodeAddress
+		unique              = map[string]bool{}
+		privateIP, publicIP string
+	)
+	addr := v1.NodeAddress{Type: v1.NodeHostName, Address: device.Hostname}
+	unique[addr.Address] = true
+	addresses = append(addresses, addr)
 
-	var privateIP, publicIP string
+	// if the kubelet was started with --node-ip, that must be the first address to use
+	if providedNodeIP != "" {
+		privateIP = providedNodeIP
+		addr = v1.NodeAddress{Type: v1.NodeInternalIP, Address: providedNodeIP}
+		if _, ok := unique[addr.Address]; !ok {
+			unique[addr.Address] = true
+			addresses = append(addresses, addr)
+		}
+	}
 	for _, address := range device.Network {
 		if address.AddressFamily == int(metadata.IPv4) {
 			var addrType v1.NodeAddressType
@@ -111,7 +132,12 @@ func nodeAddresses(device *packngo.Device) ([]v1.NodeAddress, error) {
 				privateIP = address.Address
 				addrType = v1.NodeInternalIP
 			}
-			addresses = append(addresses, v1.NodeAddress{Type: addrType, Address: address.Address})
+			addr = v1.NodeAddress{Type: addrType, Address: address.Address}
+
+			if _, ok := unique[addr.Address]; !ok {
+				unique[addr.Address] = true
+				addresses = append(addresses, addr)
+			}
 		}
 	}
 
