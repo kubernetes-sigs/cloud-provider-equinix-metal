@@ -82,7 +82,7 @@ done
 
 **TL;DR**
 
-1. Set kubernetes binary arguments correctly
+1. Set kubernetes binary arguments correctly, including for VLAN IPs, if used
 1. Get your Equinix Metal project and secret API token
 1. Deploy your Equinix Metal project and secret API token to your cluster in a [Secret](https://kubernetes.io/docs/concepts/configuration/secret/)
 1. Deploy the CCM
@@ -107,6 +107,24 @@ and then restarting it will not work.
 By default, the kubelet will name nodes based on the node's hostname.
 Equinix Metal's device hostnames are set based on the name of the device.
 It is important that the Kubernetes node name matches the device name.
+
+#### VLANs
+
+If using Equinix Metal [Layer 2 VLANs](https://metal.equinix.com/developers/docs/layer2-networking/overview/), then you
+likely are supplying your own private IPs. As CPEM uses the Equinix Metal API to determine IPs for Kubernetes nodes,
+it does not know about the IPs you manage privately and assign to the node.
+
+In this case, you **must** assign the node the IP you want as "internal" - used to communicate between nodes in the Kubernetes cluster -
+using the [kubelet](https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/) option `--node-ip`. CPEM respects this kubelet option
+and, when it finds it has been used, will prefer it as a node's "internal" IP address.
+
+#### Private Elastic IP
+
+If you are using Equinix Metal [private Elastic IPs](https://metal.equinix.com/developers/docs/networking/ip-addresses/#private-ipv4-management-subnets),
+which you have assigned to a node, and wish to use that IP as the "internal" IP for the Kubernetes node, you **must** assign the node the selected IP
+using the [kubelet](https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/) option `--node-ip`. CPEM respects this kubelet option
+and, when it finds it has been used, will prefer it as a node's "internal" IP address. CPEM is intelligent enough to recognize that this IP
+was provided both via `--node-ip` and via the Equinix Metal API, and will set it only once.
 
 ### Get Equinix Metal Project ID and API Token
 
