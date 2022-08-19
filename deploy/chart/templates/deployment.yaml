@@ -78,7 +78,7 @@ spec:
           command:
             - ./cloud-provider-equinix-metal
             - '--cloud-provider=equinixmetal'
-            - '--leader-elect=false'
+            - '--leader-elect=true'
             - '--authentication-skip-lookup=true'
             - '--cloud-config=/etc/cloud-sa/cloud-sa.json'
           {{- with .Values.additionalCommands }}
