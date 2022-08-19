@@ -64,7 +64,7 @@ spec:
         command:
           - "./cloud-provider-equinix-metal"
           - "--cloud-provider=equinixmetal"
-          - "--leader-elect=false"
+          - "--leader-elect=true"
           - "--authentication-skip-lookup=true"
           - "--cloud-config=/etc/cloud-sa/cloud-sa.json"
         resources:
@@ -166,6 +166,18 @@ rules:
   - ""
   resources:
   - events
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  # reason: so ccm can use leases
+  - "coordination.k8s.io"
+  resources:
+  - leases
   verbs:
   - create
   - get
