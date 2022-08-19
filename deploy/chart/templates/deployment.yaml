@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: {{ include "cloud-provider-equinix-metal.fullname" . }}
   labels:
@@ -17,7 +17,6 @@ spec:
       {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
-        scheduler.alpha.kubernetes.io/critical-pod: ''
         checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
       labels:
         {{- include "cloud-provider-equinix-metal.selectorLabels" . | nindent 8 }}
@@ -28,6 +27,7 @@ spec:
       {{- end }}
       dnsPolicy: Default
       hostNetwork: true
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "cloud-provider-equinix-metal.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
@@ -35,6 +35,25 @@ spec:
       hostAliases: 
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      # set node affinity such that it will run only on nodes that have one of (logical OR)
+      # the labels:
+      #   kubernetes.io/role: master
+      #   node-role.kubernetes.io/control-plane
+      #   node-role.kubernetes.io/master
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/role
+                operator: In
+                values: [master]
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
       tolerations:
         - key: node.cloudprovider.kubernetes.io/uninitialized
           value: 'true'
