@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # Build the manager binary
-ARG GOVER=1.17.8
+ARG GOVER=1.19
 FROM --platform=$BUILDPLATFORM golang:${GOVER} as builder
 
 ARG TARGETPLATFORM
