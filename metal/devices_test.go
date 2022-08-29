@@ -165,39 +165,39 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 }
 
 /*
-func TestInstanceID(t *testing.T) {
-	vc, backend := testGetValidCloud(t, "")
-	inst, _ := vc.InstancesV2()
-	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	func TestInstanceID(t *testing.T) {
+		vc, backend := testGetValidCloud(t, "")
+		inst, _ := vc.InstancesV2()
+		devName := testGetNewDevName()
+		facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
+		plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
+		dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 
-	tests := []struct {
-		name string
-		id   string
-		err  error
-	}{
-		{"", "", fmt.Errorf("node name cannot be empty")},          // empty name
-		{"thisdoesnotexist", "", fmt.Errorf("instance not found")}, // unknown name
-		{devName, dev.ID, nil},                                     // valid
-	}
-
-	for i, tt := range tests {
-		var id string
-		md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.id, nodeName))
-		if md != nil {
-			id, err = deviceIDFromProviderID(md.ProviderID)
+		tests := []struct {
+			name string
+			id   string
+			err  error
+		}{
+			{"", "", fmt.Errorf("node name cannot be empty")},          // empty name
+			{"thisdoesnotexist", "", fmt.Errorf("instance not found")}, // unknown name
+			{devName, dev.ID, nil},                                     // valid
 		}
 
-		switch {
-		case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
-			t.Errorf("%d: mismatched errors, actual %q expected %q", i, err, tt.err)
-		case id != tt.id:
-			t.Errorf("%d: mismatched id, actual %v expected %v", i, id, tt.id)
+		for i, tt := range tests {
+			var id string
+			md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.id, nodeName))
+			if md != nil {
+				id, err = deviceIDFromProviderID(md.ProviderID)
+			}
+
+			switch {
+			case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
+				t.Errorf("%d: mismatched errors, actual %q expected %q", i, err, tt.err)
+			case id != tt.id:
+				t.Errorf("%d: mismatched id, actual %v expected %v", i, id, tt.id)
+			}
 		}
 	}
-}
 */
 func TestInstanceType(t *testing.T) {
 	vc, backend := testGetValidCloud(t, "")
