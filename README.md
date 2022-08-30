@@ -382,7 +382,7 @@ If `kube-vip` management is enabled, then CCM does the following.
 
 ##### MetalLB
 
-**Minimum Version**: MetalLB [version 0.11.0](https://metallb.universe.tf/release-notes/#version-0-11-0)
+**Supported Versions**: MetalLB [version 0.11.0](https://metallb.universe.tf/release-notes/#version-0-11-0) through [version 0.12.1](https://metallb.universe.tf/release-notes/#version-0-12-1). We are in the process of adding support for version 0.13.x.
 
 When [MetalLB](https://metallb.universe.tf) is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
 the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancing, without
