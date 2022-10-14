@@ -111,12 +111,11 @@ func TestConfigFileRemovePeer(t *testing.T) {
 		{genPeer(), len(peers), "remove non-existent peer"},
 		{peers[0].Duplicate(), len(peers) - 1, "remove matching peer"},
 	}
-	m := &MetalLBConfigMapper{config: &cfg}
 
 	for i, tt := range tests {
 		// get a clean set of peers
 		cfg.Peers = peers[:]
-		m.RemovePeer(&tt.peer)
+		cfg.RemovePeer(&tt.peer)
 		if len(cfg.Peers) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
 		}
