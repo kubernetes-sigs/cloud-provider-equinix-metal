@@ -19,7 +19,7 @@ const (
 	defaultName         = "config"
 )
 
-type MetalLBConfigurer interface {
+type Configurer interface {
 	// AddPeerByService adds a peer for a specific service.
 	// If a matching peer already exists with the service, do not change anything.
 	// If a matching peer already exists but does not have the service, add it.
@@ -51,8 +51,10 @@ type LB struct {
 	configMapInterface typedv1.ConfigMapInterface
 	configMapNamespace string
 	configMapName      string
-	configurer         MetalLBConfigurer
+	configurer         Configurer
 }
+
+var _ loadbalancers.LB = (*LB)(nil)
 
 func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	var configmapnamespace, configmapname string
@@ -75,7 +77,7 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 
 	lb := &LB{}
 	if crdConfiguration {
-		lb.configurer = &MetalLBCRDConfigurer{namespace: configmapnamespace}
+		lb.configurer = &CRDConfigurer{namespace: configmapnamespace}
 
 	} else {
 		// get the configmapinterface scoped to the namespace
@@ -84,7 +86,7 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 		lb.configMapInterface = cmInterface
 		lb.configMapNamespace = configmapnamespace
 		lb.configMapName = configmapname
-		lb.configurer = &MetalLBConfigMapper{namespace: configmapnamespace, configmapName: configmapname, cmi: cmInterface}
+		lb.configurer = &CMConfigurer{namespace: configmapnamespace, configmapName: configmapname, cmi: cmInterface}
 
 	}
 
@@ -99,7 +101,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	}
 
 	// Update the service and configmap and save them
-	err = mapIP(ctx, config, ip, svcNamespace, svcName, l.configMapName, l.configMapInterface)
+	err = mapIP(ctx, config, ip, svcNamespace, svcName)
 	if err != nil {
 		return fmt.Errorf("unable to map IP to service: %w", err)
 	}
@@ -117,7 +119,7 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	}
 
 	// unmap the EIP
-	if err := unmapIP(ctx, config, ip, l.configMapName, l.configMapInterface); err != nil {
+	if err := unmapIP(ctx, config, ip); err != nil {
 		return fmt.Errorf("failed to remove IP: %w", err)
 	}
 
@@ -198,18 +200,18 @@ func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
 }
 
 // mapIP add a given ip address to the metallb configmap
-func mapIP(ctx context.Context, config MetalLBConfigurer, addr, svcNamespace, svcName, configmapname string, cmInterface typedv1.ConfigMapInterface) error {
+func mapIP(ctx context.Context, config Configurer, addr, svcNamespace, svcName string) error {
 	klog.V(2).Infof("mapping IP %s", addr)
-	return updateMapIP(ctx, config, addr, svcNamespace, svcName, configmapname, cmInterface, true)
+	return updateMapIP(ctx, config, addr, svcNamespace, svcName, true)
 }
 
 // unmapIP remove a given IP address from the metalllb config map
-func unmapIP(ctx context.Context, config MetalLBConfigurer, addr, configmapname string, cmInterface typedv1.ConfigMapInterface) error {
+func unmapIP(ctx context.Context, config Configurer, addr string) error {
 	klog.V(2).Infof("unmapping IP %s", addr)
-	return updateMapIP(ctx, config, addr, "", "", configmapname, cmInterface, false)
+	return updateMapIP(ctx, config, addr, "", "", false)
 }
 
-func updateMapIP(ctx context.Context, config MetalLBConfigurer, addr, svcNamespace, svcName, configmapname string, cmInterface typedv1.ConfigMapInterface, add bool) error {
+func updateMapIP(ctx context.Context, config Configurer, addr, svcNamespace, svcName string, add bool) error {
 	if config == nil {
 		klog.V(2).Info("config unchanged, not updating")
 		return nil

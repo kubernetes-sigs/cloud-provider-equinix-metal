@@ -56,7 +56,7 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 		{peers[1], len(peers), 1, "default", "b", []string{"a", "b"}, "add existing peer with new service"},
 		{genPeer(), len(peers) + 1, len(peers), "default", "c", []string{"c"}, "add new peer"},
 	}
-	m := &MetalLBConfigMapper{config: &cfg}
+	m := &CMConfigurer{config: &cfg}
 
 	for i, tt := range tests {
 		// get a clean set of peers
@@ -150,7 +150,7 @@ func TestConfigFileRemovePeersByService(t *testing.T) {
 		cfg := ConfigFile{
 			Peers: peers,
 		}
-		m := &MetalLBConfigMapper{config: &cfg}
+		m := &CMConfigurer{config: &cfg}
 
 		m.RemovePeersByService(tt.svcNamespace, tt.svcName)
 		if len(cfg.Peers) != len(tt.left) {
@@ -202,7 +202,7 @@ func TestConfigFileRemovePeersBySelector(t *testing.T) {
 		{peers[0].NodeSelectors[1], len(peers) - 1, "remove existing peer, second selector"},
 		{genNodeSelector(), len(peers), "no match"},
 	}
-	m := &MetalLBConfigMapper{config: &cfg}
+	m := &CMConfigurer{config: &cfg}
 
 	for i, tt := range tests {
 		// get a clean set of peers
@@ -249,7 +249,7 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 		cfg := ConfigFile{
 			Pools: append([]AddressPool{}, pools...),
 		}
-		m := &MetalLBConfigMapper{config: &cfg}
+		m := &CMConfigurer{config: &cfg}
 
 		changed := m.AddAddressPool(&tt.pool)
 		if changed != tt.changed {
@@ -296,7 +296,7 @@ func TestConfigFileRemoveAddressPool(t *testing.T) {
 		cfg := ConfigFile{
 			Pools: append([]AddressPool{}, pools...),
 		}
-		m := &MetalLBConfigMapper{config: &cfg}
+		m := &CMConfigurer{config: &cfg}
 
 		m.RemoveAddressPool(&tt.pool)
 		if len(cfg.Pools) != len(tt.expected) {
@@ -333,7 +333,7 @@ func TestConfigFileRemoveAddressPoolByAddress(t *testing.T) {
 
 	for i, tt := range tests {
 		cfg.Pools = pools[:]
-		m := &MetalLBConfigMapper{config: &cfg}
+		m := &CMConfigurer{config: &cfg}
 
 		m.RemoveAddressPoolByAddress(tt.addr)
 		if len(cfg.Pools) != tt.total {

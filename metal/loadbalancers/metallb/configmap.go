@@ -22,22 +22,22 @@ const (
 	nameJoiner = ","
 )
 
-type MetalLBConfigMapper struct {
+type CMConfigurer struct {
 	namespace     string // defaults to metallb-system
 	configmapName string
 	config        *ConfigFile
 	cmi           typedv1.ConfigMapInterface
 }
 
-var _ MetalLBConfigurer = (*MetalLBConfigMapper)(nil)
+var _ Configurer = (*CMConfigurer)(nil)
 
-func (m *MetalLBConfigMapper) Get(ctx context.Context) error {
+func (m *CMConfigurer) Get(ctx context.Context) error {
 	var err error
 	m.config, err = m.getConfigMap(ctx)
 	return err
 }
 
-func (m *MetalLBConfigMapper) getConfigMap(ctx context.Context) (*ConfigFile, error) {
+func (m *CMConfigurer) getConfigMap(ctx context.Context) (*ConfigFile, error) {
 	cm, err := m.cmi.Get(ctx, m.configmapName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("unable to get metallb configmap %s: %w", m.configmapName, err)
@@ -47,7 +47,7 @@ func (m *MetalLBConfigMapper) getConfigMap(ctx context.Context) (*ConfigFile, er
 	return ParseConfig([]byte(configData))
 }
 
-func (m *MetalLBConfigMapper) Update(ctx context.Context) error {
+func (m *CMConfigurer) Update(ctx context.Context) error {
 	b, err := m.config.Bytes()
 	if err != nil {
 		return fmt.Errorf("error converting configfile data to bytes: %w", err)
@@ -70,7 +70,7 @@ func (m *MetalLBConfigMapper) Update(ctx context.Context) error {
 // If a matching peer already exists with the service, do not change anything.
 // If a matching peer already exists but does not have the service, add it.
 // Returns if anything changed.
-func (m *MetalLBConfigMapper) AddPeerByService(add *Peer, svcNamespace, svcName string) bool {
+func (m *CMConfigurer) AddPeerByService(add *Peer, svcNamespace, svcName string) bool {
 	var found bool
 	// ignore empty peer; nothing to add
 	if add == nil {
@@ -104,7 +104,7 @@ func (m *MetalLBConfigMapper) AddPeerByService(add *Peer, svcNamespace, svcName 
 // For any peers that have this services in the special MatchLabel, remove
 // the service from the label. If there are no services left on a peer, remove the
 // peer entirely.
-func (m *MetalLBConfigMapper) RemovePeersByService(svcNamespace, svcName string) bool {
+func (m *CMConfigurer) RemovePeersByService(svcNamespace, svcName string) bool {
 	var changed bool
 	// go through the peers and see if we have a match
 	peers := make([]Peer, 0)
@@ -127,7 +127,7 @@ func (m *MetalLBConfigMapper) RemovePeersByService(svcNamespace, svcName string)
 
 // RemovePeersBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
 // Returns if anything changed.
-func (m *MetalLBConfigMapper) RemovePeersBySelector(remove *NodeSelector) bool {
+func (m *CMConfigurer) RemovePeersBySelector(remove *NodeSelector) bool {
 	if remove == nil {
 		return false
 	}
@@ -145,7 +145,7 @@ func (m *MetalLBConfigMapper) RemovePeersBySelector(remove *NodeSelector) bool {
 
 // AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
 // Returns if anything changed
-func (m *MetalLBConfigMapper) AddAddressPool(add *AddressPool) bool {
+func (m *CMConfigurer) AddAddressPool(add *AddressPool) bool {
 	// ignore empty peer; nothing to add
 	if add == nil {
 		return false
@@ -185,7 +185,7 @@ func (m *MetalLBConfigMapper) AddAddressPool(add *AddressPool) bool {
 }
 
 // RemoveAddressPool remove a pool. If the matching pool does not exist, do not change anything
-func (m *MetalLBConfigMapper) RemoveAddressPool(remove *AddressPool) {
+func (m *CMConfigurer) RemoveAddressPool(remove *AddressPool) {
 	if remove == nil {
 		return
 	}
@@ -219,7 +219,7 @@ func (m *MetalLBConfigMapper) RemoveAddressPool(remove *AddressPool) {
 }
 
 // RemoveAddressPooByAddress remove a pool by an address alone. If the matching pool does not exist, do not change anything
-func (m *MetalLBConfigMapper) RemoveAddressPoolByAddress(addr string) {
+func (m *CMConfigurer) RemoveAddressPoolByAddress(addr string) {
 	if addr == "" {
 		return
 	}
