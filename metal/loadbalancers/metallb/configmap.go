@@ -40,7 +40,7 @@ func (m *CMConfigurer) Get(ctx context.Context) error {
 func (m *CMConfigurer) getConfigMap(ctx context.Context) (*ConfigFile, error) {
 	cm, err := m.cmi.Get(ctx, m.configmapName, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("unable to get metallb configmap %s: %w", m.configmapName, err)
+		return nil, fmt.Errorf("unable to get metallb configmap %s:%s %w", m.namespace, m.configmapName, err)
 	}
 	// ignore checking if it exists; if not, it gives a blank string, which ParseConfig can handle anyways
 	configData := cm.Data["config"]
