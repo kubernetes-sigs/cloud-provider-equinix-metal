@@ -7,7 +7,6 @@ import (
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"k8s.io/client-go/kubernetes"
-	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -48,10 +47,7 @@ type Configurer interface {
 }
 
 type LB struct {
-	configMapInterface typedv1.ConfigMapInterface
-	configMapNamespace string
-	configMapName      string
-	configurer         Configurer
+	configurer Configurer
 }
 
 var _ loadbalancers.LB = (*LB)(nil)
@@ -82,10 +78,6 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	} else {
 		// get the configmapinterface scoped to the namespace
 		cmInterface := k8sclient.CoreV1().ConfigMaps(configmapnamespace)
-
-		lb.configMapInterface = cmInterface
-		lb.configMapNamespace = configmapnamespace
-		lb.configMapName = configmapname
 		lb.configurer = &CMConfigurer{namespace: configmapnamespace, configmapName: configmapname, cmi: cmInterface}
 
 	}
@@ -95,27 +87,24 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node) error {
 	config := l.configurer
-	err := config.Get(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
+	if err := config.Get(ctx); err != nil {
+		return fmt.Errorf("unable to add service: %w", err)
 	}
 
 	// Update the service and configmap and save them
-	err = mapIP(ctx, config, ip, svcNamespace, svcName)
-	if err != nil {
+	if err := mapIP(ctx, config, ip, svcNamespace, svcName); err != nil {
 		return fmt.Errorf("unable to map IP to service: %w", err)
 	}
 	if err := l.addNodes(ctx, svcNamespace, svcName, nodes); err != nil {
-		return fmt.Errorf("failed to add nodes: %w", err)
+		return fmt.Errorf("unable to add service: %w", err)
 	}
 	return nil
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
 	config := l.configurer
-	err := config.Get(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
+	if err := config.Get(ctx); err != nil {
+		return fmt.Errorf("unable to remove service: %w", err)
 	}
 
 	// unmap the EIP
@@ -126,7 +115,9 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	// remove any node entries for this service
 	// go through the peers and see if we have one with our hostname.
 	if config.RemovePeersByService(svcNamespace, svcName) {
-		return config.Update(ctx)
+		if err := config.Update(ctx); err != nil {
+			return fmt.Errorf("unable to remove service: %w", err)
+		}
 	}
 	return nil
 }
@@ -144,9 +135,8 @@ func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, no
 // addNodes add one or more nodes with the provided name, srcIP, and bgp information
 func (l *LB) addNodes(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
 	config := l.configurer
-	err := config.Get(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
+	if err := config.Get(ctx); err != nil {
+		return fmt.Errorf("unable to add nodes: %w", err)
 	}
 
 	var changed bool
@@ -171,7 +161,9 @@ func (l *LB) addNodes(ctx context.Context, svcNamespace, svcName string, nodes [
 		}
 	}
 	if changed {
-		return config.Update(ctx)
+		if err := config.Update(ctx); err != nil {
+			return fmt.Errorf("unable to add nodes: %w", err)
+		}
 	}
 	return nil
 }
@@ -179,9 +171,8 @@ func (l *LB) addNodes(ctx context.Context, svcNamespace, svcName string, nodes [
 // RemoveNode remove a node with the provided name
 func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
 	config := l.configurer
-	err := config.Get(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
+	if err := config.Get(ctx); err != nil {
+		return fmt.Errorf("unable to remove node : %w", err)
 	}
 	// go through the peers and see if we have one with our hostname.
 	selector := NodeSelector{
@@ -194,7 +185,9 @@ func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
 		changed = true
 	}
 	if changed {
-		return config.Update(ctx)
+		if err := config.Update(ctx); err != nil {
+			return fmt.Errorf("unable to remove node: %w", err)
+		}
 	}
 	return nil
 }
