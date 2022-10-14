@@ -56,11 +56,13 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 		{peers[1], len(peers), 1, "default", "b", []string{"a", "b"}, "add existing peer with new service"},
 		{genPeer(), len(peers) + 1, len(peers), "default", "c", []string{"c"}, "add new peer"},
 	}
+	m := &MetalLBConfigMapper{config: &cfg}
 
 	for i, tt := range tests {
 		// get a clean set of peers
+
 		cfg.Peers = peers[:]
-		cfg.AddPeerByService(&tt.peer, tt.addServiceNamespace, tt.addServicename)
+		m.AddPeerByService(&tt.peer, tt.addServiceNamespace, tt.addServicename)
 		// make sure the number of peers is as expected
 		if len(cfg.Peers) != tt.total {
 			t.Fatalf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
@@ -69,7 +71,6 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 		p := cfg.Peers[tt.index]
 
 		var (
-			svcs  []string
 			found bool
 		)
 		for _, ns := range p.NodeSelectors {
@@ -84,7 +85,6 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 				if namespace == tt.addServiceNamespace && name == tt.addServicename {
 					found = true
 				}
-				svcs = append(svcs, fmt.Sprintf("%s/%s", namespace, name))
 			}
 		}
 		if !found {
@@ -111,11 +111,12 @@ func TestConfigFileRemovePeer(t *testing.T) {
 		{genPeer(), len(peers), "remove non-existent peer"},
 		{peers[0].Duplicate(), len(peers) - 1, "remove matching peer"},
 	}
+	m := &MetalLBConfigMapper{config: &cfg}
 
 	for i, tt := range tests {
 		// get a clean set of peers
 		cfg.Peers = peers[:]
-		cfg.RemovePeer(&tt.peer)
+		m.RemovePeer(&tt.peer)
 		if len(cfg.Peers) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
 		}
@@ -150,7 +151,9 @@ func TestConfigFileRemovePeersByService(t *testing.T) {
 		cfg := ConfigFile{
 			Peers: peers,
 		}
-		cfg.RemovePeersByService(tt.svcNamespace, tt.svcName)
+		m := &MetalLBConfigMapper{config: &cfg}
+
+		m.RemovePeersByService(tt.svcNamespace, tt.svcName)
 		if len(cfg.Peers) != len(tt.left) {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), len(tt.left), tt.message)
 		}
@@ -200,11 +203,12 @@ func TestConfigFileRemovePeersBySelector(t *testing.T) {
 		{peers[0].NodeSelectors[1], len(peers) - 1, "remove existing peer, second selector"},
 		{genNodeSelector(), len(peers), "no match"},
 	}
+	m := &MetalLBConfigMapper{config: &cfg}
 
 	for i, tt := range tests {
 		// get a clean set of peers
 		cfg.Peers = peers[:]
-		cfg.RemovePeersBySelector(&tt.selector)
+		m.RemovePeersBySelector(&tt.selector)
 		if len(cfg.Peers) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
 		}
@@ -246,8 +250,9 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 		cfg := ConfigFile{
 			Pools: append([]AddressPool{}, pools...),
 		}
+		m := &MetalLBConfigMapper{config: &cfg}
 
-		changed := cfg.AddAddressPool(&tt.pool)
+		changed := m.AddAddressPool(&tt.pool)
 		if changed != tt.changed {
 			t.Errorf("%d: mismatched changed actual %v expected %v", i, changed, tt.changed)
 		}
@@ -292,8 +297,9 @@ func TestConfigFileRemoveAddressPool(t *testing.T) {
 		cfg := ConfigFile{
 			Pools: append([]AddressPool{}, pools...),
 		}
+		m := &MetalLBConfigMapper{config: &cfg}
 
-		cfg.RemoveAddressPool(&tt.pool)
+		m.RemoveAddressPool(&tt.pool)
 		if len(cfg.Pools) != len(tt.expected) {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), len(tt.expected), tt.message)
 		} else {
@@ -328,7 +334,9 @@ func TestConfigFileRemoveAddressPoolByAddress(t *testing.T) {
 
 	for i, tt := range tests {
 		cfg.Pools = pools[:]
-		cfg.RemoveAddressPoolByAddress(tt.addr)
+		m := &MetalLBConfigMapper{config: &cfg}
+
+		m.RemoveAddressPoolByAddress(tt.addr)
 		if len(cfg.Pools) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), tt.total, tt.message)
 		}

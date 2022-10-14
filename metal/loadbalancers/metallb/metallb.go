@@ -2,13 +2,10 @@ package metallb
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog/v2"
@@ -22,10 +19,39 @@ const (
 	defaultName         = "config"
 )
 
+type MetalLBConfigurer interface {
+	// AddPeerByService adds a peer for a specific service.
+	// If a matching peer already exists with the service, do not change anything.
+	// If a matching peer already exists but does not have the service, add it.
+	// Returns if anything changed.
+	AddPeerByService(add *Peer, svcNamespace, svcName string) bool
+
+	// RemovePeersByService remove peers from a particular service.
+	// For any peers that have this services in the special MatchLabel, remove
+	// the service from the label. If there are no services left on a peer, remove the
+	// peer entirely.
+	RemovePeersByService(svcNamespace, svcName string) bool
+
+	// RemovePeersBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
+	// Returns if anything changed.
+	RemovePeersBySelector(remove *NodeSelector) bool
+
+	// AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
+	// Returns if anything changed
+	AddAddressPool(add *AddressPool) bool
+
+	// RemoveAddressPooByAddress remove a pool by an address alone. If the matching pool does not exist, do not change anything
+	RemoveAddressPoolByAddress(addr string)
+
+	Get(context.Context) error
+	Update(context.Context) error
+}
+
 type LB struct {
 	configMapInterface typedv1.ConfigMapInterface
 	configMapNamespace string
 	configMapName      string
+	configurer         MetalLBConfigurer
 }
 
 func NewLB(k8sclient kubernetes.Interface, config string) *LB {
@@ -45,17 +71,29 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 		configmapnamespace = defaultNamespace
 	}
 
-	// get the configmap
-	cmInterface := k8sclient.CoreV1().ConfigMaps(configmapnamespace)
-	return &LB{
-		configMapInterface: cmInterface,
-		configMapNamespace: configmapnamespace,
-		configMapName:      configmapname,
+	crdConfiguration := false
+
+	lb := &LB{}
+	if crdConfiguration {
+		lb.configurer = &MetalLBCRDConfigurer{namespace: configmapnamespace}
+
+	} else {
+		// get the configmapinterface scoped to the namespace
+		cmInterface := k8sclient.CoreV1().ConfigMaps(configmapnamespace)
+
+		lb.configMapInterface = cmInterface
+		lb.configMapNamespace = configmapnamespace
+		lb.configMapName = configmapname
+		lb.configurer = &MetalLBConfigMapper{namespace: configmapnamespace, configmapName: configmapname, cmi: cmInterface}
+
 	}
+
+	return lb
 }
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node) error {
-	config, err := l.getConfigMap(ctx)
+	config := l.configurer
+	err := config.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
 	}
@@ -72,7 +110,8 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
-	config, err := l.getConfigMap(ctx)
+	config := l.configurer
+	err := config.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
 	}
@@ -85,7 +124,7 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	// remove any node entries for this service
 	// go through the peers and see if we have one with our hostname.
 	if config.RemovePeersByService(svcNamespace, svcName) {
-		return saveUpdatedConfigMap(ctx, l.configMapInterface, l.configMapName, config)
+		return config.Update(ctx)
 	}
 	return nil
 }
@@ -102,7 +141,8 @@ func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, no
 
 // addNodes add one or more nodes with the provided name, srcIP, and bgp information
 func (l *LB) addNodes(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
-	config, err := l.getConfigMap(ctx)
+	config := l.configurer
+	err := config.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
 	}
@@ -129,14 +169,15 @@ func (l *LB) addNodes(ctx context.Context, svcNamespace, svcName string, nodes [
 		}
 	}
 	if changed {
-		return saveUpdatedConfigMap(ctx, l.configMapInterface, l.configMapName, config)
+		return config.Update(ctx)
 	}
 	return nil
 }
 
 // RemoveNode remove a node with the provided name
 func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
-	config, err := l.getConfigMap(ctx)
+	config := l.configurer
+	err := config.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve metallb config map %s:%s : %w", l.configMapNamespace, l.configMapName, err)
 	}
@@ -151,34 +192,24 @@ func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
 		changed = true
 	}
 	if changed {
-		return saveUpdatedConfigMap(ctx, l.configMapInterface, l.configMapName, config)
+		return config.Update(ctx)
 	}
 	return nil
 }
 
-func (l *LB) getConfigMap(ctx context.Context) (*ConfigFile, error) {
-	cm, err := l.configMapInterface.Get(ctx, l.configMapName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("unable to get metallb configmap %s: %w", l.configMapName, err)
-	}
-	// ignore checking if it exists; if not, it gives a blank string, which ParseConfig can handle anyways
-	configData := cm.Data["config"]
-	return ParseConfig([]byte(configData))
-}
-
 // mapIP add a given ip address to the metallb configmap
-func mapIP(ctx context.Context, config *ConfigFile, addr, svcNamespace, svcName, configmapname string, cmInterface typedv1.ConfigMapInterface) error {
+func mapIP(ctx context.Context, config MetalLBConfigurer, addr, svcNamespace, svcName, configmapname string, cmInterface typedv1.ConfigMapInterface) error {
 	klog.V(2).Infof("mapping IP %s", addr)
 	return updateMapIP(ctx, config, addr, svcNamespace, svcName, configmapname, cmInterface, true)
 }
 
 // unmapIP remove a given IP address from the metalllb config map
-func unmapIP(ctx context.Context, config *ConfigFile, addr, configmapname string, cmInterface typedv1.ConfigMapInterface) error {
+func unmapIP(ctx context.Context, config MetalLBConfigurer, addr, configmapname string, cmInterface typedv1.ConfigMapInterface) error {
 	klog.V(2).Infof("unmapping IP %s", addr)
 	return updateMapIP(ctx, config, addr, "", "", configmapname, cmInterface, false)
 }
 
-func updateMapIP(ctx context.Context, config *ConfigFile, addr, svcNamespace, svcName, configmapname string, cmInterface typedv1.ConfigMapInterface, add bool) error {
+func updateMapIP(ctx context.Context, config MetalLBConfigurer, addr, svcNamespace, svcName, configmapname string, cmInterface typedv1.ConfigMapInterface, add bool) error {
 	if config == nil {
 		klog.V(2).Info("config unchanged, not updating")
 		return nil
@@ -199,28 +230,9 @@ func updateMapIP(ctx context.Context, config *ConfigFile, addr, svcNamespace, sv
 		config.RemoveAddressPoolByAddress(addr)
 	}
 	klog.V(2).Info("config changed, updating")
-	if err := saveUpdatedConfigMap(ctx, cmInterface, configmapname, config); err != nil {
+	if err := config.Update(ctx); err != nil {
 		klog.V(2).Infof("error updating configmap: %v", err)
 		return fmt.Errorf("failed to update configmap: %w", err)
 	}
 	return nil
-}
-
-func saveUpdatedConfigMap(ctx context.Context, cmi typedv1.ConfigMapInterface, name string, cfg *ConfigFile) error {
-	b, err := cfg.Bytes()
-	if err != nil {
-		return fmt.Errorf("error converting configfile data to bytes: %w", err)
-	}
-
-	mergePatch, _ := json.Marshal(map[string]interface{}{
-		"data": map[string]interface{}{
-			"config": string(b),
-		},
-	})
-
-	klog.V(2).Infof("patching configmap:\n%s", mergePatch)
-	// save to k8s
-	_, err = cmi.Patch(ctx, name, k8stypes.MergePatchType, mergePatch, metav1.PatchOptions{})
-
-	return err
 }
