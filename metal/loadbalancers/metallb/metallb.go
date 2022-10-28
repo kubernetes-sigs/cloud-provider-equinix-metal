@@ -8,6 +8,12 @@ import (
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	// k8sapiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	clientconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 const (
@@ -23,24 +29,24 @@ type Configurer interface {
 	// If a matching peer already exists with the service, do not change anything.
 	// If a matching peer already exists but does not have the service, add it.
 	// Returns if anything changed.
-	AddPeerByService(add *Peer, svcNamespace, svcName string) bool
+	AddPeerByService(ctx context.Context, add *Peer, svcNamespace, svcName string) bool
 
 	// RemovePeersByService remove peers from a particular service.
 	// For any peers that have this services in the special MatchLabel, remove
 	// the service from the label. If there are no services left on a peer, remove the
 	// peer entirely.
-	RemovePeersByService(svcNamespace, svcName string) bool
+	RemovePeersByService(ctx context.Context, svcNamespace, svcName string) bool
 
 	// RemovePeersBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
 	// Returns if anything changed.
-	RemovePeersBySelector(remove *NodeSelector) bool
+	RemovePeersBySelector(ctx context.Context, remove *NodeSelector) bool
 
 	// AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
 	// Returns if anything changed
-	AddAddressPool(add *AddressPool) bool
+	AddAddressPool(ctx context.Context, add *AddressPool) bool
 
 	// RemoveAddressPooByAddress remove a pool by an address alone. If the matching pool does not exist, do not change anything
-	RemoveAddressPoolByAddress(addr string)
+	RemoveAddressPoolByAddress(ctx context.Context, addr string)
 
 	Get(context.Context) error
 	Update(context.Context) error
@@ -52,34 +58,43 @@ type LB struct {
 
 var _ loadbalancers.LB = (*LB)(nil)
 
-func NewLB(k8sclient kubernetes.Interface, config string) *LB {
-	var configmapnamespace, configmapname string
+// func NewLB(k8sclient kubernetes.Interface, k8sApiextensionsClientset *k8sapiextensionsclient.Clientset, config string) *LB {
+func NewLB(k8sclient kubernetes.Interface, config string, extraConfig map[string][]string) *LB {
+	var namespace, configmapname string
+
 	// it may have an extra slash at the beginning or end, so get rid of it
 	config = strings.TrimPrefix(config, "/")
 	config = strings.TrimSuffix(config, "/")
 	cmparts := strings.SplitN(config, "/", 2)
 	if len(cmparts) >= 2 {
-		configmapnamespace, configmapname = cmparts[0], cmparts[1]
+		namespace, configmapname = cmparts[0], cmparts[1]
 	}
 	// defaults
 	if configmapname == "" {
 		configmapname = defaultName
 	}
-	if configmapnamespace == "" {
-		configmapnamespace = defaultNamespace
+	if namespace == "" {
+		namespace = defaultNamespace
 	}
 
 	crdConfiguration := false
 
 	lb := &LB{}
 	if crdConfiguration {
-		lb.configurer = &CRDConfigurer{namespace: configmapnamespace}
 
+		scheme := runtime.NewScheme()
+		_ = metallbv1beta1.AddToScheme(scheme)
+		cl, err := client.New(clientconfig.GetConfigOrDie(), client.Options{Scheme: scheme})
+		if err != nil {
+			panic(err)
+		}
+
+		// lb.configurer = &CRDConfigurer{namespace: namespace, crdi: k8sApiextensionsClientset.ApiextensionsV1beta1().CustomResourceDefinitions()}
+		lb.configurer = &CRDConfigurer{namespace: namespace, client: cl, advertisementNames: extraConfig["advertisment-names"]}
 	} else {
 		// get the configmapinterface scoped to the namespace
-		cmInterface := k8sclient.CoreV1().ConfigMaps(configmapnamespace)
-		lb.configurer = &CMConfigurer{namespace: configmapnamespace, configmapName: configmapname, cmi: cmInterface}
-
+		cmInterface := k8sclient.CoreV1().ConfigMaps(namespace)
+		lb.configurer = &CMConfigurer{namespace: namespace, configmapName: configmapname, cmi: cmInterface}
 	}
 
 	return lb
@@ -114,7 +129,7 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 
 	// remove any node entries for this service
 	// go through the peers and see if we have one with our hostname.
-	if config.RemovePeersByService(svcNamespace, svcName) {
+	if config.RemovePeersByService(ctx, svcNamespace, svcName) {
 		if err := config.Update(ctx); err != nil {
 			return fmt.Errorf("unable to remove service: %w", err)
 		}
@@ -155,12 +170,12 @@ func (l *LB) addNodes(ctx context.Context, svcNamespace, svcName string, nodes [
 				SrcAddr:       node.SourceIP,
 				NodeSelectors: ns,
 			}
-			if config.AddPeerByService(&p, svcNamespace, svcName) {
+			if config.AddPeerByService(ctx, &p, svcNamespace, svcName) {
 				changed = true
 			}
 		}
 	}
-	if changed {
+	if changed { // and type configmap
 		if err := config.Update(ctx); err != nil {
 			return fmt.Errorf("unable to add nodes: %w", err)
 		}
@@ -181,7 +196,7 @@ func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
 		},
 	}
 	var changed bool
-	if config.RemovePeersBySelector(&selector) {
+	if config.RemovePeersBySelector(ctx, &selector) {
 		changed = true
 	}
 	if changed {
@@ -212,7 +227,7 @@ func updateMapIP(ctx context.Context, config Configurer, addr, svcNamespace, svc
 	// update the configmap and save it
 	if add {
 		autoAssign := false
-		if !config.AddAddressPool(&AddressPool{
+		if !config.AddAddressPool(ctx, &AddressPool{
 			Protocol:   "bgp",
 			Name:       fmt.Sprintf("%s/%s", svcNamespace, svcName),
 			Addresses:  []string{addr},
@@ -222,7 +237,7 @@ func updateMapIP(ctx context.Context, config Configurer, addr, svcNamespace, svc
 			return nil
 		}
 	} else {
-		config.RemoveAddressPoolByAddress(addr)
+		config.RemoveAddressPoolByAddress(ctx, addr)
 	}
 	klog.V(2).Info("config changed, updating")
 	if err := config.Update(ctx); err != nil {

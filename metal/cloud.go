@@ -9,6 +9,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/component-base/version"
 	"k8s.io/klog/v2"
+	// k8sapiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 )
 
 const (
@@ -75,7 +76,9 @@ func init() {
 func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
 	klog.V(5).Info("called Initialize")
 	clientset := clientBuilder.ClientOrDie("cloud-provider-equinix-metal-shared-informers")
+	// apiextensionsClientset := k8sapiextensionsclient.NewForConfigOrDie(clientBuilder.ConfigOrDie("cloud-provider-equinix-metal-shared-informers"))
 
+	// apiextensionsV1Client.ApiextensionsV1beta1().CustomResourceDefinitions().Get()
 	// initialize the individual services
 	epm, err := newControlPlaneEndpointManager(clientset, stop, c.config.EIPTag, c.config.ProjectID, c.client.DeviceIPs, c.client.ProjectIPs, c.config.APIServerPort, c.config.EIPHealthCheckUseHostIP)
 	if err != nil {
@@ -85,6 +88,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	if err != nil {
 		klog.Fatalf("could not initialize BGP: %v", err)
 	}
+	// lb, err := newLoadBalancers(c.client, clientset, apiextensionsClientset, c.config.ProjectID, c.config.Metro, c.config.Facility, c.config.LoadBalancerSetting, bgp.localASN, bgp.bgpPass, c.config.AnnotationNetworkIPv4Private, c.config.AnnotationLocalASN, c.config.AnnotationPeerASN, c.config.AnnotationPeerIP, c.config.AnnotationSrcIP, c.config.AnnotationBGPPass, c.config.AnnotationEIPMetro, c.config.AnnotationEIPMetro, c.config.BGPNodeSelector, c.config.EIPTag)
 	lb, err := newLoadBalancers(c.client, clientset, c.config.ProjectID, c.config.Metro, c.config.Facility, c.config.LoadBalancerSetting, bgp.localASN, bgp.bgpPass, c.config.AnnotationNetworkIPv4Private, c.config.AnnotationLocalASN, c.config.AnnotationPeerASN, c.config.AnnotationPeerIP, c.config.AnnotationSrcIP, c.config.AnnotationBGPPass, c.config.AnnotationEIPMetro, c.config.AnnotationEIPMetro, c.config.BGPNodeSelector, c.config.EIPTag)
 	if err != nil {
 		klog.Fatalf("could not initialize LoadBalancers: %v", err)

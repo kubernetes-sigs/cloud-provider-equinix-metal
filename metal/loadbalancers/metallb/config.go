@@ -318,6 +318,7 @@ func (s SelectorRequirementsSlice) Less(i, j int) bool {
 func (s SelectorRequirementsSlice) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
+
 func (s SelectorRequirementsSlice) Equal(o SelectorRequirementsSlice) bool {
 	// not matched if the slices are of the wrong length
 	if len(s) != len(o) {
@@ -656,6 +657,7 @@ type BgpAdvertisements []BgpAdvertisement
 func (b BgpAdvertisements) Len() int {
 	return len(b)
 }
+
 func (b BgpAdvertisements) Less(i, j int) bool {
 	if *b[i].AggregationLength < *b[j].AggregationLength || *b[i].LocalPref < *b[j].LocalPref {
 		return true
@@ -675,6 +677,7 @@ func (b BgpAdvertisements) Less(i, j int) bool {
 
 	return false
 }
+
 func (b BgpAdvertisements) Swap(i, j int) {
 	b[i], b[j] = b[j], b[i]
 }

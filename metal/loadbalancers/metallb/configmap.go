@@ -70,7 +70,7 @@ func (m *CMConfigurer) Update(ctx context.Context) error {
 // If a matching peer already exists with the service, do not change anything.
 // If a matching peer already exists but does not have the service, add it.
 // Returns if anything changed.
-func (m *CMConfigurer) AddPeerByService(add *Peer, svcNamespace, svcName string) bool {
+func (m *CMConfigurer) AddPeerByService(ctx context.Context, add *Peer, svcNamespace, svcName string) bool {
 	var found bool
 	// ignore empty peer; nothing to add
 	if add == nil {
@@ -104,7 +104,7 @@ func (m *CMConfigurer) AddPeerByService(add *Peer, svcNamespace, svcName string)
 // For any peers that have this services in the special MatchLabel, remove
 // the service from the label. If there are no services left on a peer, remove the
 // peer entirely.
-func (m *CMConfigurer) RemovePeersByService(svcNamespace, svcName string) bool {
+func (m *CMConfigurer) RemovePeersByService(ctx context.Context, svcNamespace, svcName string) bool {
 	var changed bool
 	// go through the peers and see if we have a match
 	peers := make([]Peer, 0)
@@ -127,7 +127,7 @@ func (m *CMConfigurer) RemovePeersByService(svcNamespace, svcName string) bool {
 
 // RemovePeersBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
 // Returns if anything changed.
-func (m *CMConfigurer) RemovePeersBySelector(remove *NodeSelector) bool {
+func (m *CMConfigurer) RemovePeersBySelector(ctx context.Context, remove *NodeSelector) bool {
 	if remove == nil {
 		return false
 	}
@@ -145,7 +145,7 @@ func (m *CMConfigurer) RemovePeersBySelector(remove *NodeSelector) bool {
 
 // AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
 // Returns if anything changed
-func (m *CMConfigurer) AddAddressPool(add *AddressPool) bool {
+func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool) bool {
 	// ignore empty peer; nothing to add
 	if add == nil {
 		return false
@@ -219,7 +219,7 @@ func (m *CMConfigurer) RemoveAddressPool(remove *AddressPool) {
 }
 
 // RemoveAddressPooByAddress remove a pool by an address alone. If the matching pool does not exist, do not change anything
-func (m *CMConfigurer) RemoveAddressPoolByAddress(addr string) {
+func (m *CMConfigurer) RemoveAddressPoolByAddress(ctx context.Context, addr string) {
 	if addr == "" {
 		return
 	}

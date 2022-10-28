@@ -5,7 +5,7 @@ import (
 )
 
 func genRandomString(l int) string {
-	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	b := make([]rune, l)
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
@@ -59,6 +59,7 @@ func genNodeSelector() NodeSelector {
 	}
 	return ns
 }
+
 func genSelectorRequirements() SelectorRequirements {
 	return SelectorRequirements{
 		Key:      genRandomString(4),

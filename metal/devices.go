@@ -21,9 +21,7 @@ type instances struct {
 	project string
 }
 
-var (
-	_ cloudprovider.InstancesV2 = (*instances)(nil)
-)
+var _ cloudprovider.InstancesV2 = (*instances)(nil)
 
 func newInstances(client *packngo.Client, projectID string) *instances {
 	return &instances{client: client, project: projectID}

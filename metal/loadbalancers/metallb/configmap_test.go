@@ -1,6 +1,7 @@
 package metallb
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -62,7 +63,7 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 		// get a clean set of peers
 
 		cfg.Peers = peers[:]
-		m.AddPeerByService(&tt.peer, tt.addServiceNamespace, tt.addServicename)
+		m.AddPeerByService(context.Background(), &tt.peer, tt.addServiceNamespace, tt.addServicename)
 		// make sure the number of peers is as expected
 		if len(cfg.Peers) != tt.total {
 			t.Fatalf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
@@ -70,9 +71,7 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 		// make sure the particular peer has the right services annotated
 		p := cfg.Peers[tt.index]
 
-		var (
-			found bool
-		)
+		var found bool
 		for _, ns := range p.NodeSelectors {
 			var namespace, name string
 			for k, v := range ns.MatchLabels {
@@ -152,7 +151,7 @@ func TestConfigFileRemovePeersByService(t *testing.T) {
 		}
 		m := &CMConfigurer{config: &cfg}
 
-		m.RemovePeersByService(tt.svcNamespace, tt.svcName)
+		m.RemovePeersByService(context.Background(), tt.svcNamespace, tt.svcName)
 		if len(cfg.Peers) != len(tt.left) {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), len(tt.left), tt.message)
 		}
@@ -207,7 +206,7 @@ func TestConfigFileRemovePeersBySelector(t *testing.T) {
 	for i, tt := range tests {
 		// get a clean set of peers
 		cfg.Peers = peers[:]
-		m.RemovePeersBySelector(&tt.selector)
+		m.RemovePeersBySelector(context.Background(), &tt.selector)
 		if len(cfg.Peers) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
 		}
@@ -251,7 +250,7 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 		}
 		m := &CMConfigurer{config: &cfg}
 
-		changed := m.AddAddressPool(&tt.pool)
+		changed := m.AddAddressPool(context.Background(), &tt.pool)
 		if changed != tt.changed {
 			t.Errorf("%d: mismatched changed actual %v expected %v", i, changed, tt.changed)
 		}
@@ -266,6 +265,7 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 		}
 	}
 }
+
 func TestConfigFileRemoveAddressPool(t *testing.T) {
 	pools := []AddressPool{
 		genPool(),
@@ -310,6 +310,7 @@ func TestConfigFileRemoveAddressPool(t *testing.T) {
 		}
 	}
 }
+
 func TestConfigFileRemoveAddressPoolByAddress(t *testing.T) {
 	pools := []AddressPool{
 		genPool(),
@@ -335,7 +336,7 @@ func TestConfigFileRemoveAddressPoolByAddress(t *testing.T) {
 		cfg.Pools = pools[:]
 		m := &CMConfigurer{config: &cfg}
 
-		m.RemoveAddressPoolByAddress(tt.addr)
+		m.RemoveAddressPoolByAddress(context.Background(), tt.addr)
 		if len(cfg.Pools) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), tt.total, tt.message)
 		}
@@ -676,7 +677,6 @@ func TestSelectorRequirementsCompare(t *testing.T) {
 			t.Errorf("%d: left %s vs right %s gave %v instead of expected %v", i, tt.left, tt.right, actual, tt.compare)
 		}
 	}
-
 }
 
 // we do not test SelectorRequirements.Equal, as it is just .Compare() == 0
@@ -836,6 +836,7 @@ func TestSelectorRequirementsSliceEqual(t *testing.T) {
 		t.Error("same contents with different order reports unequal")
 	}
 }
+
 func TestPeerEqual(t *testing.T) {
 	base := genPeer()
 
@@ -933,9 +934,10 @@ func TestPeerEqual(t *testing.T) {
 		t.Error("out-of-order NodeSelectors: not equal")
 	}
 }
-func TestPeerMatchSelector(t *testing.T) {
 
+func TestPeerMatchSelector(t *testing.T) {
 }
+
 func TestNodeSelectorEqual(t *testing.T) {
 	base := genNodeSelector()
 
