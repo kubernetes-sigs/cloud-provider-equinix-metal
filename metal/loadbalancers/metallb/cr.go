@@ -313,7 +313,7 @@ func convertToBGPPeer(peer Peer) metallbv1beta1.BGPPeer {
 			Address:    peer.Addr,
 			SrcAddress: peer.SrcAddr,
 			Port:       peer.Port,
-			HoldTime:   metav1.Duration{time},
+			HoldTime:   metav1.Duration{Duration: time},
 			// KeepaliveTime: ,
 			// RouterID: peer.RouterID,
 			NodeSelectors: convertToNodeSelectors(peer.NodeSelectors),
