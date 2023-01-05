@@ -186,7 +186,6 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (l *loadBalancers) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	klog.V(2).Infof("UpdateLoadBalancer(): service %s", service.Name)
-	// get IP address reservations and check if they any exists for this svc
 
 	var n []loadbalancers.Node
 	for _, node := range filterNodes(nodes, l.nodeSelector) {

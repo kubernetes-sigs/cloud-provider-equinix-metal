@@ -66,6 +66,9 @@ func (m *CMConfigurer) Update(ctx context.Context) error {
 	return err
 }
 
+// AddPeer not required
+func (m *CMConfigurer) AddPeer(ctx context.Context, add *Peer) bool { return false }
+
 // AddPeerByService adds a peer for a specific service.
 // If a matching peer already exists with the service, do not change anything.
 // If a matching peer already exists but does not have the service, add it.
@@ -127,9 +130,9 @@ func (m *CMConfigurer) RemovePeersByService(ctx context.Context, svcNamespace, s
 
 // RemovePeersBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
 // Returns if anything changed.
-func (m *CMConfigurer) RemovePeersBySelector(ctx context.Context, remove *NodeSelector) bool {
+func (m *CMConfigurer) RemovePeersBySelector(ctx context.Context, remove *NodeSelector) (bool, error) {
 	if remove == nil {
-		return false
+		return false, nil
 	}
 	originalCount := len(m.config.Peers)
 	// go through the peers and see if we have a match
@@ -140,15 +143,15 @@ func (m *CMConfigurer) RemovePeersBySelector(ctx context.Context, remove *NodeSe
 		}
 	}
 	m.config.Peers = peers
-	return len(m.config.Peers) != originalCount
+	return len(m.config.Peers) != originalCount, nil
 }
 
 // AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
 // Returns if anything changed
-func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool) bool {
+func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool) (bool, error) {
 	// ignore empty peer; nothing to add
 	if add == nil {
-		return false
+		return false, nil
 	}
 	// go through the pools and see if we have one that matches
 	for i, pool := range m.config.Pools {
@@ -158,7 +161,7 @@ func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool) boo
 		// - if the name is different, modify the name on the first to encompass both
 		if pool.Equal(add) {
 			// they were equal, so we found a matcher
-			return false
+			return false, nil
 		}
 		if pool.EqualIgnoreName(add) {
 			// they were not equal, so the names must be different. We need to modify
@@ -167,7 +170,7 @@ func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool) boo
 			for _, name := range existing {
 				// if it already has it, no need to add anything
 				if name == add.Name {
-					return false
+					return false, nil
 				}
 			}
 			// we made it here, so the name does not exist; add it
@@ -175,13 +178,13 @@ func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool) boo
 			sort.Strings(existing)
 			pool.Name = strings.Join(existing, nameJoiner)
 			m.config.Pools[i] = pool
-			return true
+			return true, nil
 		}
 	}
 
 	// if we got here, none matched exactly, so add it
 	m.config.Pools = append(m.config.Pools, *add)
-	return true
+	return true, nil
 }
 
 // RemoveAddressPool remove a pool. If the matching pool does not exist, do not change anything
@@ -219,9 +222,9 @@ func (m *CMConfigurer) RemoveAddressPool(remove *AddressPool) {
 }
 
 // RemoveAddressPooByAddress remove a pool by an address alone. If the matching pool does not exist, do not change anything
-func (m *CMConfigurer) RemoveAddressPoolByAddress(ctx context.Context, addr string) {
+func (m *CMConfigurer) RemoveAddressPoolByAddress(ctx context.Context, addr string) error {
 	if addr == "" {
-		return
+		return nil
 	}
 	// go through the pools and see if we have a match
 	pools := make([]AddressPool, 0)
@@ -238,4 +241,5 @@ func (m *CMConfigurer) RemoveAddressPoolByAddress(ctx context.Context, addr stri
 		}
 	}
 	m.config.Pools = pools
+	return nil
 }

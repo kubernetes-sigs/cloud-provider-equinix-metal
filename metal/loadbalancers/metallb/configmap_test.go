@@ -250,7 +250,7 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 		}
 		m := &CMConfigurer{config: &cfg}
 
-		changed := m.AddAddressPool(context.Background(), &tt.pool)
+		changed, _ := m.AddAddressPool(context.Background(), &tt.pool)
 		if changed != tt.changed {
 			t.Errorf("%d: mismatched changed actual %v expected %v", i, changed, tt.changed)
 		}
