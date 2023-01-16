@@ -66,48 +66,40 @@ func (m *CMConfigurer) Update(ctx context.Context) error {
 	return err
 }
 
-// AddPeer not required
-func (m *CMConfigurer) AddPeer(ctx context.Context, add *Peer) bool { return false }
-
-// AddPeerByService adds a peer for a specific service.
-// If a matching peer already exists with the service, do not change anything.
-// If a matching peer already exists but does not have the service, add it.
-// Returns if anything changed.
-func (m *CMConfigurer) AddPeerByService(ctx context.Context, add *Peer, svcNamespace, svcName string) bool {
-	var found bool
-	// ignore empty peer; nothing to add
-	if add == nil {
-		return false
-	}
-
-	// go through the peers and see if we have one that matches
-	// definition of a match is:
-	// - MyASN matches
-	// - ASN matches
-	// - Addr matches
-	// - NodeSelectors all match (but order is ignored)
-	var peers []Peer
-	for _, peer := range m.config.Peers {
-		if peer.EqualIgnoreService(add) {
-			found = true
-			peer.AddService(svcNamespace, svcName)
+func (m *CMConfigurer) UpdatePeersByService(ctx context.Context, adds *[]Peer, svcNamespace, svcName string) (bool, error) {
+	var changed bool
+	for _, add := range *adds {
+		// go through the peers and see if we have one that matches
+		// definition of a match is:
+		// - MyASN matches
+		// - ASN matches
+		// - Addr matches
+		// - NodeSelectors all match (but order is ignored)
+		var peers []Peer
+		var found bool
+		for _, peer := range m.config.Peers {
+			if peer.EqualIgnoreService(&add) {
+				found = true
+				peer.AddService(svcNamespace, svcName)
+			}
+			peers = append(peers, peer)
 		}
-		peers = append(peers, peer)
+		m.config.Peers = peers
+		if !changed {
+			changed = found
+		}
+		add.AddService(svcNamespace, svcName)
+		m.config.Peers = append(m.config.Peers, add)
 	}
-	m.config.Peers = peers
-	if found {
-		return true
-	}
-	add.AddService(svcNamespace, svcName)
-	m.config.Peers = append(m.config.Peers, *add)
-	return true
+
+	return true, nil
 }
 
 // RemovePeersByService remove peers from a particular service.
 // For any peers that have this services in the special MatchLabel, remove
 // the service from the label. If there are no services left on a peer, remove the
 // peer entirely.
-func (m *CMConfigurer) RemovePeersByService(ctx context.Context, svcNamespace, svcName string) bool {
+func (m *CMConfigurer) RemovePeersByService(ctx context.Context, svcNamespace, svcName string) (bool, error) {
 	var changed bool
 	// go through the peers and see if we have a match
 	peers := make([]Peer, 0)
@@ -125,31 +117,13 @@ func (m *CMConfigurer) RemovePeersByService(ctx context.Context, svcNamespace, s
 		}
 	}
 	m.config.Peers = peers
-	return changed
-}
-
-// RemovePeersBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
-// Returns if anything changed.
-func (m *CMConfigurer) RemovePeersBySelector(ctx context.Context, remove *NodeSelector) (bool, error) {
-	if remove == nil {
-		return false, nil
-	}
-	originalCount := len(m.config.Peers)
-	// go through the peers and see if we have a match
-	peers := make([]Peer, 0)
-	for _, peer := range m.config.Peers {
-		if !peer.MatchSelector(remove) {
-			peers = append(peers, peer)
-		}
-	}
-	m.config.Peers = peers
-	return len(m.config.Peers) != originalCount, nil
+	return changed, nil
 }
 
 // AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
 // Returns if anything changed
-func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool) (bool, error) {
-	// ignore empty peer; nothing to add
+func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, svcNamespace, svcName string) (bool, error) {
+	// ignore empty pool; nothing to add
 	if add == nil {
 		return false, nil
 	}
@@ -187,40 +161,6 @@ func (m *CMConfigurer) AddAddressPool(ctx context.Context, add *AddressPool) (bo
 	return true, nil
 }
 
-// RemoveAddressPool remove a pool. If the matching pool does not exist, do not change anything
-func (m *CMConfigurer) RemoveAddressPool(remove *AddressPool) {
-	if remove == nil {
-		return
-	}
-	// go through the pools and see if we have a match
-	pools := make([]AddressPool, 0)
-	// remove that one, keep all others
-	for _, pool := range m.config.Pools {
-		// if an exact match, continue
-		if pool.Equal(remove) {
-			continue
-		}
-		// if an exact match except for name, see if the name is in the list
-		if pool.EqualIgnoreName(remove) {
-			// they were not equal, so the names must be different.
-			// check if it is in teh list
-			existing := strings.Split(pool.Name, nameJoiner)
-			var newNames []string
-			for _, name := range existing {
-				// if it already has it, no need to add anything
-				if name == remove.Name {
-					continue
-				}
-				newNames = append(newNames, name)
-			}
-			sort.Strings(newNames)
-			pool.Name = strings.Join(newNames, nameJoiner)
-		}
-		pools = append(pools, pool)
-	}
-	m.config.Pools = pools
-}
-
 // RemoveAddressPooByAddress remove a pool by an address alone. If the matching pool does not exist, do not change anything
 func (m *CMConfigurer) RemoveAddressPoolByAddress(ctx context.Context, addr string) error {
 	if addr == "" {
@@ -243,3 +183,6 @@ func (m *CMConfigurer) RemoveAddressPoolByAddress(ctx context.Context, addr stri
 	m.config.Pools = pools
 	return nil
 }
+
+// RemoveAddressPool remove a pool by name. If the matching pool does not exist, do not change anything
+func (m *CMConfigurer) RemoveAddressPool(ctx context.Context, pool string) error { return nil }

@@ -457,7 +457,7 @@ For example:
 _any_ node that has any of the 3 sets of labels. The node with the hostname `dc-worker-1` will be matched,
 independent of the other selectors.
 
-The remaining selectros are used to allow CCM to track which services are being announced by which node.
+The remaining selectors are used to allow CCM to track which services are being announced by which node.
 These are ignored, as long as no such labels exist on any nodes. This is why the labels are called the clearly
 non-matching names of `nomatch.metal.equinix.com/service-namespace` and
 `nomatch.metal.equinix.com/service-name`

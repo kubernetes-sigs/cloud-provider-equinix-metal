@@ -4,11 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v2"
-	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // these are taken from https://github.com/metallb/metallb/blob/master/internal/config/config.go
@@ -684,109 +681,4 @@ func (b BgpAdvertisements) Less(i, j int) bool {
 
 func (b BgpAdvertisements) Swap(i, j int) {
 	b[i], b[j] = b[j], b[i]
-}
-
-/*
-type BgpAdvertisement struct {
-	AggregationLength *int `yaml:"aggregation-length"`
-	LocalPref         *uint32
-	Communities       []string
-}
-
-*/
-
-func convertToNodeSelectors(legacy NodeSelectors) []metallbv1beta1.NodeSelector {
-	nodeSelectors := make([]metallbv1beta1.NodeSelector, 0)
-	for _, l := range legacy {
-		nodeSelectors = append(nodeSelectors, convertToNodeSelector(l))
-	}
-	return nodeSelectors
-}
-
-func convertToNodeSelector(legacy NodeSelector) metallbv1beta1.NodeSelector {
-	return metallbv1beta1.NodeSelector{
-		MatchLabels:      legacy.MatchLabels,
-		MatchExpressions: convertToMatchExpressions(legacy.MatchExpressions),
-	}
-}
-
-func convertToMatchExpressions(legacy []SelectorRequirements) []metallbv1beta1.MatchExpression {
-	matchExpressions := make([]metallbv1beta1.MatchExpression, 0)
-	for _, l := range legacy {
-		new := metallbv1beta1.MatchExpression{
-			Key:      l.Key,
-			Operator: l.Operator,
-			Values:   l.Values,
-		}
-		matchExpressions = append(matchExpressions, new)
-	}
-	return matchExpressions
-}
-
-// peerEqual return true if a peer is identical.
-// Will only check for it in the current Peer p, and not the "other" peer in the parameter.
-func peerEqual(p, o metallbv1beta1.BGPPeerSpec) bool {
-	// not matched if any field is mismatched except for NodeSelectors
-	if p.MyASN != o.MyASN || p.ASN != o.ASN || p.Address != o.Address || p.Port != o.Port || p.HoldTime != o.HoldTime ||
-		p.Password != o.Password || p.RouterID != o.RouterID {
-		return false
-	}
-	return true
-}
-
-func convertToIPAddr(addr AddressPool, namespace string) metallbv1beta1.IPAddressPool {
-	ip := metallbv1beta1.IPAddressPool{
-		Spec: metallbv1beta1.IPAddressPoolSpec{
-			Addresses:     addr.Addresses,
-			AutoAssign:    addr.AutoAssign,
-			AvoidBuggyIPs: addr.AvoidBuggyIPs,
-		},
-	}
-	ip.SetName(addr.Name)
-	// add service name to labels
-	ip.SetLabels(map[string]string{servicesLabelKey : addr.Name})
-	ip.SetNamespace(namespace)
-	return ip
-}
-
-func convertToBGPPeer(peer Peer, namespace string) metallbv1beta1.BGPPeer {
-	time, _ := time.ParseDuration(peer.HoldTime)
-	bgpPeer := metallbv1beta1.BGPPeer{
-		Spec: metallbv1beta1.BGPPeerSpec{
-			MyASN:      peer.MyASN,
-			ASN:        peer.ASN,
-			Address:    peer.Addr,
-			SrcAddress: peer.SrcAddr,
-			Port:       peer.Port,
-			HoldTime:   metav1.Duration{Duration: time},
-			// KeepaliveTime: ,
-			// RouterID: peer.RouterID,
-			NodeSelectors: convertToNodeSelectors(peer.NodeSelectors),
-			Password:      peer.Password,
-			// BFDProfile:
-			// EBGPMultiHop:
-		},
-	}
-	bgpPeer.SetName(peer.Name)
-	bgpPeer.SetNamespace(namespace)
-	return bgpPeer
-}
-
-func appendUnique[T comparable](sliceList []T, elems ...T) []T {
-	//update slice
-	sliceList = append(sliceList, elems...)
-	// remove duplicates
-	return removeDuplicate(sliceList)
-}
-
-func removeDuplicate[T comparable](sliceList []T) []T {
-	allKeys := make(map[T]bool)
-	list := []T{}
-	for _, item := range sliceList {
-		if _, value := allKeys[item]; !value {
-			allKeys[item] = true
-			list = append(list, item)
-		}
-	}
-	return list
 }

@@ -7,10 +7,10 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
+	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,33 +28,26 @@ const (
 )
 
 type Configurer interface {
-	// AddPeer adds a peer.
-	// If a matching peer already exists with same settings and NodeSelectors, do not change anything.
-	// If a matching peer already exists but does not have same NodeSelectors, add new Peer.
-	// Returns if a new Peer is added.
-	AddPeer(ctx context.Context, add *Peer) bool
-
 	// AddPeerByService adds a peer for a specific service.
 	// If a matching peer already exists with the service, do not change anything.
 	// If a matching peer already exists but does not have the service, add it.
 	// Returns if anything changed.
-	AddPeerByService(ctx context.Context, add *Peer, svcNamespace, svcName string) bool
+	UpdatePeersByService(ctx context.Context, adds *[]Peer, svcNamespace, svcName string) (bool, error)
 
 	// RemovePeersByService remove peers from a particular service.
 	// For any peers that have this services in the special MatchLabel, remove
 	// the service from the label. If there are no services left on a peer, remove the
 	// peer entirely. Not applicable with CRD
-	RemovePeersByService(ctx context.Context, svcNamespace, svcName string) bool
-
-	// RemovePeersBySelector remove a peer by selector. If the matching peer does not exist, do not change anything.
-	// Returns if anything changed.
-	RemovePeersBySelector(ctx context.Context, remove *NodeSelector) (bool, error)
+	RemovePeersByService(ctx context.Context, svcNamespace, svcName string) (bool, error)
 
 	// AddAddressPool adds an address pool. If a matching pool already exists, do not change anything.
 	// Returns if anything changed
-	AddAddressPool(ctx context.Context, add *AddressPool) (bool, error)
+	AddAddressPool(ctx context.Context, add *AddressPool, svcNamespace, svcName string) (bool, error)
 
-	// RemoveAddressPooByAddress remove a pool by an address alone. If the matching pool does not exist, do not change anything
+	// RemoveAddressPool remove a pool by name. If the matching pool does not exist, do not change anything
+	RemoveAddressPool(ctx context.Context, pool string) error
+
+	// RemoveAddressPoolByAddress remove a pool by an address alone. If the matching pool does not exist, do not change anything
 	RemoveAddressPoolByAddress(ctx context.Context, addr string) error
 
 	Get(context.Context) error
@@ -62,14 +55,17 @@ type Configurer interface {
 }
 
 type LB struct {
-	configurer Configurer
+	configurer     Configurer
 	configurerType string
 }
 
-var _ loadbalancers.LB = (*LB)(nil)
+var (
+	_                loadbalancers.LB = (*LB)(nil)
+	crdConfiguration                  = false
+)
 
 // func NewLB(k8sclient kubernetes.Interface, k8sApiextensionsClientset *k8sapiextensionsclient.Clientset, config string) *LB {
-func NewLB(k8sclient kubernetes.Interface, config string, extraConfig map[string][]string) *LB {
+func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	var namespace, configmapname string
 
 	// it may have an extra slash at the beginning or end, so get rid of it
@@ -87,8 +83,7 @@ func NewLB(k8sclient kubernetes.Interface, config string, extraConfig map[string
 		namespace = defaultNamespace
 	}
 
-	//check metallb version
-	crdConfiguration := false
+	// check metallb version
 	version, _ := metallbVersion(k8sclient, namespace)
 	currentVersion, _ := semver.Make(version)
 	crdMinVersion, _ := semver.Make(metallbCrdMinVersion)
@@ -96,31 +91,22 @@ func NewLB(k8sclient kubernetes.Interface, config string, extraConfig map[string
 	// if current ver is >= min ver supporting CRD; then crdConfiguration = true
 	if currentVersion.Compare(crdMinVersion) != -1 {
 		crdConfiguration = true
+		klog.V(2).Info("using MetalLB with crdConfiguration")
 	}
+
 	lb := &LB{}
 	if crdConfiguration {
-
 		scheme := runtime.NewScheme()
 		_ = metallbv1beta1.AddToScheme(scheme)
 		cl, err := client.New(clientconfig.GetConfigOrDie(), client.Options{Scheme: scheme})
 		if err != nil {
 			panic(err)
 		}
-
-		// defaults
-		bgpAdvs := extraConfig[bgpAdvertisementConfigKey]
-		if len(bgpAdvs) == 0 {
-			bgpAdvs = []string{ defaultBgpAdvertisement }
-		}
-
-		// lb.configurer = &CRDConfigurer{namespace: namespace, crdi: k8sApiextensionsClientset.ApiextensionsV1beta1().CustomResourceDefinitions()}
-		lb.configurer = &CRDConfigurer{namespace: namespace, client: cl, bgpAdvertisements: bgpAdvs}
-		lb.configurerType = "CRD"
+		lb.configurer = &CRDConfigurer{namespace: namespace, client: cl}
 	} else {
 		// get the configmapinterface scoped to the namespace
 		cmInterface := k8sclient.CoreV1().ConfigMaps(namespace)
 		lb.configurer = &CMConfigurer{namespace: namespace, configmapName: configmapname, cmi: cmInterface}
-		lb.configurerType = "CM"
 	}
 
 	return lb
@@ -136,7 +122,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	if err := addIP(ctx, config, ip, svcNamespace, svcName, l.configurerType); err != nil {
 		return fmt.Errorf("unable to map IP to service: %w", err)
 	}
-	if err := l.addNodes(ctx, svcNamespace, svcName, nodes); err != nil {
+	if err := l.updateNodes(ctx, svcNamespace, svcName, nodes); err != nil {
 		return fmt.Errorf("unable to add service: %w", err)
 	}
 	return nil
@@ -149,13 +135,17 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	}
 
 	// remove the EIP
-	if err := removeIP(ctx, config, ip, l.configurerType); err != nil {
+	if err := removeIP(ctx, config, ip, svcNamespace, svcName, l.configurerType); err != nil {
 		return fmt.Errorf("failed to remove IP: %w", err)
 	}
 
 	// remove any node entries for this service
 	// go through the peers and see if we have one with our hostname.
-	if config.RemovePeersByService(ctx, svcNamespace, svcName) {
+	removed, err := config.RemovePeersByService(ctx, svcNamespace, svcName)
+	if err != nil {
+		return fmt.Errorf("unable to remove service: %w", err)
+	}
+	if removed {
 		if err := config.Update(ctx); err != nil {
 			return fmt.Errorf("unable to remove service: %w", err)
 		}
@@ -164,23 +154,22 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 }
 
 func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
-	// find the service whose name matches the requested svc
-
 	// ensure nodes are correct
-	if err := l.addNodes(ctx, svcNamespace, svcName, nodes); err != nil {
+	if err := l.updateNodes(ctx, svcNamespace, svcName, nodes); err != nil {
 		return fmt.Errorf("failed to add nodes: %w", err)
 	}
 	return nil
 }
 
-// addNodes add one or more nodes with the provided name, srcIP, and bgp information
-func (l *LB) addNodes(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
+// updateNodes add/delete one or more nodes with the provided name, srcIP, and bgp information
+func (l *LB) updateNodes(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
 	config := l.configurer
 	if err := config.Get(ctx); err != nil {
 		return fmt.Errorf("unable to add nodes: %w", err)
 	}
 
 	var changed bool
+	var peersToUpdate []Peer
 	for _, node := range nodes {
 		ns := []NodeSelector{
 			{MatchLabels: map[string]string{
@@ -196,46 +185,24 @@ func (l *LB) addNodes(ctx context.Context, svcNamespace, svcName string, nodes [
 				SrcAddr:       node.SourceIP,
 				NodeSelectors: ns,
 			}
-			if l.configurerType == "CM" && config.AddPeerByService(ctx, &p, svcNamespace, svcName) {
-				changed = true
-			} else if l.configurerType == "CRD" {
+			if crdConfiguration {
 				p.Name = fmt.Sprintf("%s-%d", node.Name, i)
 				// TODO (ocobleseqx) could it be another port num?
 				p.Port = 179
-				config.AddPeer(ctx, &p)
 			}
+			peersToUpdate = append(peersToUpdate, p)
 		}
 	}
-	if l.configurerType == "CM" && changed {
-		if err := config.Update(ctx); err != nil {
-			return fmt.Errorf("unable to add nodes: %w", err)
-		}
-	}
-	return nil
-}
-
-// RemoveNode remove a node with the provided name
-func (l *LB) RemoveNode(ctx context.Context, nodeName string) error {
-	config := l.configurer
-	if err := config.Get(ctx); err != nil {
-		return fmt.Errorf("unable to remove node : %w", err)
-	}
-	// go through the peers and see if we have one with our hostname.
-	selector := NodeSelector{
-		MatchLabels: map[string]string{
-			hostnameKey: nodeName,
-		},
-	}
-
-	changed, err := config.RemovePeersBySelector(ctx, &selector)
-
+	// to ensure that the nodes are correct, we need to check the nodes specified
+	// for these services against the whole list of nodes/peers saved in the configuration
+	changed, err := config.UpdatePeersByService(ctx, &peersToUpdate, svcNamespace, svcName)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to update nodes: %w", err)
 	}
 
-	if l.configurerType == "CM" && changed {
+	if changed {
 		if err := config.Update(ctx); err != nil {
-			return fmt.Errorf("unable to remove node: %w", err)
+			return fmt.Errorf("unable to update nodes: %w", err)
 		}
 	}
 	return nil
@@ -248,9 +215,9 @@ func addIP(ctx context.Context, config Configurer, addr, svcNamespace, svcName, 
 }
 
 // removeIP remove a given IP address from the metalllb ConfigMap or IPAddressPool
-func removeIP(ctx context.Context, config Configurer, addr, configurerType string) error {
+func removeIP(ctx context.Context, config Configurer, addr, svcNamespace, svcName, configurerType string) error {
 	klog.V(2).Infof("unmapping IP %s", addr)
-	return updateIP(ctx, config, addr, "", "", configurerType, false)
+	return updateIP(ctx, config, addr, svcNamespace, svcName, configurerType, false)
 }
 
 func updateIP(ctx context.Context, config Configurer, addr, svcNamespace, svcName, configurerType string, add bool) error {
@@ -260,11 +227,11 @@ func updateIP(ctx context.Context, config Configurer, addr, svcNamespace, svcNam
 	}
 	// < v0.13: update the ConfigMap and save it
 	// > v0.13: update/create new AddressPool
-	var addrName string
-	if configurerType == "CM" {
-		addrName = fmt.Sprintf("%s/%s", svcNamespace, svcName)
+	var name string
+	if !crdConfiguration {
+		name = fmt.Sprintf("%s/%s", svcNamespace, svcName)
 	} else {
-		addrName = svcName
+		name = poolName(svcNamespace, svcName)
 	}
 
 	if add {
@@ -272,41 +239,46 @@ func updateIP(ctx context.Context, config Configurer, addr, svcNamespace, svcNam
 
 		added, err := config.AddAddressPool(ctx, &AddressPool{
 			Protocol:   "bgp",
-			Name:       addrName,
+			Name:       name,
 			Addresses:  []string{addr},
 			AutoAssign: &autoAssign,
-		})
-
+		}, svcNamespace, svcName)
 		if err != nil {
-			return fmt.Errorf("failed to add new address pool: %w", err)
+			klog.V(2).Infof("error adding IP: %v", err)
+			return fmt.Errorf("error adding IP: %w", err)
 		}
-
 		if !added {
 			klog.V(2).Info("address pool already exists, unchanged")
 			return nil
 		}
 	} else {
-		if configurerType == "CM" {
-			config.RemoveAddressPoolByAddress(ctx, addr)
+		if !crdConfiguration {
+			if err := config.RemoveAddressPoolByAddress(ctx, addr); err != nil {
+				klog.V(2).Infof("error removing IP: %v", err)
+				return fmt.Errorf("error removing IP: %w", err)
+			}
 		} else {
-			config.RemoveAddressPoolByAddress(ctx, addrName)
+			if err := config.RemoveAddressPool(ctx, name); err != nil {
+				klog.V(2).Infof("error removing IPAddressPool: %v", err)
+				return fmt.Errorf("error removing IPAddressPool: %w", err)
+			}
 		}
 	}
 
-	// > v0.13: Update not required, will return nil
-	if err := config.Update(ctx); err != nil {
-		klog.V(2).Infof("error updating configmap: %v", err)
-		return fmt.Errorf("failed to update configmap: %w", err)
+	if !crdConfiguration {
+		if err := config.Update(ctx); err != nil {
+			klog.V(2).Infof("error updating configmap: %v", err)
+			return fmt.Errorf("failed to update configmap: %w", err)
+		}
 	}
 	return nil
 }
 
 func metallbVersion(k8sclient kubernetes.Interface, namespace string) (string, error) {
 	listOptions := metav1.ListOptions{
-        LabelSelector: "app=metallb,component=controller",
-    }
-	deploys, err := k8sclient.AppsV1().Deployments(namespace).List(context.Background(), listOptions )
-
+		LabelSelector: "app=metallb,component=controller",
+	}
+	deploys, err := k8sclient.AppsV1().Deployments(namespace).List(context.Background(), listOptions)
 	if err != nil {
 		return "", fmt.Errorf("unable to get metallb controller deployment %s:controller %w", namespace, err)
 	}
@@ -318,7 +290,6 @@ func metallbVersion(k8sclient kubernetes.Interface, namespace string) (string, e
 				if img[0] == "quay.io/metallb/controller" {
 					return img[1], nil
 				}
-
 			}
 		}
 	}

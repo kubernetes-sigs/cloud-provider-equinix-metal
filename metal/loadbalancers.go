@@ -86,11 +86,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 		impl = kubevip.NewLB(k8sclient, lbconfig)
 	case "metallb":
 		klog.Info("loadbalancer implementation enabled: metallb")
-		extralbconfig, err := url.ParseQuery(u.RawQuery)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse url for the Metallb load balancer: %w", err)
-		}
-		impl = metallb.NewLB(k8sclient, lbconfig, extralbconfig)
+		impl = metallb.NewLB(k8sclient, lbconfig)
 	case "empty":
 		klog.Info("loadbalancer implementation enabled: empty, bgp only")
 		impl = empty.NewLB(k8sclient, lbconfig)
