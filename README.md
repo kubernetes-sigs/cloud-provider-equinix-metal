@@ -382,12 +382,64 @@ If `kube-vip` management is enabled, then CCM does the following.
 
 ##### MetalLB
 
-**Supported Versions**: MetalLB [version 0.11.0](https://metallb.universe.tf/release-notes/#version-0-11-0) through [version 0.12.1](https://metallb.universe.tf/release-notes/#version-0-12-1). We are in the process of adding support for version 0.13.x.
+**Supported Versions**: MetalLB [version 0.11.0](https://metallb.universe.tf/release-notes/#version-0-11-0) through [version 0.13.7](https://metallb.universe.tf/release-notes/#version-0-13-7).
 
 When [MetalLB](https://metallb.universe.tf) is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
 the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancing, without
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
+
+**NOTE:** MetalLB [is now configurable via CRs](https://metallb.universe.tf/release-notes/#version-0-13-2), and ConfigMap configuration is not supported anymore. If you need to use a previous version, skip to the section [MetalLB from v0.11.0 to v0.12.1](#metallb-configuration-after-v0.13.2)
+
+###### MetalLB after v0.13.2
+
+To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
+
+```
+metallb:///<configMapNamespace>
+```
+
+For example:
+
+* `metallb:///metallb-system` - enable `MetalLB` management and update configuration in the namespace `metallb-system` (default)
+* `metallb:///foonamespace` - enable `MetalLB` management and update configuration in the namespace `metallb-system`
+* `metallb:///` - enable `MetalLB` management and update configuration in the default namespace `metallb-system`
+
+Notice the **three* slashes. In the URL, the namespace are in the path.
+
+When enabled, CCM controls the loadbalancer by updating the required MetalLB CR (custom resources).
+
+If `MetalLB` management is enabled, then CCM does the following.
+
+1. Get the appropriate namespace, based on the rules above.
+1. 
+1. Enable BGP on the Equinix Metal project
+1. For each node currently in the cluster or added:
+   * retrieve the node's Equinix Metal ID via the node provider ID
+   * retrieve the device's BGP configuration: node ASN, peer ASN, peer IPs, source IP
+   * create a `bgpeers.metallb.io` for each peer IP with a kubernetes selector ensuring that those BGPPeers are only for this node
+1. For each node deleted from the cluster:
+   * delete the affiliated BGPeers.
+1. For each service of `type=LoadBalancer` currently in the cluster or added:
+   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` already has that IP address affiliated with it, it is ready; ignore
+   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#servicespec-v1-core) and ensure there is an `ipaddresspools.metallb.io` with `auto-assign: false`, and there is an elegible `bgpadvertisement.metallb.io`. If no bgpadvertisement exists with the appropriate tag ("cloud-provider":"equinix-metal"), a default bgpadvertisement "equinix-metal-bgp-adv" with the ipaddresspool name in the ipAddressPools spec will be created. 
+   * if an Elastic IP address reservation with the appropriate tags does not exist, create it and add it to the services spec, and ensure there is an `ipaddresspools.metallb.io` with `auto-assign: false`, and there is an elegible `bgpadvertisement.metallb.io`. If no bgpadvertisement exists with the appropriate tag ("cloud-provider":"equinix-metal"), a default bgpadvertisement "equinix-metal-bgp-adv" with the ipaddresspool name in the ipAddressPools spec will be created; see [Equinix EIP][Equinix EIP] to control in which metro or facility the EIP will be created.
+1. For each service of `type=LoadBalancer` deleted from the cluster:
+   * find the Elastic IP address from the service spec and remove it
+   * remove the affiliated `ipaddresspools.metallb.io`
+   * If there is no other service, delete all CCM managed `bgpeers` and the default `bgpadvertisement`
+   * delete the Elastic IP reservation from Equinix Metal
+
+**NOTE:** (IP Address sharing)[https://metallb.universe.tf/usage/#ip-address-sharing] is not yet supported in Cloud Provider Equinix Metal.
+
+CCM itself does **not** install/deploy the load-balancer and it may exists before enable it. This can be deployed by the administrator separately, using the manifest provided in the releases page, or in any other manner.
+
+In order to instruct metallb which IPs to announce and from where, CCM takes direct responsibility for managing the
+metallb configuration. As described above, this is normally at `metallb-system`. Users can create their own `bgpadvertisements.metallb.io` resources for advanced configuration, but they must have the appropriate tag ("cloud-provider":"equinix-metal")
+
+You **should not** attempt to modify metallb resources created by the CCM separately, as CCM will modify it with each loop. Modifying it separately is likely to break metallb's functioning.
+
+###### MetalLB from v0.11.0 to v0.12.1
 
 To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
@@ -418,7 +470,7 @@ If `MetalLB` management is enabled, then CCM does the following.
    * remove the node from the MetalLB `ConfigMap`
 1. For each service of `type=LoadBalancer` currently in the cluster or added:
    * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` already has that IP address affiliated with it, it is ready; ignore
-   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core) and ensure it is in the pools of the MetalLB `ConfigMap` with `auto-assign: false`
+   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#servicespec-v1-core) and ensure it is in the pools of the MetalLB `ConfigMap` with `auto-assign: false`
    * if an Elastic IP address reservation with the appropriate tags does not exist, create it and add it to the services spec, and ensure is in the pools of the metallb `ConfigMap` with `auto-assign: false`; see [Equinix EIP][Equinix EIP] to control in which metro or facility the EIP will be created.
 1. For each service of `type=LoadBalancer` deleted from the cluster:
    * find the Elastic IP address from the service spec and remove it
@@ -435,7 +487,9 @@ metallb `ConfigMap`. As described above, this is normally at `metallb-system/con
 You **should not** attempt to modify this `ConfigMap` separately, as CCM will modify it with each loop. Modifying it
 separately is likely to break metallb's functioning.
 
-In addition to the usual entries in the `ConfigMap`, CCM adds
+###### MetalLB common configuration
+
+CCM adds
 [nodeSelector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector) entries
 that are specifically structured to be ignored by metallb.
 
