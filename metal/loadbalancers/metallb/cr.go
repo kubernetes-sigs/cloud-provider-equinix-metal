@@ -284,6 +284,7 @@ func (m *CRDConfigurer) RemoveAddressPool(ctx context.Context, pool string) erro
 					}
 				}
 			}
+			break
 		}
 	}
 	return nil
