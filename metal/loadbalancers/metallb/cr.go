@@ -147,7 +147,7 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 		return false, fmt.Errorf("retrieve a list of IPAddressPools %s %w", m.namespace, err)
 	}
 
-	addIpAddr := convertToIPAddr(*add, m.namespace, svcNamespace, svcName)
+	addIPAddr := convertToIPAddr(*add, m.namespace, svcNamespace, svcName)
 
 	// go through the pools and see if we have one that matches
 	// - if same service name return false
@@ -159,7 +159,7 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 	for _, o := range olds.Items {
 		var updateLabels, updateAddresses bool
 		// if same name check services labels
-		if o.GetName() == addIpAddr.GetName() {
+		if o.GetName() == addIPAddr.GetName() {
 			for k := range o.GetLabels() {
 				if strings.HasPrefix(k, svcLabelKeyPrefix) {
 					osvc := strings.TrimPrefix(k, svcLabelKeyPrefix)
@@ -172,7 +172,7 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 			// if we got here, none matched exactly, update labels
 			updateLabels = true
 		}
-		for _, addr := range addIpAddr.Spec.Addresses {
+		for _, addr := range addIPAddr.Spec.Addresses {
 			if slices.Contains(o.Spec.Addresses, addr) {
 				updateAddresses = true
 				break
@@ -186,7 +186,7 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 			}
 			if updateAddresses {
 				// update addreses and remove duplicates
-				addresses := append(o.Spec.Addresses, addIpAddr.Spec.Addresses...)
+				addresses := append(o.Spec.Addresses, addIPAddr.Spec.Addresses...)
 				slices.Sort(addresses)
 				o.Spec.Addresses = slices.Compact(addresses)
 				o.Spec.Addresses = addresses
@@ -200,9 +200,9 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 	}
 
 	// if we got here, none matched exactly, so add it
-	err = m.client.Create(ctx, &addIpAddr)
+	err = m.client.Create(ctx, &addIPAddr)
 	if err != nil {
-		return false, fmt.Errorf("unable to add IPAddressPool %s: %w", addIpAddr.GetName(), err)
+		return false, fmt.Errorf("unable to add IPAddressPool %s: %w", addIPAddr.GetName(), err)
 	}
 
 	// - if there's no BGPAdvertisement, create the default BGPAdvertisement
@@ -216,7 +216,7 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 		adv.SetName(defaultBgpAdvertisement)
 		adv.SetNamespace(m.namespace)
 		adv.SetLabels(map[string]string{cpemLabelKey: cpemLabelValue})
-		adv.Spec.IPAddressPools = []string{addIpAddr.Name}
+		adv.Spec.IPAddressPools = []string{addIPAddr.Name}
 		err = m.client.Create(ctx, &adv)
 		if err != nil {
 			return false, fmt.Errorf("unable to add default BGPAdvertisement %s: %w", adv.GetName(), err)
@@ -225,7 +225,7 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 		for _, adv := range advs.Items {
 			if adv.Name == defaultBgpAdvertisement {
 				patch := client.MergeFrom(adv.DeepCopy())
-				adv.Spec.IPAddressPools = append(adv.Spec.IPAddressPools, addIpAddr.Name)
+				adv.Spec.IPAddressPools = append(adv.Spec.IPAddressPools, addIPAddr.Name)
 				err := m.client.Patch(ctx, &adv, patch)
 				if err != nil {
 					return false, fmt.Errorf("unable to update BGPAdvertisement %s: %w", adv.GetName(), err)
