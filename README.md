@@ -432,10 +432,10 @@ If `MetalLB` management is enabled, then CCM does the following.
 
 **NOTE:** (IP Address sharing)[https://metallb.universe.tf/usage/#ip-address-sharing] is not yet supported in Cloud Provider Equinix Metal.
 
-CCM itself does **not** install/deploy the load-balancer and it may exists before enable it. This can be deployed by the administrator separately, using the manifest provided in the releases page, or in any other manner.
+CCM itself does **not** install/deploy the load-balancer and it may exists before enable it. This can be deployed by the administrator separately, using the manifest provided in the releases page, or in any other manner. Not having metallb installed but enabled in the CCM configuration will end up allowing you to continue deploying kubernetes services, but the external ip assignment will remain pending, making it useless.
 
 In order to instruct metallb which IPs to announce and from where, CCM takes direct responsibility for managing the
-metallb configuration. As described above, this is normally at `metallb-system`. Users can create their own `bgpadvertisements.metallb.io` resources for advanced configuration, but they must have the appropriate tag ("cloud-provider":"equinix-metal")
+metallb configuration. As described above, this is normally at `metallb-system`. Users can create and manage their own `bgpadvertisements.metallb.io` resources for advanced configuration, but they must have the appropriate tag ("cloud-provider":"equinix-metal") to prevent the CCM from creating a default bgpadvertisement. 
 
 You **should not** attempt to modify metallb resources created by the CCM separately, as CCM will modify it with each loop. Modifying it separately is likely to break metallb's functioning.
 
