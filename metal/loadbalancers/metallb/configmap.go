@@ -85,14 +85,18 @@ func (m *CMConfigurer) UpdatePeersByService(ctx context.Context, adds *[]Peer, s
 			peers = append(peers, peer)
 		}
 		m.config.Peers = peers
+
+		if !found {
+			add.AddService(svcNamespace, svcName)
+			m.config.Peers = append(m.config.Peers, add)
+			found = true
+		}
+
 		if !changed {
 			changed = found
 		}
-		add.AddService(svcNamespace, svcName)
-		m.config.Peers = append(m.config.Peers, add)
 	}
-
-	return true, nil
+	return changed, nil
 }
 
 // RemovePeersByService remove peers from a particular service.
