@@ -54,7 +54,7 @@ func init() {
 			return nil, fmt.Errorf("provider config error: %w", err)
 		}
 
-		// report the config
+		// report the config to startup logs
 		printMetalConfig(metalConfig)
 
 		// set up our client and create the cloud interface
