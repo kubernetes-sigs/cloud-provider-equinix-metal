@@ -94,16 +94,21 @@ func override(options ...string) string {
 	return ""
 }
 
+// getMetalConfig returns a Config struct from a cloud config JSON file or environment variables
 func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	// get our token and project
 	var config, rawConfig Config
-	configBytes, err := ioutil.ReadAll(providerConfig)
-	if err != nil {
-		return config, fmt.Errorf("failed to read configuration : %w", err)
-	}
-	err = json.Unmarshal(configBytes, &rawConfig)
-	if err != nil {
-		return config, fmt.Errorf("failed to process json of configuration file at path %s: %w", providerConfig, err)
+
+	// providerConfig may be nil if no --cloud-config is provided
+	if providerConfig != nil {
+		configBytes, err := ioutil.ReadAll(providerConfig)
+		if err != nil {
+			return config, fmt.Errorf("failed to read configuration : %w", err)
+		}
+		err = json.Unmarshal(configBytes, &rawConfig)
+		if err != nil {
+			return config, fmt.Errorf("failed to process json of configuration file at path %s: %w", providerConfig, err)
+		}
 	}
 
 	// read env vars; if not set, use rawConfig
