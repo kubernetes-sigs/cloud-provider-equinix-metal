@@ -389,7 +389,7 @@ the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancin
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
 
-**NOTE:** MetalLB [is now configurable via CRs](https://metallb.universe.tf/release-notes/#version-0-13-2), and ConfigMap configuration is not supported anymore. If you need to use a previous version, skip to the section [MetalLB from v0.11.0 to v0.12.1](#metallb-configuration-after-v0.13.2)
+**NOTE:** MetalLB [is now configurable via CRs](https://metallb.universe.tf/release-notes/#version-0-13-2), and ConfigMap configuration is not supported anymore. If you need to use a previous version, skip to the section [MetalLB from v0.11.0 to v0.12.1](#metallb-from-v0.11.0-to-v0.12.1)
 
 ###### MetalLB after v0.13.2
 
@@ -412,7 +412,6 @@ When enabled, CCM controls the loadbalancer by updating the required MetalLB CR 
 If `MetalLB` management is enabled, then CCM does the following.
 
 1. Get the appropriate namespace, based on the rules above.
-1. 
 1. Enable BGP on the Equinix Metal project
 1. For each node currently in the cluster or added:
    * retrieve the node's Equinix Metal ID via the node provider ID
