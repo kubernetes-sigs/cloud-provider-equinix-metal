@@ -389,7 +389,7 @@ the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancin
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
 
-**NOTE:** MetalLB [is now configurable via CRs](https://metallb.universe.tf/release-notes/#version-0-13-2), and ConfigMap configuration is not supported anymore. If you need to use a previous version, skip to the section [MetalLB from v0.11.0 to v0.12.1](#metallb-from-v0.11.0-to-v0.12.1)
+**NOTE:** MetalLB [is now configurable via CRs](https://metallb.universe.tf/release-notes/#version-0-13-2), and ConfigMap configuration is not supported anymore. If you need to use a previous version, skip to the section [MetalLB from v0.11.0 to v0.12.1](#metallb-from-v0110-to-v0121)
 
 ###### MetalLB after v0.13.2
 
