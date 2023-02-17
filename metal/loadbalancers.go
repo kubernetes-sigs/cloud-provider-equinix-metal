@@ -76,6 +76,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 	if err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
+
 	lbconfig := u.Path
 	var impl loadbalancers.LB
 	switch u.Scheme {
@@ -154,9 +155,7 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve IP reservations for project %s: %w", l.project, err)
 	}
-	var (
-		ipCidr string
-	)
+	var ipCidr string
 	// handling is completely different if it is the control plane vs a regular service of type=LoadBalancer
 	if service.Name == externalServiceName && service.Namespace == externalServiceNamespace {
 		ipCidr, err = l.retrieveIPByTag(ctx, service, ips, l.eipTag)
@@ -182,7 +181,6 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (l *loadBalancers) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	klog.V(2).Infof("UpdateLoadBalancer(): service %s", service.Name)
-	// get IP address reservations and check if they any exists for this svc
 
 	var n []loadbalancers.Node
 	for _, node := range filterNodes(nodes, l.nodeSelector) {
@@ -296,7 +294,6 @@ func (l *loadBalancers) annotateNode(ctx context.Context, node *v1.Node) error {
 	network, err := getNodePrivateNetwork(id, l.client)
 	if err != nil || network == "" {
 		return fmt.Errorf("could not get private network info for node %s: %w", node.Name, err)
-
 	}
 	annotations[l.annotationNetwork] = network
 
@@ -500,9 +497,7 @@ func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, ip
 	svcIP := svc.Spec.LoadBalancerIP
 	cidr := 32
 
-	var (
-		svcIPCidr string
-	)
+	var svcIPCidr string
 	ipReservation := ipReservationByAllTags([]string{tag}, ips)
 
 	klog.V(2).Infof("processing %s with existing IP assignment %s", svcName, svcIP)
@@ -543,6 +538,7 @@ func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, ip
 
 	return svcIPCidr, nil
 }
+
 func serviceRep(svc *v1.Service) string {
 	if svc == nil {
 		return ""
@@ -575,7 +571,6 @@ func clusterTag(clusterID string) string {
 // getNodePrivateNetwork use the Equinix Metal API to get the CIDR of the private network given a providerID.
 func getNodePrivateNetwork(deviceID string, client *packngo.Client) (string, error) {
 	device, _, err := client.Devices.Get(deviceID, &packngo.GetOptions{Includes: []string{"ip_addresses.parent_block,parent_block"}})
-
 	if err != nil {
 		return "", err
 	}

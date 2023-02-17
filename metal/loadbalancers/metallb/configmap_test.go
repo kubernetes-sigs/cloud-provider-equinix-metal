@@ -1,6 +1,7 @@
 package metallb
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -56,11 +57,14 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 		{peers[1], len(peers), 1, "default", "b", []string{"a", "b"}, "add existing peer with new service"},
 		{genPeer(), len(peers) + 1, len(peers), "default", "c", []string{"c"}, "add new peer"},
 	}
+	m := &CMConfigurer{config: &cfg}
 
 	for i, tt := range tests {
 		// get a clean set of peers
+
 		cfg.Peers = peers[:]
-		cfg.AddPeerByService(&tt.peer, tt.addServiceNamespace, tt.addServicename)
+		peers := []Peer{tt.peer}
+		m.UpdatePeersByService(context.Background(), &peers, tt.addServiceNamespace, tt.addServicename)
 		// make sure the number of peers is as expected
 		if len(cfg.Peers) != tt.total {
 			t.Fatalf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
@@ -68,10 +72,7 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 		// make sure the particular peer has the right services annotated
 		p := cfg.Peers[tt.index]
 
-		var (
-			svcs  []string
-			found bool
-		)
+		var found bool
 		for _, ns := range p.NodeSelectors {
 			var namespace, name string
 			for k, v := range ns.MatchLabels {
@@ -84,7 +85,6 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 				if namespace == tt.addServiceNamespace && name == tt.addServicename {
 					found = true
 				}
-				svcs = append(svcs, fmt.Sprintf("%s/%s", namespace, name))
 			}
 		}
 		if !found {
@@ -150,7 +150,9 @@ func TestConfigFileRemovePeersByService(t *testing.T) {
 		cfg := ConfigFile{
 			Peers: peers,
 		}
-		cfg.RemovePeersByService(tt.svcNamespace, tt.svcName)
+		m := &CMConfigurer{config: &cfg}
+
+		m.RemovePeersByService(context.Background(), tt.svcNamespace, tt.svcName)
 		if len(cfg.Peers) != len(tt.left) {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), len(tt.left), tt.message)
 		}
@@ -178,35 +180,6 @@ func TestConfigFileRemovePeersByService(t *testing.T) {
 			if found {
 				t.Errorf("%d: still has service '%s/%s' after removal, list: %s", i, tt.svcNamespace, tt.svcName, svcs)
 			}
-		}
-	}
-}
-
-func TestConfigFileRemovePeersBySelector(t *testing.T) {
-	peers := []Peer{
-		genPeer(),
-		genPeer(),
-	}
-	cfg := ConfigFile{
-		Peers: peers,
-	}
-
-	tests := []struct {
-		selector NodeSelector
-		total    int
-		message  string
-	}{
-		{peers[0].NodeSelectors[0], len(peers) - 1, "remove existing peer, first selector"},
-		{peers[0].NodeSelectors[1], len(peers) - 1, "remove existing peer, second selector"},
-		{genNodeSelector(), len(peers), "no match"},
-	}
-
-	for i, tt := range tests {
-		// get a clean set of peers
-		cfg.Peers = peers[:]
-		cfg.RemovePeersBySelector(&tt.selector)
-		if len(cfg.Peers) != tt.total {
-			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), tt.total, tt.message)
 		}
 	}
 }
@@ -246,8 +219,9 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 		cfg := ConfigFile{
 			Pools: append([]AddressPool{}, pools...),
 		}
+		m := &CMConfigurer{config: &cfg}
 
-		changed := cfg.AddAddressPool(&tt.pool)
+		changed, _ := m.AddAddressPool(context.Background(), &tt.pool, "", "")
 		if changed != tt.changed {
 			t.Errorf("%d: mismatched changed actual %v expected %v", i, changed, tt.changed)
 		}
@@ -262,49 +236,7 @@ func TestConfigFileAddAddressPool(t *testing.T) {
 		}
 	}
 }
-func TestConfigFileRemoveAddressPool(t *testing.T) {
-	pools := []AddressPool{
-		genPool(),
-		genPool(),
-	}
-	joinedPool := genPool()
-	joinedPool.Name = "newName,oldName"
-	pools = append(pools, joinedPool)
-	unjoinedPoolOld := joinedPool.Duplicate()
-	unjoinedPoolOld.Name = "oldName"
-	unjoinedPoolNew := joinedPool.Duplicate()
-	unjoinedPoolNew.Name = "newName"
-	modifiedPools := pools[:]
-	modifiedPools[2] = unjoinedPoolNew
 
-	tests := []struct {
-		pool     AddressPool
-		expected []AddressPool
-		message  string
-	}{
-		{pools[0], pools[1:], "remove first existing pool"},
-		{pools[1], []AddressPool{pools[0], pools[2]}, "remove second existing pool"},
-		{genPool(), pools, "no match"},
-		{unjoinedPoolOld, modifiedPools, "remove single name of joined pool"},
-	}
-
-	for i, tt := range tests {
-		cfg := ConfigFile{
-			Pools: append([]AddressPool{}, pools...),
-		}
-
-		cfg.RemoveAddressPool(&tt.pool)
-		if len(cfg.Pools) != len(tt.expected) {
-			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), len(tt.expected), tt.message)
-		} else {
-			for j, pool := range cfg.Pools {
-				if !pool.Equal(&tt.expected[j]) {
-					t.Errorf("%d: pool %d mismatched, actual %#v, expected %#v", i, j, pool, tt.expected[j])
-				}
-			}
-		}
-	}
-}
 func TestConfigFileRemoveAddressPoolByAddress(t *testing.T) {
 	pools := []AddressPool{
 		genPool(),
@@ -328,7 +260,9 @@ func TestConfigFileRemoveAddressPoolByAddress(t *testing.T) {
 
 	for i, tt := range tests {
 		cfg.Pools = pools[:]
-		cfg.RemoveAddressPoolByAddress(tt.addr)
+		m := &CMConfigurer{config: &cfg}
+
+		m.RemoveAddressPoolByAddress(context.Background(), tt.addr)
 		if len(cfg.Pools) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), tt.total, tt.message)
 		}
@@ -669,7 +603,6 @@ func TestSelectorRequirementsCompare(t *testing.T) {
 			t.Errorf("%d: left %s vs right %s gave %v instead of expected %v", i, tt.left, tt.right, actual, tt.compare)
 		}
 	}
-
 }
 
 // we do not test SelectorRequirements.Equal, as it is just .Compare() == 0
@@ -829,6 +762,7 @@ func TestSelectorRequirementsSliceEqual(t *testing.T) {
 		t.Error("same contents with different order reports unequal")
 	}
 }
+
 func TestPeerEqual(t *testing.T) {
 	base := genPeer()
 
@@ -926,9 +860,10 @@ func TestPeerEqual(t *testing.T) {
 		t.Error("out-of-order NodeSelectors: not equal")
 	}
 }
-func TestPeerMatchSelector(t *testing.T) {
 
+func TestPeerMatchSelector(t *testing.T) {
 }
+
 func TestNodeSelectorEqual(t *testing.T) {
 	base := genNodeSelector()
 

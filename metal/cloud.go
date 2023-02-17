@@ -75,7 +75,6 @@ func init() {
 func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
 	klog.V(5).Info("called Initialize")
 	clientset := clientBuilder.ClientOrDie("cloud-provider-equinix-metal-shared-informers")
-
 	// initialize the individual services
 	epm, err := newControlPlaneEndpointManager(clientset, stop, c.config.EIPTag, c.config.ProjectID, c.client.DeviceIPs, c.client.ProjectIPs, c.config.APIServerPort, c.config.EIPHealthCheckUseHostIP)
 	if err != nil {
