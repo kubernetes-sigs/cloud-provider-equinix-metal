@@ -38,7 +38,7 @@ jobs:
       with:
         go-version: 1.19
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@v3.2.0
+      uses: golangci/golangci-lint-action@v3.4.0
       with:
         version: v1.48
   test:
@@ -135,7 +135,7 @@ jobs:
 
     - name: Build
       id: docker_build
-      uses: docker/build-push-action@v3
+      uses: docker/build-push-action@v4
       with:
         context: .
         push: ${{ steps.should-push.outputs.should-push == 'true' }}
