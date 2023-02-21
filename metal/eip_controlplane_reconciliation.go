@@ -77,7 +77,8 @@ func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan 
 			Timeout: time.Second * 5,
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			}},
+			},
+		},
 		eipTag:        eipTag,
 		projectID:     projectID,
 		ipResSvr:      ipResSvr,
@@ -246,7 +247,6 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 				continue
 			}
 			resp, err := m.httpClient.Do(req)
-
 			if err != nil {
 				if err != nil {
 					klog.Errorf("http client error during healthcheck. err \"%s\"", err)

@@ -30,18 +30,20 @@ const (
 
 // mockControllerClientBuilder mock implementation of https://pkg.go.dev/k8s.io/cloud-provider#ControllerClientBuilder
 // so we can pass it to cloud.Initialize()
-type mockControllerClientBuilder struct {
-}
+type mockControllerClientBuilder struct{}
 
 func (m mockControllerClientBuilder) Config(name string) (*restclient.Config, error) {
 	return &restclient.Config{}, nil
 }
+
 func (m mockControllerClientBuilder) ConfigOrDie(name string) *restclient.Config {
 	return &restclient.Config{}
 }
+
 func (m mockControllerClientBuilder) Client(name string) (clientset.Interface, error) {
 	return k8sfake.NewSimpleClientset(), nil
 }
+
 func (m mockControllerClientBuilder) ClientOrDie(name string) clientset.Interface {
 	return k8sfake.NewSimpleClientset()
 }
@@ -174,7 +176,6 @@ func TestClusters(t *testing.T) {
 	if response != expectedResponse {
 		t.Errorf("value returned %v instead of expected %v", response, expectedResponse)
 	}
-
 }
 
 func TestRoutes(t *testing.T) {
@@ -190,8 +191,8 @@ func TestRoutes(t *testing.T) {
 	if response != expectedResponse {
 		t.Errorf("value returned %v instead of expected %v", response, expectedResponse)
 	}
-
 }
+
 func TestProviderName(t *testing.T) {
 	vc, _ := testGetValidCloud(t, "")
 	name := vc.ProviderName()
@@ -207,7 +208,6 @@ func TestHasClusterID(t *testing.T) {
 	if cid != expectedCid {
 		t.Errorf("returned %v instead of expected %v", cid, expectedCid)
 	}
-
 }
 
 // builds an Equinix Metal client

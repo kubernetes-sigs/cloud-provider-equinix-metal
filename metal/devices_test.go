@@ -13,9 +13,7 @@ import (
 	cpapi "k8s.io/cloud-provider/api"
 )
 
-var (
-	projectID = uuid.New().String()
-)
+var projectID = uuid.New().String()
 
 // testNode provides a simple Node object satisfying the lookup requirements of InstanceMetadata()
 func testNodeWithIP(providerID, nodeName, nodeIP string) *v1.Node {
@@ -106,6 +104,7 @@ func TestNodeAddresses(t *testing.T) {
 		})
 	}
 }
+
 func TestNodeAddressesByProviderID(t *testing.T) {
 	vc, backend := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
@@ -450,5 +449,4 @@ func compareAddresses(a1, a2 []v1.NodeAddress) bool {
 		}
 		return true
 	}
-
 }

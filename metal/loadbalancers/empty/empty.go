@@ -8,8 +8,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type LB struct {
-}
+type LB struct{}
 
 func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	return &LB{}
