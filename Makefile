@@ -24,9 +24,6 @@ LDFLAGS ?= -ldflags "$(LDFLAGS_ARGS) -extldflags '-static'"
 # which arches can we support
 ARCHES=arm64 amd64
 
-QEMU_VERSION?=4.2.0-7
-QEMU_IMAGE?=multiarch/qemu-user-static:$(QEMU_VERSION)
-
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
 # we need to keep track of them separately
@@ -173,14 +170,6 @@ manifest-annotate:
 
 manifest-create: push-all ## Creates Docker manifest for all created images.
 	docker manifest create $(TAGGED_IMAGE) $(addprefix --amend $(TAGGED_IMAGE)-, $(ARCHES))
-
-# Targets used when cross building.
-.PHONY: register
-# Enable binfmt adding support for miscellaneous binary formats.
-# This is only needed when running non-native binaries.
-register:
-	docker pull $(QEMU_IMAGE)
-	docker run --rm --privileged $(QEMU_IMAGE) --reset -p yes || true
 
 .PHONY: clean
 clean: clean-docker clean-go ## clean up all artifacts
