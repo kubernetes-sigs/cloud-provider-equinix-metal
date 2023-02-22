@@ -18,13 +18,13 @@ type bgp struct {
 	bgpPass   string
 }
 
-func newBGP(client *packngo.Client, k8sclient kubernetes.Interface, project string, localASN int, bgpPass string) (*bgp, error) {
+func newBGP(client *packngo.Client, k8sclient kubernetes.Interface, metalConfig Config) (*bgp, error) {
 	b := &bgp{
 		client:    client,
 		k8sclient: k8sclient,
-		project:   project,
-		localASN:  localASN,
-		bgpPass:   bgpPass,
+		project:   metalConfig.ProjectID,
+		localASN:  metalConfig.LocalASN,
+		bgpPass:   metalConfig.BGPPass,
 	}
 	// enable BGP
 	klog.V(2).Info("bgp.init(): enabling BGP on project")
