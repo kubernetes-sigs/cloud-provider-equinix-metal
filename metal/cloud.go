@@ -80,7 +80,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	if err != nil {
 		klog.Fatalf("could not initialize ControlPlaneEndpointManager: %v", err)
 	}
-	bgp, err := newBGP(c.client, clientset, c.config.ProjectID, c.config.LocalASN, c.config.BGPPass)
+	bgp, err := newBGP(c.client, clientset, c.config)
 	if err != nil {
 		klog.Fatalf("could not initialize BGP: %v", err)
 	}
