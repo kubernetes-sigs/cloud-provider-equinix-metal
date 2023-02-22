@@ -102,8 +102,8 @@ jobs:
         [[ "$GITHUB_ACTOR" == "dependabot[bot]" ]] && SHOULD_PUSH=false
         # Skip pushing if a PR
         [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && SHOULD_PUSH=false
-        # Skip pushing if a pull request and branch is not master
-        [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF_NAME" != "master" ]] && SHOULD_PUSH=false
+        # Skip pushing if a pull request and branch is not main
+        [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF_NAME" != "main" ]] && SHOULD_PUSH=false
         echo "::set-output name=should-push::${SHOULD_PUSH}"
 
     - name: Log in to ghcr.io

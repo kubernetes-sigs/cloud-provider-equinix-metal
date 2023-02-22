@@ -14,4 +14,4 @@ See the [packethost/standards glossary] for more details about this file.
 [Packet CLI]: https://github.com/packethost/packet-cli
 [SUPPORT.md]: SUPPORT.md
 [packethost/standards
-glossary]: https://github.com/packethost/standards/blob/master/glossary.md#ownersmd
+glossary]: https://github.com/packethost/standards/blob/main/glossary.md#ownersmd
