@@ -13,7 +13,7 @@
 
 `cloud-provider-equinix-metal` is the Kubernetes CCM implementation for Equinix Metal. Read more about the CCM in [the official Kubernetes documentation](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/).
 
-This repository is [Maintained](https://github.com/packethost/standards/blob/master/maintained-statement.md)!
+This repository is [Maintained](https://github.com/packethost/standards/blob/main/maintained-statement.md)!
 
 ## Requirements
 

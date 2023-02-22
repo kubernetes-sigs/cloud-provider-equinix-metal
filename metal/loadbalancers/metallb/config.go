@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// these are taken from https://github.com/metallb/metallb/blob/master/internal/config/config.go
+// these are taken from https://github.com/metallb/metallb/blob/main/internal/config/config.go
 // unfortunately, these are internal, so we cannot leverage them and need to copy. :-()
 
 // Copyright 2017 Google Inc.
