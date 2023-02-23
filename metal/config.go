@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strconv"
 
@@ -101,7 +100,7 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 
 	// providerConfig may be nil if no --cloud-config is provided
 	if providerConfig != nil {
-		configBytes, err := ioutil.ReadAll(providerConfig)
+		configBytes, err := io.ReadAll(providerConfig)
 		if err != nil {
 			return config, fmt.Errorf("failed to read configuration : %w", err)
 		}
