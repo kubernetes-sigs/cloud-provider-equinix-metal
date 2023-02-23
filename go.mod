@@ -6,12 +6,12 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-retryablehttp v0.7.2
-	github.com/packethost/packet-api-server v0.0.0-20220330121625-ea9b1ee39962
+	github.com/packethost/packet-api-server v0.0.0-20230223042617-bc7d1539adbb
 	github.com/packethost/packngo v0.29.0
 	github.com/pallinder/go-randomdata v1.2.0
 	github.com/spf13/pflag v1.0.5
 	go.universe.tf/metallb v0.13.7
-	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+	golang.org/x/exp v0.0.0-20230223201515-30ed42f936dd
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.26.1
 	k8s.io/apimachinery v0.26.1
@@ -51,7 +51,7 @@ require (
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/gorilla/mux v1.7.3 // indirect
+	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
