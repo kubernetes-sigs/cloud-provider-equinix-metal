@@ -159,6 +159,9 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 	// handling is completely different if it is the control plane vs a regular service of type=LoadBalancer
 	if service.Name == externalServiceName && service.Namespace == externalServiceNamespace {
 		ipCidr, err = l.retrieveIPByTag(ctx, service, ips, l.eipTag)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
+		}
 	} else {
 		ipCidr, err = l.addService(ctx, service, ips, filterNodes(nodes, l.nodeSelector))
 		if err != nil {
