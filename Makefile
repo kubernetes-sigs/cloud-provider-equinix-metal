@@ -77,6 +77,8 @@ BUILD_CMD = docker run --rm \
 endif
 
 GOBIN ?= $(shell go env GOPATH)/bin
+# Bump as necessary/desired to latest that supports our version of go at https://github.com/golangci/golangci-lint/releases
+GOLANGCI_LINT_VER := v1.51.2
 LINTER ?= $(GOBIN)/golangci-lint
 
 .PHONY: fmt lint test tag version
@@ -93,9 +95,8 @@ version: ## Report the version that would be put in the binary
 fmt: golangci-lint  ## Format all source code files
 	@$(BUILD_CMD) $(LINTER) run --fix ./
 
-golangci-lint: $(LINTER)
-$(LINTER):
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.44.2
+golangci-lint:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER)
 
 lint: golangci-lint ## Lint the files
 	@$(BUILD_CMD) $(LINTER) run ./
@@ -181,11 +182,21 @@ register:
 	docker pull $(QEMU_IMAGE)
 	docker run --rm --privileged $(QEMU_IMAGE) --reset -p yes || true
 
-clean: ## clean up all artifacts
-	$(eval IMAGE_TAGS := $(shell docker image ls | awk "/^$(subst /,\/,$(BUILD_IMAGE))\s/"' {print $$2}' ))
-	docker image rm $(addprefix $(BUILD_IMAGE):,$(IMAGE_TAGS))
-	rm -rf dist/
+.PHONY: clean
+clean: clean-docker clean-go ## clean up all artifacts
 
+.PHONY: clean-docker
+clean-docker:
+	$(eval IMAGE_TAGS := $(shell docker image ls | awk "/^$(subst /,\/,$(BUILD_IMAGE))\s/"' {print $$2}' ))
+	@if [ -n "$(IMAGE_TAGS)" ]; then \
+		docker image rm $(addprefix $(BUILD_IMAGE):,$(IMAGE_TAGS)); \
+	fi
+
+.PHONY: clean-go
+clean-go:
+	go clean
+	rm -rf dist/
+	
 ###############################################################################
 # CI
 ###############################################################################
