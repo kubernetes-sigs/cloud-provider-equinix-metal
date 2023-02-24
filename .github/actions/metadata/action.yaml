@@ -36,7 +36,7 @@ runs:
       IMAGES=${GHCR_REGISTRY}/${IMAGE_NAME}
       [[ -n "$DOCKER_USERNAME" ]] && IMAGES=${IMAGES},${DOCKER_REGISTRY}/${IMAGE_NAME}
       [[ -n "$QUAY_USERNAME" ]] && IMAGES=${IMAGES},${QUAY_REGISTRY}/${IMAGE_NAME}
-      echo "::set-output name=images::${IMAGES}"
+      echo "images=${IMAGES}" >> $GITHUB_OUTPUT
   - name: Docker manager metadata
     id: meta
     uses: docker/metadata-action@v3
