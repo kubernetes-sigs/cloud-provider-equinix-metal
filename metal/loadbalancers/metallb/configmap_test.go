@@ -65,7 +65,7 @@ func TestConfigFileAddPeerByService(t *testing.T) {
 		cfg.Peers = peers[:]
 		peers := []Peer{tt.peer}
 		if _, err := m.UpdatePeersByService(context.Background(), &peers, tt.addServiceNamespace, tt.addServicename); err != nil {
-			t.Fatalf("error updating peers by service")
+			t.Fatalf("error updating peers by service: %s", err)
 		}
 		// make sure the number of peers is as expected
 		if len(cfg.Peers) != tt.total {
@@ -155,7 +155,7 @@ func TestConfigFileRemovePeersByService(t *testing.T) {
 		m := &CMConfigurer{config: &cfg}
 
 		if _, err := m.RemovePeersByService(context.Background(), tt.svcNamespace, tt.svcName); err != nil {
-			t.Fatalf("erorr removing peers by service")
+			t.Fatalf("error removing peers by service: %s", err)
 		}
 		if len(cfg.Peers) != len(tt.left) {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Peers), len(tt.left), tt.message)
@@ -267,7 +267,7 @@ func TestConfigFileRemoveAddressPoolByAddress(t *testing.T) {
 		m := &CMConfigurer{config: &cfg}
 
 		if err := m.RemoveAddressPoolByAddress(context.Background(), tt.addr); err != nil {
-			t.Fatalf("error removing address pool")
+			t.Fatalf("error removing address pool: %s", err)
 		}
 		if len(cfg.Pools) != tt.total {
 			t.Errorf("%d: mismatch actual %d vs expected %d: %s", i, len(cfg.Pools), tt.total, tt.message)
