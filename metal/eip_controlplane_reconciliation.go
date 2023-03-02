@@ -105,7 +105,7 @@ func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan 
 
 	sharedInformer := informers.NewSharedInformerFactory(k8sclient, checkLoopTimerSeconds*time.Second)
 
-	_, err := sharedInformer.Core().V1().Nodes().Informer().AddEventHandler(
+	if _, err := sharedInformer.Core().V1().Nodes().Informer().AddEventHandler(
 		cache.FilteringResourceEventHandler{
 			FilterFunc: func(obj interface{}) bool {
 				n, _ := obj.(*v1.Node)
@@ -147,12 +147,11 @@ func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan 
 				},
 			},
 		},
-	)
-	if err != nil {
+	); err != nil {
 		return m, err
 	}
 
-	_, err = sharedInformer.Core().V1().Endpoints().Informer().AddEventHandler(
+	if _, err := sharedInformer.Core().V1().Endpoints().Informer().AddEventHandler(
 		cache.FilteringResourceEventHandler{
 			FilterFunc: func(obj interface{}) bool {
 				e, _ := obj.(*v1.Endpoints)
@@ -183,12 +182,11 @@ func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan 
 				},
 			},
 		},
-	)
-	if err != nil {
+	); err != nil {
 		return m, err
 	}
 
-	_, err = sharedInformer.Core().V1().Services().Informer().AddEventHandler(
+	if _, err := sharedInformer.Core().V1().Services().Informer().AddEventHandler(
 		cache.FilteringResourceEventHandler{
 			FilterFunc: func(obj interface{}) bool {
 				s, _ := obj.(*v1.Service)
@@ -219,8 +217,7 @@ func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan 
 				},
 			},
 		},
-	)
-	if err != nil {
+	); err != nil {
 		return m, err
 	}
 
