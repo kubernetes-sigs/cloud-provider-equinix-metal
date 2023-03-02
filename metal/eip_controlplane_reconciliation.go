@@ -186,11 +186,12 @@ func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan 
 		cache.FilteringResourceEventHandler{
 			FilterFunc: func(obj interface{}) bool {
 				s, _ := obj.(*v1.Service)
-				if s.Namespace != metav1.NamespaceDefault && s.Name != "kubernetes" {
-					return false
+				// Filter only service default/kubernetes
+				if s.Namespace == metav1.NamespaceDefault && s.Name == "kubernetes" {
+					return true
 				}
-
-				return true
+				//else
+				return false
 			},
 			Handler: cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
