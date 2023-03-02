@@ -352,6 +352,11 @@ API calls to support a load balancer, and providing configuration for supported 
 
 ##### kube-vip
 
+**Supported Versions**: 
+
+* Equinix Metal CCM version < v3.3.0 supports kube-vip version <=v0.5.10
+* Equinix Metal CCM version v3.3.0+ does not currently support kube-vip
+
 When the [kube-vip](https://kube-vip.io) option is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`,
 the Equinix Metal CCM enables BGP on the project and nodes, assigns an EIP for each such
 `Service`, and adds annotations to the nodes. These annotations are configured to be consumable
