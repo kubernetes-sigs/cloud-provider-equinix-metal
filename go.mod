@@ -16,7 +16,7 @@ require (
 	k8s.io/api v0.26.2
 	k8s.io/apimachinery v0.26.2
 	k8s.io/client-go v0.26.2
-	k8s.io/cloud-provider v0.26.1
+	k8s.io/cloud-provider v0.26.2
 	k8s.io/component-base v0.26.2
 	k8s.io/klog/v2 v2.90.0
 	sigs.k8s.io/controller-runtime v0.14.4
@@ -105,10 +105,10 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.26.1 // indirect
-	k8s.io/apiserver v0.26.1 // indirect
-	k8s.io/component-helpers v0.26.1 // indirect
-	k8s.io/controller-manager v0.26.1 // indirect
-	k8s.io/kms v0.26.1 // indirect
+	k8s.io/apiserver v0.26.2 // indirect
+	k8s.io/component-helpers v0.26.2 // indirect
+	k8s.io/controller-manager v0.26.2 // indirect
+	k8s.io/kms v0.26.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.35 // indirect
