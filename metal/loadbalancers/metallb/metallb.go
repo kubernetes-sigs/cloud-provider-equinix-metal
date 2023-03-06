@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/blang/semver/v4"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -24,7 +22,6 @@ const (
 	defaultNamespace          = "metallb-system"
 	defaultName               = "config"
 	bgpAdvertisementConfigKey = "bgp_advertisments"
-	metallbCrdMinVersion      = "0.13.2"
 )
 
 type Configurer interface {
@@ -65,7 +62,7 @@ var (
 )
 
 // func NewLB(k8sclient kubernetes.Interface, k8sApiextensionsClientset *k8sapiextensionsclient.Clientset, config string) *LB {
-func NewLB(k8sclient kubernetes.Interface, config string) *LB {
+func NewLB(k8sclient kubernetes.Interface, config string, useCrdConfiguration bool) *LB {
 	var namespace, configmapname string
 
 	// it may have an extra slash at the beginning or end, so get rid of it
@@ -83,16 +80,7 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 		namespace = defaultNamespace
 	}
 
-	// check metallb version
-	version, _ := metallbVersion(k8sclient, namespace)
-	currentVersion, _ := semver.Make(version)
-	crdMinVersion, _ := semver.Make(metallbCrdMinVersion)
-
-	// if current ver is >= min ver supporting CRD; then crdConfiguration = true
-	if currentVersion.Compare(crdMinVersion) != -1 {
-		crdConfiguration = true
-		klog.V(2).Info("using MetalLB with crdConfiguration")
-	}
+	crdConfiguration = useCrdConfiguration
 
 	lb := &LB{}
 	if crdConfiguration {
@@ -272,26 +260,4 @@ func updateIP(ctx context.Context, config Configurer, addr, svcNamespace, svcNam
 		}
 	}
 	return nil
-}
-
-func metallbVersion(k8sclient kubernetes.Interface, namespace string) (string, error) {
-	listOptions := metav1.ListOptions{
-		LabelSelector: "app=metallb,component=controller",
-	}
-	deploys, err := k8sclient.AppsV1().Deployments(namespace).List(context.Background(), listOptions)
-	if err != nil {
-		return "", fmt.Errorf("unable to get metallb controller deployment %s:controller %w", namespace, err)
-	}
-
-	if len(deploys.Items) > 0 {
-		for _, c := range deploys.Items[0].Spec.Template.Spec.Containers {
-			img := strings.Split(c.Image, ":v")
-			if len(img) > 1 {
-				if img[0] == "quay.io/metallb/controller" {
-					return img[1], nil
-				}
-			}
-		}
-	}
-	return "", fmt.Errorf("unable to get metallb installed version in %s", namespace)
 }

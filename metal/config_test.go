@@ -28,6 +28,23 @@ func Test_getMetalConfig(t *testing.T) {
 		AnnotationNetworkIPv4Private: DefaultAnnotationNetworkIPv4Private,
 		AnnotationEIPMetro:           DefaultAnnotationEIPMetro,
 		AnnotationEIPFacility:        DefaultAnnotationEIPFacility,
+		UseCRDForMetalLB:             false,
+	}
+	crdForMetalLBConfig := Config{
+		// not default, but required and set in tests
+		AuthToken: testKey,
+		ProjectID: testProject,
+		// defaults defined in getMetalConfig
+		LocalASN:                     DefaultLocalASN,
+		AnnotationLocalASN:           DefaultAnnotationNodeASN,
+		AnnotationPeerASN:            DefaultAnnotationPeerASN,
+		AnnotationPeerIP:             DefaultAnnotationPeerIP,
+		AnnotationSrcIP:              DefaultAnnotationSrcIP,
+		AnnotationBGPPass:            DefaultAnnotationBGPPass,
+		AnnotationNetworkIPv4Private: DefaultAnnotationNetworkIPv4Private,
+		AnnotationEIPMetro:           DefaultAnnotationEIPMetro,
+		AnnotationEIPFacility:        DefaultAnnotationEIPFacility,
+		UseCRDForMetalLB:             true,
 	}
 	tests := []struct {
 		name    string
@@ -104,6 +121,32 @@ func Test_getMetalConfig(t *testing.T) {
 			},
 			want:    Config{},
 			wantErr: true,
+		},
+		{
+			name: "useCRDForMetalLB in JSON",
+			args: args{
+				providerConfig: strings.NewReader(`{
+					"apiKey": "test",
+					"projectId": "test",
+					"useCRDForMetalLB": true
+				}`),
+			},
+			want:    crdForMetalLBConfig,
+			wantErr: false,
+		},
+		{
+			name: "useCRDForMetalLB in env",
+			args: args{
+				providerConfig: strings.NewReader(`{
+					"apiKey": "test",
+					"projectId": "test"
+				}`),
+			},
+			want:    crdForMetalLBConfig,
+			wantErr: false,
+			env: map[string]string{
+				"METAL_USE_CRD_FOR_METALLB": "true",
+			},
 		},
 	}
 	for _, tt := range tests {

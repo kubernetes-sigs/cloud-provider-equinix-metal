@@ -31,6 +31,7 @@ const (
 	envVarAPIServerPort                = "METAL_API_SERVER_PORT"
 	envVarBGPNodeSelector              = "METAL_BGP_NODE_SELECTOR"
 	envVarEIPHealthCheckUseHostIP      = "METAL_EIP_HEALTH_CHECK_USE_HOST_IP"
+	envVarUseCRDForMetalLB             = "METAL_USE_CRD_FOR_METALLB"
 )
 
 // Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different Equinix Metal API endpoint
@@ -55,6 +56,7 @@ type Config struct {
 	APIServerPort                int32   `json:"apiServerPort,omitempty"`
 	BGPNodeSelector              string  `json:"bgpNodeSelector,omitempty"`
 	EIPHealthCheckUseHostIP      bool    `json:"eipHealthCheckUseHostIP,omitempty"`
+	UseCRDForMetalLB             bool    `json:"useCRDForMetalLB,omitempty"`
 }
 
 // String converts the Config structure to a string, while masking hidden fields.
@@ -193,6 +195,15 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 			return config, fmt.Errorf("env var %s must be a boolean, was %s: %w", envVarEIPHealthCheckUseHostIP, v, err)
 		}
 		config.EIPHealthCheckUseHostIP = useHostIP
+	}
+
+	config.UseCRDForMetalLB = rawConfig.UseCRDForMetalLB
+	if v := os.Getenv(envVarUseCRDForMetalLB); v != "" {
+		useCRDForMetalLB, err := strconv.ParseBool(v)
+		if err != nil {
+			return config, fmt.Errorf("env var %s must be a boolean, was %s: %w", envVarUseCRDForMetalLB, v, err)
+		}
+		config.UseCRDForMetalLB = useCRDForMetalLB
 	}
 
 	return config, nil

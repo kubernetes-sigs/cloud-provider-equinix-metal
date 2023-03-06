@@ -214,7 +214,7 @@ This section lists each configuration option, and whether it can be set by each 
 
 | Purpose | CLI Flag | Env Var | Secret Field | Default |
 | --- | --- | --- | --- | --- |
-| Path to config secret |    |    | `cloud-config` | error |
+| Path to config secret | `cloud-config` |    |  | error |
 | API Key |    | `METAL_API_KEY` | `apiKey` | error |
 | Project ID |    | `METAL_PROJECT_ID` | `projectID` | error |
 | Metro in which to create LoadBalancer Elastic IPs |    | `METAL_METRO_NAME` | `metro` | Service-specific annotation, else error |
@@ -235,6 +235,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP |    | `METAL_BGP_NODE_SELECTOR` | `bgpNodeSelector` | All nodes |
 | Use host IP for Control Plane endpoint health checks | | `METAL_EIP_HEALTH_CHECK_USE_HOST_IP` | `eipHealthCheckUseHostIP` | false |
+| Use newer MetalLB (0.13.2+) configuration |   | `METAL_USE_CRD_FOR_METALLB` | `useCRDForMetalLB` | false |
 
 <u>Security Warning</u>
 Including your project's BGP password, even base64-encoded, may have security implications. Because Equinix Metal
@@ -394,11 +395,11 @@ the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancin
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
 
-**NOTE:** MetalLB [is now configurable via CRs](https://metallb.universe.tf/release-notes/#version-0-13-2), and ConfigMap configuration is not supported anymore. If you need to use a previous version, skip to the section [MetalLB from v0.11.0 to v0.12.1](#metallb-from-v0110-to-v0121)
+**NOTE:** MetalLB 0.13.2+ [uses CRs for configuration](https://metallb.universe.tf/release-notes/#version-0-13-2), and no longer uses a ConfigMap. If you need to use MetalLB <= 0.12.1, skip to the section [MetalLB from v0.11.0 to v0.12.1](#metallb-from-v0110-to-v0121)
 
 ###### MetalLB after v0.13.2
 
-To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
+To enable the CCM to use MetalLB v0.13.2+, you must set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
 metallb:///<configMapNamespace>
@@ -411,6 +412,11 @@ For example:
 * `metallb:///` - enable `MetalLB` management and update configuration in the default namespace `metallb-system`
 
 Notice the **three* slashes. In the URL, the namespace are in the path.
+
+You must also tell the CCM to configure MetalLB using CRDs instead of a ConfigMap by either:
+
+- Setting the `METAL_USE_CRD_FOR_METALLB` environment variable to `true`
+- Setting the `useCRDForMetalLB=true` in your CCM secret
 
 When enabled, CCM controls the loadbalancer by updating the required MetalLB CR (custom resources).
 
