@@ -394,54 +394,41 @@ the Equinix Metal CCM uses BGP and to provide the _equivalence_ of load balancin
 requiring an additional managed service (or hop). BGP route advertisements enable Equinix Metal's network
 to route traffic for your services at the Elastic IP to the correct host.
 
-**NOTE:** MetalLB 0.13.2+ [uses CRs for configuration](https://metallb.universe.tf/release-notes/#version-0-13-2), and no longer uses a ConfigMap. If you need to use MetalLB <= 0.12.1, skip to the section [MetalLB from v0.11.0 to v0.12.1](#metallb-from-v0110-to-v0121)
+**NOTE:** MetalLB 0.13.2+ [uses CRs for configuration](https://metallb.universe.tf/release-notes/#version-0-13-2), and no longer uses a ConfigMap.
+Currently, the CCM defaults to using a ConfigMap for backwards compatibility.  In a future release, the CCM will default to using CRDs with MetalLB.
 
-###### MetalLB after v0.13.2
+To configure the CCM to integrate with MetalLB <= v0.12.1, follow the instructions in [MetalLB from v0.11.0 to v0.12.1](#metallb-from-v0110-to-v0121).
 
-To enable the CCM to use MetalLB v0.13.2+, you must set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
+To configure the CCM to integrate with MetalLB >= v0.13.2, follow the instructions in [MetalLB after v0.13.2](#metallb-after-v0132).
 
-```
-metallb:///<configMapNamespace>?crdConfiguration=true
-```
+###### MetalLB common configuration
 
-Note that the `?crdConfiguration=true` is _required_ in order for the CCM to correctly configure MetalLB v0.13.2+ via CRDs instead of using a ConfigMap. Currently, the CCM defaults to using a ConfigMap for backwards compatibility.  In a future release, the CCM will default to using CRDs with MetalLB.
+CCM adds
+[nodeSelector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector) entries
+that are specifically structured to be ignored by metallb.
 
 For example:
 
-* `metallb:///metallb-system?crdConfiguration=true` - enable `MetalLB` management and update configuration in the namespace `metallb-system` (default)
-* `metallb:///foonamespace?crdConfiguration=true` - enable `MetalLB` management and update configuration in the namespace `metallb-system`
-* `metallb:///?crdConfiguration=true` - enable `MetalLB` management and update configuration in the default namespace `metallb-system`
+```yaml
+  node-selectors:
+  - match-labels:
+      kubernetes.io/hostname: dc-worker-1
+  - match-labels:
+      nomatch.metal.equinix.com/service-namespace: default
+      nomatch.metal.equinix.com/service-name: nginx-deployment
+  - match-labels:
+      nomatch.metal.equinix.com/service-namespace: ai
+      nomatch.metal.equinix.com/service-name: trainer
+```
 
-Notice the **three* slashes. In the URL, the namespace are in the path.
+`node-selectors` are grouped together with a logical OR. The above thus means that it will match
+_any_ node that has any of the 3 sets of labels. The node with the hostname `dc-worker-1` will be matched,
+independent of the other selectors.
 
-If `MetalLB` management is enabled, then CCM does the following.
-
-1. Get the appropriate namespace, based on the rules above.
-1. Enable BGP on the Equinix Metal project
-1. For each node currently in the cluster or added:
-   * retrieve the node's Equinix Metal ID via the node provider ID
-   * retrieve the device's BGP configuration: node ASN, peer ASN, peer IPs, source IP
-   * create a `bgpeers.metallb.io` for each peer IP with a kubernetes selector ensuring that those BGPPeers are only for this node
-1. For each node deleted from the cluster:
-   * delete the affiliated BGPeers.
-1. For each service of `type=LoadBalancer` currently in the cluster or added:
-   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` already has that IP address affiliated with it, it is ready; ignore
-   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#servicespec-v1-core) and ensure there is an `ipaddresspools.metallb.io` with `auto-assign: false`, and there is an elegible `bgpadvertisement.metallb.io`. If no bgpadvertisement exists with the appropriate tag ("cloud-provider":"equinix-metal"), a default bgpadvertisement "equinix-metal-bgp-adv" with the ipaddresspool name in the ipAddressPools spec will be created. 
-   * if an Elastic IP address reservation with the appropriate tags does not exist, create it and add it to the services spec, and ensure there is an `ipaddresspools.metallb.io` with `auto-assign: false`, and there is an elegible `bgpadvertisement.metallb.io`. If no bgpadvertisement exists with the appropriate tag ("cloud-provider":"equinix-metal"), a default bgpadvertisement "equinix-metal-bgp-adv" with the ipaddresspool name in the ipAddressPools spec will be created; see [Equinix EIP][Equinix EIP] to control in which metro or facility the EIP will be created.
-1. For each service of `type=LoadBalancer` deleted from the cluster:
-   * find the Elastic IP address from the service spec and remove it
-   * remove the affiliated `ipaddresspools.metallb.io`
-   * If there is no other service, delete all CCM managed `bgpeers` and the default `bgpadvertisement`
-   * delete the Elastic IP reservation from Equinix Metal
-
-**NOTE:** (IP Address sharing)[https://metallb.universe.tf/usage/#ip-address-sharing] is not yet supported in Cloud Provider Equinix Metal.
-
-CCM itself does **not** install/deploy the load-balancer and it may exists before enable it. This can be deployed by the administrator separately, using the manifest provided in the releases page, or in any other manner. Not having metallb installed but enabled in the CCM configuration will end up allowing you to continue deploying kubernetes services, but the external ip assignment will remain pending, making it useless.
-
-In order to instruct metallb which IPs to announce and from where, CCM takes direct responsibility for managing the
-metallb configuration. As described above, this is normally at `metallb-system`. Users can create and manage their own `bgpadvertisements.metallb.io` resources for advanced configuration, but they must have the appropriate tag ("cloud-provider":"equinix-metal") to prevent the CCM from creating a default bgpadvertisement. 
-
-You **should not** attempt to modify metallb resources created by the CCM separately, as CCM will modify it with each loop. Modifying it separately is likely to break metallb's functioning.
+The remaining selectors are used to allow CCM to track which services are being announced by which node.
+These are ignored, as long as no such labels exist on any nodes. This is why the labels are called the clearly
+non-matching names of `nomatch.metal.equinix.com/service-namespace` and
+`nomatch.metal.equinix.com/service-name`
 
 ###### MetalLB from v0.11.0 to v0.12.1
 
@@ -493,34 +480,52 @@ metallb `ConfigMap`. As described above, this is normally at `metallb-system/con
 You **should not** attempt to modify this `ConfigMap` separately, as CCM will modify it with each loop. Modifying it
 separately is likely to break metallb's functioning.
 
-###### MetalLB common configuration
+###### MetalLB after v0.13.2
 
-CCM adds
-[nodeSelector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector) entries
-that are specifically structured to be ignored by metallb.
+To enable the CCM to use MetalLB v0.13.2+, you must set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
+
+```
+metallb:///<configMapNamespace>?crdConfiguration=true
+```
+
+Note that the `?crdConfiguration=true` is _required_ in order for the CCM to correctly configure MetalLB v0.13.2+ via CRDs instead of using a ConfigMap. Currently, the CCM defaults to using a ConfigMap for backwards compatibility.  In a future release, the CCM will default to using CRDs with MetalLB.
 
 For example:
 
-```yaml
-  node-selectors:
-  - match-labels:
-      kubernetes.io/hostname: dc-worker-1
-  - match-labels:
-      nomatch.metal.equinix.com/service-namespace: default
-      nomatch.metal.equinix.com/service-name: nginx-deployment
-  - match-labels:
-      nomatch.metal.equinix.com/service-namespace: ai
-      nomatch.metal.equinix.com/service-name: trainer
-```
+* `metallb:///metallb-system?crdConfiguration=true` - enable `MetalLB` management and update configuration in the namespace `metallb-system` (default)
+* `metallb:///foonamespace?crdConfiguration=true` - enable `MetalLB` management and update configuration in the namespace `metallb-system`
+* `metallb:///?crdConfiguration=true` - enable `MetalLB` management and update configuration in the default namespace `metallb-system`
 
-`node-selectors` are grouped together with a logical OR. The above thus means that it will match
-_any_ node that has any of the 3 sets of labels. The node with the hostname `dc-worker-1` will be matched,
-independent of the other selectors.
+Notice the **three* slashes. In the URL, the namespace are in the path.
 
-The remaining selectors are used to allow CCM to track which services are being announced by which node.
-These are ignored, as long as no such labels exist on any nodes. This is why the labels are called the clearly
-non-matching names of `nomatch.metal.equinix.com/service-namespace` and
-`nomatch.metal.equinix.com/service-name`
+If `MetalLB` management is enabled, then CCM does the following.
+
+1. Get the appropriate namespace, based on the rules above.
+1. Enable BGP on the Equinix Metal project
+1. For each node currently in the cluster or added:
+   * retrieve the node's Equinix Metal ID via the node provider ID
+   * retrieve the device's BGP configuration: node ASN, peer ASN, peer IPs, source IP
+   * create a `bgpeers.metallb.io` for each peer IP with a kubernetes selector ensuring that those BGPPeers are only for this node
+1. For each node deleted from the cluster:
+   * delete the affiliated BGPeers.
+1. For each service of `type=LoadBalancer` currently in the cluster or added:
+   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` already has that IP address affiliated with it, it is ready; ignore
+   * if an Elastic IP address reservation with the appropriate tags exists, and the `Service` does not have that IP affiliated with it, add it to the [service spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#servicespec-v1-core) and ensure there is an `ipaddresspools.metallb.io` with `auto-assign: false`, and there is an elegible `bgpadvertisement.metallb.io`. If no bgpadvertisement exists with the appropriate tag ("cloud-provider":"equinix-metal"), a default bgpadvertisement "equinix-metal-bgp-adv" with the ipaddresspool name in the ipAddressPools spec will be created. 
+   * if an Elastic IP address reservation with the appropriate tags does not exist, create it and add it to the services spec, and ensure there is an `ipaddresspools.metallb.io` with `auto-assign: false`, and there is an elegible `bgpadvertisement.metallb.io`. If no bgpadvertisement exists with the appropriate tag ("cloud-provider":"equinix-metal"), a default bgpadvertisement "equinix-metal-bgp-adv" with the ipaddresspool name in the ipAddressPools spec will be created; see [Equinix EIP][Equinix EIP] to control in which metro or facility the EIP will be created.
+1. For each service of `type=LoadBalancer` deleted from the cluster:
+   * find the Elastic IP address from the service spec and remove it
+   * remove the affiliated `ipaddresspools.metallb.io`
+   * If there is no other service, delete all CCM managed `bgpeers` and the default `bgpadvertisement`
+   * delete the Elastic IP reservation from Equinix Metal
+
+**NOTE:** (IP Address sharing)[https://metallb.universe.tf/usage/#ip-address-sharing] is not yet supported in Cloud Provider Equinix Metal.
+
+CCM itself does **not** install/deploy the load-balancer and it may exists before enable it. This can be deployed by the administrator separately, using the manifest provided in the releases page, or in any other manner. Not having metallb installed but enabled in the CCM configuration will end up allowing you to continue deploying kubernetes services, but the external ip assignment will remain pending, making it useless.
+
+In order to instruct metallb which IPs to announce and from where, CCM takes direct responsibility for managing the
+metallb configuration. As described above, this is normally at `metallb-system`. Users can create and manage their own `bgpadvertisements.metallb.io` resources for advanced configuration, but they must have the appropriate tag ("cloud-provider":"equinix-metal") to prevent the CCM from creating a default bgpadvertisement. 
+
+You **should not** attempt to modify metallb resources created by the CCM separately, as CCM will modify it with each loop. Modifying it separately is likely to break metallb's functioning.
 
 ##### empty
 
