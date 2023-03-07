@@ -69,9 +69,15 @@ func NewLB(k8sclient kubernetes.Interface, config string, useCrdConfiguration bo
 	config = strings.TrimPrefix(config, "/")
 	config = strings.TrimSuffix(config, "/")
 	cmparts := strings.SplitN(config, "/", 2)
-	if len(cmparts) >= 2 {
-		namespace, configmapname = cmparts[0], cmparts[1]
+
+	if len(cmparts) >= 1 {
+		namespace = cmparts[0]
 	}
+
+	if len(cmparts) >= 2 {
+		configmapname = cmparts[1]
+	}
+
 	// defaults
 	if configmapname == "" {
 		configmapname = defaultName
