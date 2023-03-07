@@ -235,7 +235,6 @@ This section lists each configuration option, and whether it can be set by each 
 | Kubernetes API server port for Elastic IP |     | `METAL_API_SERVER_PORT` | `apiServerPort` | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP |    | `METAL_BGP_NODE_SELECTOR` | `bgpNodeSelector` | All nodes |
 | Use host IP for Control Plane endpoint health checks | | `METAL_EIP_HEALTH_CHECK_USE_HOST_IP` | `eipHealthCheckUseHostIP` | false |
-| Use newer MetalLB (0.13.2+) configuration |   | `METAL_USE_CRD_FOR_METALLB` | `useCRDForMetalLB` | false |
 
 <u>Security Warning</u>
 Including your project's BGP password, even base64-encoded, may have security implications. Because Equinix Metal
@@ -402,23 +401,18 @@ to route traffic for your services at the Elastic IP to the correct host.
 To enable the CCM to use MetalLB v0.13.2+, you must set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
-metallb:///<configMapNamespace>
+metallb:///<configMapNamespace>?crdConfiguration=true
 ```
+
+Note that the `?crdConfiguration=true` is _required_ in order for the CCM to correctly configure MetalLB v0.13.2+ via CRDs instead of using a ConfigMap. Currently, the CCM defaults to using a ConfigMap for backwards compatibility.  In a future release, the CCM will default to using CRDs with MetalLB.
 
 For example:
 
-* `metallb:///metallb-system` - enable `MetalLB` management and update configuration in the namespace `metallb-system` (default)
-* `metallb:///foonamespace` - enable `MetalLB` management and update configuration in the namespace `metallb-system`
-* `metallb:///` - enable `MetalLB` management and update configuration in the default namespace `metallb-system`
+* `metallb:///metallb-system?crdConfiguration=true` - enable `MetalLB` management and update configuration in the namespace `metallb-system` (default)
+* `metallb:///foonamespace?crdConfiguration=true` - enable `MetalLB` management and update configuration in the namespace `metallb-system`
+* `metallb:///?crdConfiguration=true` - enable `MetalLB` management and update configuration in the default namespace `metallb-system`
 
 Notice the **three* slashes. In the URL, the namespace are in the path.
-
-You must also tell the CCM to configure MetalLB using CRDs instead of a ConfigMap by either:
-
-- Setting the `METAL_USE_CRD_FOR_METALLB` environment variable to `true`
-- Setting the `useCRDForMetalLB=true` in your CCM secret
-
-When enabled, CCM controls the loadbalancer by updating the required MetalLB CR (custom resources).
 
 If `MetalLB` management is enabled, then CCM does the following.
 
@@ -464,6 +458,8 @@ For example:
 * `metallb:///` - enable `MetalLB` management and update the default configmap, i.e. `config` in the namespace `metallb-system`
 
 Notice the **three* slashes. In the URL, the namespace and the configmap are in the path.
+
+By default, the CCM configures MetalLB using a ConfigMap. ConfigMap configuration only works with MetalLB <= v0.12.1.  For forward compatibility, you may optionally append `?crdConfiguration=false` to the configuration string in order to explicitly tell the CCM to use a ConfigMap to configure MetalLB.  In a future release, the CCM will default to using CRDs with MetalLB.
 
 When enabled, CCM controls the loadbalancer by updating the provided `ConfigMap`.
 

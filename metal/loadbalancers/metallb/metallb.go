@@ -3,6 +3,8 @@ package metallb
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
@@ -62,7 +64,7 @@ var (
 )
 
 // func NewLB(k8sclient kubernetes.Interface, k8sApiextensionsClientset *k8sapiextensionsclient.Clientset, config string) *LB {
-func NewLB(k8sclient kubernetes.Interface, config string, useCrdConfiguration bool) *LB {
+func NewLB(k8sclient kubernetes.Interface, config string, featureFlags url.Values) *LB {
 	var namespace, configmapname string
 
 	// it may have an extra slash at the beginning or end, so get rid of it
@@ -86,7 +88,14 @@ func NewLB(k8sclient kubernetes.Interface, config string, useCrdConfiguration bo
 		namespace = defaultNamespace
 	}
 
-	crdConfiguration = useCrdConfiguration
+	if featureFlags.Has("crdConfiguration") {
+		rawCrdConfiguration := featureFlags.Get("crdConfiguration")
+		parsedCrdConfiguration, err := strconv.ParseBool(rawCrdConfiguration)
+		if err != nil {
+			panic(fmt.Errorf("crdConfiguration must be a boolean, was %s: %w", rawCrdConfiguration, err))
+		}
+		crdConfiguration = parsedCrdConfiguration
+	}
 
 	lb := &LB{}
 	if crdConfiguration {

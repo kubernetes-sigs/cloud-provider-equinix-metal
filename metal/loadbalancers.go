@@ -49,7 +49,7 @@ type loadBalancers struct {
 	eipTag                string
 }
 
-func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector, eipTag string, useCRDForMetalLB bool) (*loadBalancers, error) {
+func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector, eipTag string) (*loadBalancers, error) {
 	selector := labels.Everything()
 	if nodeSelector != "" {
 		selector, _ = labels.Parse(nodeSelector)
@@ -78,6 +78,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 	}
 
 	lbconfig := u.Path
+	lbflags := u.Query()
 	var impl loadbalancers.LB
 	switch u.Scheme {
 	case "kube-vip":
@@ -85,7 +86,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 		impl = kubevip.NewLB(k8sclient, lbconfig)
 	case "metallb":
 		klog.Info("loadbalancer implementation enabled: metallb")
-		impl = metallb.NewLB(k8sclient, lbconfig, useCRDForMetalLB)
+		impl = metallb.NewLB(k8sclient, lbconfig, lbflags)
 	case "empty":
 		klog.Info("loadbalancer implementation enabled: empty, bgp only")
 		impl = empty.NewLB(k8sclient, lbconfig)
