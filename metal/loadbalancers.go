@@ -78,6 +78,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 	}
 
 	lbconfig := u.Path
+	lbflags := u.Query()
 	var impl loadbalancers.LB
 	switch u.Scheme {
 	case "kube-vip":
@@ -85,7 +86,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 		impl = kubevip.NewLB(k8sclient, lbconfig)
 	case "metallb":
 		klog.Info("loadbalancer implementation enabled: metallb")
-		impl = metallb.NewLB(k8sclient, lbconfig)
+		impl = metallb.NewLB(k8sclient, lbconfig, lbflags)
 	case "empty":
 		klog.Info("loadbalancer implementation enabled: empty, bgp only")
 		impl = empty.NewLB(k8sclient, lbconfig)

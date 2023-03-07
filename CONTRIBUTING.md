@@ -42,10 +42,10 @@ Before committing, it's a good idea to run `goimports -w .`.
 
 ## Building and Testing
 
-The [Makefile](./Makefile) contains the targets to build, lint, vet and test:
+The [Makefile](./Makefile) contains the targets to build, lint, and test:
 
 ```sh
-make build lint vet test
+make build lint test
 ```
 
 These normally will be run using your locally installed golang tools. If you do not have them
@@ -53,7 +53,7 @@ installed, or do not want to use local ones for any other reason, you can run it
 image by setting the var `DOCKERBUILD=true`:
 
 ```sh
-make build lint vet test DOCKERBUILD=true
+make build lint test DOCKERBUILD=true
 ```
 
 If you want to see HTTP requests, set the `PACKNGO_DEBUG` env var to non-empty
