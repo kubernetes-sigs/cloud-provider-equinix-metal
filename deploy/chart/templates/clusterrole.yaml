@@ -93,4 +93,17 @@ rules:
       - watch
       - update
       - patch
+  - apiGroups:
+      - metallb.io
+    resources:
+      - ipaddresspools
+      - bgppeers
+      - bgpadvertisements
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - patch
+      - delete
 {{- end }}
