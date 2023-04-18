@@ -43,7 +43,7 @@ type Peer struct {
 	RouterID      string         `yaml:"router-id"`
 	NodeSelectors []NodeSelector `yaml:"node-selectors"`
 	Password      string         `yaml:"password"`
-	Name          string         `yaml:"name"`
+	Name          string         `yaml:"name,omitempty"`
 }
 
 type NodeSelector struct {
