@@ -629,9 +629,9 @@ func TestSelectorRequirementsSliceLess(t *testing.T) {
 	// basic set we use for our tests.
 	/*
 		type SelectorRequirements struct {
-			Key      string   `yaml:"key"`
-			Operator string   `yaml:"operator"`
-			Values   []string `yaml:"values"`
+			Key      string   `json:"key"`
+			Operator string   `json:"operator"`
+			Values   []string `json:"values"`
 		}
 	*/
 	sr := map[string]SelectorRequirements{
