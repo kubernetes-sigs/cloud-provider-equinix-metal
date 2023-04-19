@@ -28,7 +28,7 @@ import (
 // configFile is the configuration as parsed out of the ConfigMap,
 // without validation or useful high level types.
 type ConfigFile struct {
-	Peers          []Peer
+	Peers          []Peer            `json:"peers"`
 	BGPCommunities map[string]string `json:"bgp-communities"`
 	Pools          []AddressPool     `json:"address-pools"`
 }
@@ -58,9 +58,9 @@ type SelectorRequirements struct {
 }
 
 type AddressPool struct {
-	Protocol          Proto
-	Name              string
-	Addresses         []string
+	Protocol          Proto              `json:"protocol"`
+	Name              string             `json:"name"`
+	Addresses         []string           `json:"addresses"`
 	AvoidBuggyIPs     bool               `json:"avoid-buggy-ips"`
 	AutoAssign        *bool              `json:"auto-assign"`
 	BGPAdvertisements []BgpAdvertisement `json:"bgp-advertisements"`
