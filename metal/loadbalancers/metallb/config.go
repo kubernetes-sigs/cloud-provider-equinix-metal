@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 )
 
 // these are taken from https://github.com/metallb/metallb/blob/main/internal/config/config.go
@@ -28,46 +28,46 @@ import (
 // configFile is the configuration as parsed out of the ConfigMap,
 // without validation or useful high level types.
 type ConfigFile struct {
-	Peers          []Peer
-	BGPCommunities map[string]string `yaml:"bgp-communities"`
-	Pools          []AddressPool     `yaml:"address-pools"`
+	Peers          []Peer            `json:"peers"`
+	BGPCommunities map[string]string `json:"bgp-communities"`
+	Pools          []AddressPool     `json:"address-pools"`
 }
 
 type Peer struct {
-	MyASN         uint32         `yaml:"my-asn"`
-	ASN           uint32         `yaml:"peer-asn"`
-	Addr          string         `yaml:"peer-address"`
-	Port          uint16         `yaml:"peer-port"`
-	SrcAddr       string         `yaml:"source-address"`
-	HoldTime      string         `yaml:"hold-time"`
-	RouterID      string         `yaml:"router-id"`
-	NodeSelectors []NodeSelector `yaml:"node-selectors"`
-	Password      string         `yaml:"password"`
-	Name          string         `yaml:"name"`
+	MyASN         uint32         `json:"my-asn"`
+	ASN           uint32         `json:"peer-asn"`
+	Addr          string         `json:"peer-address"`
+	Port          uint16         `json:"peer-port"`
+	SrcAddr       string         `json:"source-address"`
+	HoldTime      string         `json:"hold-time"`
+	RouterID      string         `json:"router-id"`
+	NodeSelectors []NodeSelector `json:"node-selectors"`
+	Password      string         `json:"password"`
+	Name          string         `json:"name,omitempty"`
 }
 
 type NodeSelector struct {
-	MatchLabels      map[string]string      `yaml:"match-labels"`
-	MatchExpressions []SelectorRequirements `yaml:"match-expressions"`
+	MatchLabels      map[string]string      `json:"match-labels"`
+	MatchExpressions []SelectorRequirements `json:"match-expressions"`
 }
 
 type SelectorRequirements struct {
-	Key      string   `yaml:"key"`
-	Operator string   `yaml:"operator"`
-	Values   []string `yaml:"values"`
+	Key      string   `json:"key"`
+	Operator string   `json:"operator"`
+	Values   []string `json:"values"`
 }
 
 type AddressPool struct {
-	Protocol          Proto
-	Name              string
-	Addresses         []string
-	AvoidBuggyIPs     bool               `yaml:"avoid-buggy-ips"`
-	AutoAssign        *bool              `yaml:"auto-assign"`
-	BGPAdvertisements []BgpAdvertisement `yaml:"bgp-advertisements"`
+	Protocol          Proto              `json:"protocol"`
+	Name              string             `json:"name"`
+	Addresses         []string           `json:"addresses"`
+	AvoidBuggyIPs     bool               `json:"avoid-buggy-ips"`
+	AutoAssign        *bool              `json:"auto-assign"`
+	BGPAdvertisements []BgpAdvertisement `json:"bgp-advertisements"`
 }
 
 type BgpAdvertisement struct {
-	AggregationLength *int `yaml:"aggregation-length"`
+	AggregationLength *int `json:"aggregation-length"`
 	LocalPref         *uint32
 	Communities       []string
 }
