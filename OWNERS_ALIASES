@@ -1,0 +1,11 @@
+# See the OWNERS docs at https://go.k8s.io/owners#owners_aliases
+
+aliases:
+  sig-cloud-provider-leads:
+    - andrewsykim
+    - cheftako
+    - nckturner
+  cloud-provider-equinix-metal-maintainers:
+    - cprivitere
+    - deitch
+    - displague
