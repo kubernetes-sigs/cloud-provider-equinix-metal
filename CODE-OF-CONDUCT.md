@@ -1,3 +1,3 @@
-# Code Of Conduct
+# Kubernetes Community Code of Conduct
 
-Please refer to the [Contributor Covenant](https://www.contributor-covenant.org/version/1/2/0/code-of-conduct/).
+Please refer to our [Kubernetes Community Code of Conduct](https://git.k8s.io/community/code-of-conduct.md)
