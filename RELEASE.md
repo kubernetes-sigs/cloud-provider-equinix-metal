@@ -20,5 +20,4 @@ In order to cut a release, you must:
 
 * GitHub Actions detects a new tag has been pushed
 * CI builds docker images for each supported architecture as well as a multi-arch manifest, and tags it with the semver tag of the release, e.g. `v0.4.0`
-* CI creates the release in `out/release`, the equivalent of `make release`
-* CI copies the artifacts in `out/release/*` to the github releases
+* CI builds and pushes the image and then creates the release.
