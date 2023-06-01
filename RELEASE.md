@@ -13,7 +13,7 @@ In order to cut a release, you must:
 1. Commit the changes.
 1. Push out your branch, open a PR and merge the changes
 1. Wait for the Continuous Integration github action to finish running
-1. Tag the release with `git tag -a vX.Y.z -m "Message"
+1. Tag the release with `git tag -a vX.Y.z -m "Message"`
 1. Push out the tag
 
 ## How A Release Happens
