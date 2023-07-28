@@ -16,7 +16,7 @@ require (
 	k8s.io/client-go v0.26.4
 	k8s.io/cloud-provider v0.26.4
 	k8s.io/component-base v0.26.4
-	k8s.io/klog/v2 v2.90.1
+	k8s.io/klog/v2 v2.100.1
 	sigs.k8s.io/controller-runtime v0.14.6
 	sigs.k8s.io/yaml v1.3.0
 )
