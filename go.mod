@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-retryablehttp v0.7.4
 	github.com/packethost/packet-api-server v0.0.0-20230223042617-bc7d1539adbb
-	github.com/packethost/packngo v0.29.0
+	github.com/packethost/packngo v0.30.0
 	github.com/pallinder/go-randomdata v1.2.0
 	github.com/spf13/pflag v1.0.5
 	go.universe.tf/metallb v0.13.7
