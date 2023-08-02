@@ -2,4 +2,4 @@ dist/*
 vendor/
 hacks/
 tmp/
-
+.idea
