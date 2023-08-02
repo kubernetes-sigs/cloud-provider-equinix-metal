@@ -177,8 +177,9 @@ metal-cloud-config   Opaque                                1         2m
 
 To apply the CCM itself, select your release and apply the manifest:
 
+Example:
 ```
-RELEASE=v2.0.0
+RELEASE=v3.6.2
 kubectl apply -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${RELEASE}/deployment.yaml
 ```
 
