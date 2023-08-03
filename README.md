@@ -2,9 +2,9 @@
 
 # Kubernetes Cloud Controller Manager for Equinix Metal
 
-[![GitHub release](https://img.shields.io/github/release/equinix/cloud-provider-equinix-metal/all.svg?style=flat-square)](https://github.com/equinix/cloud-provider-equinix-metal/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/equinix/cloud-provider-equinix-metal)](https://goreportcard.com/report/github.com/equinix/cloud-provider-equinix-metal)
-![Continuous Integration](https://github.com/equinix/cloud-provider-equinix-metal/workflows/Continuous%20Integration/badge.svg)
+[![GitHub release](https://img.shields.io/github/release/equinix/cloud-provider-equinix-metal/all.svg?style=flat-square)](https://github.com/kubernetes-sigs/cloud-provider-equinix-metal/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kubernetes-sigs/cloud-provider-equinix-metal)](https://goreportcard.com/report/github.com/kubernetes-sigs/cloud-provider-equinix-metal)
+![Continuous Integration](https://github.com/kubernetes-sigs/cloud-provider-equinix-metal/workflows/Continuous%20Integration/badge.svg)
 [![Docker Pulls](https://img.shields.io/docker/pulls/equinix/cloud-provider-equinix-metal.svg)](https://hub.docker.com/r/equinix/cloud-provider-equinix-metal/)
 [![Slack](https://slack.equinixmetal.com/badge.svg)](https://slack.equinixmetal.com/)
 [![Twitter Follow](https://img.shields.io/twitter/follow/equinixmetal.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=equinixmetal&user_id=788180534543339520)
@@ -180,7 +180,7 @@ Example:
 
 ```
 RELEASE=v3.6.2
-kubectl apply -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${RELEASE}/deployment.yaml
+kubectl apply -f https://github.com/kubernetes-sigs/cloud-provider-equinix-metal/releases/download/${RELEASE}/deployment.yaml
 ```
 
 The CCM uses multiple configuration options. See the [configuration][#Configuration] section for all of the options.
@@ -233,7 +233,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Kubernetes Service annotation to set EIP metro                                                                                                               |                | `METAL_ANNOTATION_EIP_METRO`            | `annotationEIPMetro`           | `"metal.equinix.com/eip-metro"`                              |
 | Kubernetes Service annotation to set EIP facility                                                                                                            |                | `METAL_ANNOTATION_EIP_FACILITY`         | `annotationEIPFacility`        | `"metal.equinix.com/eip-facility"`                           |
 | Tag for control plane Elastic IP                                                                                                                             |                | `METAL_EIP_TAG`                         | `eipTag`                       | No control plane Elastic IP                                  |
-| ID for control plane Equinix Metal Load Balancer                                                                                                                             |                | `METAL_LOAD_BALANCER_ID`                         | `loadBalancerID`                       | No control plane Equinix Metal Load Balancer                                  |
+| ID for control plane Equinix Metal Load Balancer                                                                                                             |                | `METAL_LOAD_BALANCER_ID`                | `loadBalancerID`               | No control plane Equinix Metal Load Balancer                 |
 | Kubernetes API server port for Elastic IP                                                                                                                    |                | `METAL_API_SERVER_PORT`                 | `apiServerPort`                | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP                                                                                                              |                | `METAL_BGP_NODE_SELECTOR`               | `bgpNodeSelector`              | All nodes                                                    |
 | Use host IP for Control Plane endpoint health checks                                                                                                         |                | `METAL_EIP_HEALTH_CHECK_USE_HOST_IP`    | `eipHealthCheckUseHostIP`      | false                                                        |
@@ -340,7 +340,6 @@ The value of the loadbalancing configuration is `<type>:///<detail>` where:
 
 For loadbalancing for Kubernetes `Service` of `type=LoadBalancer`, the following implementations are supported:
 
-
 - [Equinix Metal Load Balancer](#EquinixMetalLoadBalancer)
 - [kube-vip](#kube-vip)
 - [MetalLB](#metallb)
@@ -354,6 +353,7 @@ API calls to support a load balancer, and providing configuration for supported 
 Equinix Metal Load Balancer (EMLB) is a beta service that is available to a limited number of Equinix Metal customers that provides managed layer 4 load balancers.
 
 When the EMLB option is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`, the Equinix Metal CCM:
+
 - creates an Equinix Metal Load Balancer for the service
 - creates listener ports on the Equinix Metal Load Balancer for each port on the service
 - creates origin pools for each listener port that send traffic to the corresponding NodePorts in your cluster
@@ -364,7 +364,7 @@ To enable EMLB, set the configuration `METAL_LOAD_BALANCER` or config `loadbalan
 emlb://<metro>
 ```
 
-Where `<metro>` is the Equinix metro in which you want CCM to deploy your external load balancers.  For example, to deploy your load balancers in Silicon Valley, you would set the configuration to `emlb://sv`.  Note that EMLB is available in a limited number of Equinix metros (as of this writing, `sv`, `da`, and `ny`).
+Where `<metro>` is the Equinix metro in which you want CCM to deploy your external load balancers. For example, to deploy your load balancers in Silicon Valley, you would set the configuration to `emlb://sv`. Note that EMLB is available in a limited number of Equinix metros (as of this writing, `sv`, `da`, and `ny`).
 
 ##### kube-vip
 
@@ -384,7 +384,7 @@ To enable it, set the configuration `METAL_LOAD_BALANCER` or config `loadbalance
 kube-vip://
 ```
 
-Directions on using configuring kube-vip in this method are available at the kube-vip [site](<https://kube-vip.io/hybrid/daemonset/#equinix-metal-overview-(using-the-%5Bequinix-cloud-provider-equinix-metal%5D(https://github.com/equinix/cloud-provider-equinix-metal))>)
+Directions on using configuring kube-vip in this method are available at the kube-vip [site](<https://kube-vip.io/hybrid/daemonset/#equinix-metal-overview-(using-the-%5Bequinix-cloud-provider-equinix-metal%5D(https://github.com/kubernetes-sigs/cloud-provider-equinix-metal))>)
 
 If `kube-vip` management is enabled, then CCM does the following.
 
@@ -601,14 +601,14 @@ You have several options for control plane load-balancing:
 
 #### Equinix Metal Load Balancer
 
-If you have configured the CCM to use Equinix Metal Load Balancers (EMLB) for service load balancing, you can also choose to use EMLB for control plane load balancing.  To enable control plane load balancing with EMLB:
+If you have configured the CCM to use Equinix Metal Load Balancers (EMLB) for service load balancing, you can also choose to use EMLB for control plane load balancing. To enable control plane load balancing with EMLB:
 
 1. Create a Load Balancer using the Equinix Metal API or Web UI
 1. When starting the CCM
    - set the [configuration](#Configuration) for load balancing with EMLB, e.g. env var `METAL_LOAD_BALANCER=emlb://<metro>`, where `<metro>` is the metro in which you want the CCM to create your load balancers
    - set the [configuration](#Configuration) for the control plane EIP tag, e.g. env var `METAL_LOAD_BALANCER_ID=<id>`, where `<id>` is the ID of the Load Balancer you created earlier
 
-When run with the correct configuration, on startup, CCM will automatically update your Load Balancer to send traffic to your control plane nodes. 
+When run with the correct configuration, on startup, CCM will automatically update your Load Balancer to send traffic to your control plane nodes.
 
 #### Elastic IP Load Balancer
 

@@ -4,7 +4,7 @@ package kubevip
 import (
 	"context"
 
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
+	"github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal/loadbalancers"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )

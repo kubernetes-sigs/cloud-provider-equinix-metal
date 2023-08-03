@@ -2,7 +2,7 @@ SHELL=/bin/sh
 BINARY ?= cloud-provider-equinix-metal
 BUILD_IMAGE?=equinix/cloud-provider-equinix-metal
 BUILDER_IMAGE?=equinix/go-build
-PACKAGE_NAME?=github.com/equinix/cloud-provider-equinix-metal
+PACKAGE_NAME?=github.com/kubernetes-sigs/cloud-provider-equinix-metal
 GIT_VERSION?=$(shell git log -1 --format="%h")
 VERSION?=$(GIT_VERSION)
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)

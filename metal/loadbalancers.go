@@ -12,11 +12,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/emlb"
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/empty"
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/kubevip"
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/metallb"
+	"github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal/loadbalancers"
+	"github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal/loadbalancers/emlb"
+	"github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal/loadbalancers/empty"
+	"github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal/loadbalancers/kubevip"
+	"github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal/loadbalancers/metallb"
 
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	v1 "k8s.io/api/core/v1"

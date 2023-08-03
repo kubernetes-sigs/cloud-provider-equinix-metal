@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
+	"github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal/loadbalancers"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"

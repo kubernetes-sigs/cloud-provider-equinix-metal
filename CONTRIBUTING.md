@@ -12,7 +12,7 @@ issue open for the pull request you are creating, please create one. Frequently,
 pull requests may be merged or closed while the underlying issue being addressed
 is not fully addressed. Issues are a place to discuss the problem in need of a
 solution. Pull requests are a place to discuss an implementation of one
-particular answer to that problem.  A pull request may not address all (or any)
+particular answer to that problem. A pull request may not address all (or any)
 of the problems expressed in the issue, so it is important to track these
 separately.
 
@@ -24,7 +24,7 @@ All public functions and variables should include at least a short description
 of the functionality they provide. Comments should be formatted according to
 <https://golang.org/doc/effective_go.html#commentary>.
 
-Documentation at <https://godoc.org/github.com/equinix/cloud-provider-equinix-metal> will be
+Documentation at <https://godoc.org/github.com/kubernetes-sigs/cloud-provider-equinix-metal> will be
 generated from these comments.
 
 Although the Equinix Metal CCM is intended more as a standalone runtime container than
@@ -70,11 +70,11 @@ It will be named and tagged `equinix/cloud-provider-equinix-metal:latest-${ARCH}
 
 You can override any of the above as follows:
 
-* `BUILD_IMAGE`: name of the image, instead of the default `equinix/cloud-provider-equinix-metal`
-* `BUILD_TAG`: base tag for the image, instead of the default `latest`
-* `ARCH`: architecture to build for, and extension to tag
-* `OS`: OS to build for, not included in the tag, defaults to `linux`
-* `TAGGED_ARCH_IMAGE`: to replace the entire tag, defaults to `$(BUILD_IMAGE):$(BUILD_TAG)-$(ARCH)`
+- `BUILD_IMAGE`: name of the image, instead of the default `equinix/cloud-provider-equinix-metal`
+- `BUILD_TAG`: base tag for the image, instead of the default `latest`
+- `ARCH`: architecture to build for, and extension to tag
+- `OS`: OS to build for, not included in the tag, defaults to `linux`
+- `TAGGED_ARCH_IMAGE`: to replace the entire tag, defaults to `$(BUILD_IMAGE):$(BUILD_TAG)-$(ARCH)`
 
 ### Automation (CI/CD)
 
@@ -84,11 +84,13 @@ It is possible to test the github actions using your own fork of this repository
 you have github actions support enabled in your repository settings.
 
 If you want to test publishing container images to quay.io, you will need to set the following secrets:
+
 - QUAY_ORG
 - QUAY_USERNAME
 - QUAY_PASSWORD
 
 If you want to test publishing container images to dockerhub, you will need to set the following secrets:
+
 - DOCKER_ORG
 - DOCKER_USERNAME
 - DOCKER_PASSWORD
