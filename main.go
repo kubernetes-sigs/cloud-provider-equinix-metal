@@ -1,54 +1,41 @@
 package main
 
 import (
-	goflag "flag"
-	"fmt"
-	"math/rand"
 	"os"
-	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/cloud-provider/app"
 	cloudcontrollerconfig "k8s.io/cloud-provider/app/config"
 	"k8s.io/cloud-provider/options"
+	"k8s.io/component-base/cli"
 	cliflag "k8s.io/component-base/cli/flag"
-	"k8s.io/component-base/logs"
+	_ "k8s.io/component-base/logs/json/register"
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // for client metric registration
 	_ "k8s.io/component-base/metrics/prometheus/version"  // for version metric registration
 	"k8s.io/klog/v2"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal"
-	"github.com/spf13/pflag"
 )
 
 func main() {
-	rand.Seed(time.Now().UTC().UnixNano())
-
-	opts, err := options.NewCloudControllerManagerOptions()
-	opts.KubeCloudShared.CloudProvider.Name = metal.ProviderName
-
+	ccmOptions, err := options.NewCloudControllerManagerOptions()
 	if err != nil {
 		klog.Fatalf("unable to initialize command options: %v", err)
 	}
+
 	controllerInitializers := app.DefaultInitFuncConstructors
-	// remove unneeded controllers
+
+	// Remove the route controller which cloud provider equinix metal does not use.
 	delete(controllerInitializers, "route")
-	fss := cliflag.NamedFlagSets{
-		NormalizeNameFunc: cliflag.WordSepNormalizeFunc,
-	}
-	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
-	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 
-	command := app.NewCloudControllerManagerCommand(opts, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
+	// Set the name of our Cloud Provider
+	ccmOptions.KubeCloudShared.CloudProvider.Name = metal.ProviderName
 
-	logs.InitLogs()
-	defer logs.FlushLogs()
-
-	if err := command.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+	fss := cliflag.NamedFlagSets{}
+	command := app.NewCloudControllerManagerCommand(ccmOptions, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
+	code := cli.Run(command)
+	os.Exit(code)
 }
 
 func cloudInitializer(config *cloudcontrollerconfig.CompletedConfig) cloudprovider.Interface {
