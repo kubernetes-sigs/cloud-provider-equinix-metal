@@ -10,13 +10,20 @@ import (
 )
 
 type LB struct {
-	client *lbaas.APIClient
+	client               *lbaas.APIClient
+	loadBalancerLocation *lbaas.LoadBalancerLocation
 }
 
 func NewLB(k8sclient kubernetes.Interface, config string) *LB {
+	// Parse config for Equinix Metal Load Balancer
+	// An example config using Dallas as the location would look like
+	// The format is emlb://<location>
+	// it may have an extra slash at the beginning or end, so get rid of it
+
 	lb := &LB{}
 	emlbConfig := lbaas.NewConfiguration()
 	lb.client = lbaas.NewAPIClient(emlbConfig)
+	lb.loadBalancerLocation.Id = &config
 	return lb
 }
 

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/emlb"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/empty"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/kubevip"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/metallb"
@@ -92,7 +93,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 		impl = empty.NewLB(k8sclient, lbconfig)
 	case "emlb":
 		klog.Info("loadbalancer implementation enabled: emlb")
-		impl = empty.NewLB(k8sclient, lbconfig)
+		impl = emlb.NewLB(k8sclient, lbconfig)
 	default:
 		klog.Info("loadbalancer implementation disabled")
 		impl = nil
