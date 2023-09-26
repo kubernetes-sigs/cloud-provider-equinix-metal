@@ -4,14 +4,20 @@ package emlb
 import (
 	"context"
 
+	lbaas "github.com/equinix/cloud-provider-equinix-metal/internal/lbaas/v1"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"k8s.io/client-go/kubernetes"
 )
 
-type LB struct{}
+type LB struct {
+	client *lbaas.APIClient
+}
 
 func NewLB(k8sclient kubernetes.Interface, config string) *LB {
-	return &LB{}
+	lb := &LB{}
+	emlbConfig := lbaas.NewConfiguration()
+	lb.client = lbaas.NewAPIClient(emlbConfig)
+	return lb
 }
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node) error {
