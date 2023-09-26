@@ -91,7 +91,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 		klog.Info("loadbalancer implementation enabled: empty, bgp only")
 		impl = empty.NewLB(k8sclient, lbconfig)
 	case "emlb":
-		klog.Info("loadbalancer implementation enabled: empty, bgp only")
+		klog.Info("loadbalancer implementation enabled: emlb")
 		impl = empty.NewLB(k8sclient, lbconfig)
 	default:
 		klog.Info("loadbalancer implementation disabled")
