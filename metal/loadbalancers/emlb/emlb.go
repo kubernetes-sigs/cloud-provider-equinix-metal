@@ -28,10 +28,46 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 }
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node) error {
+	tokenExchanger := &MetalTokenExchanger{
+		metalAPIKey: "", // TODO pass this in somehow (maybe add it to the context?)
+		client:      l.client.GetConfig().HTTPClient,
+	}
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, tokenExchanger)
+
+	lbCreateRequest := lbaas.LoadBalancerCreate{
+		Name:       "", // TODO generate from service definition.  Maybe "svcNamespace:svcName"?  Do we need to know the cluster name here?
+		LocationId: "", // TODO In the first pass, this comes from the config string?  Or an annotation
+		ProviderId: "", // TODO I have a working value for this (same as what the portal uses) but waiting on feedback from LBaaS team
+	}
+
+	// TODO lb, resp, err :=
+	_, _, err := l.client.ProjectsApi.CreateLoadBalancer(ctx, "TODO: project ID").LoadBalancerCreate(lbCreateRequest).Execute()
+	if err != nil {
+		return err
+	}
+
+	// TODO create other resources
+
 	return nil
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
+	tokenExchanger := &MetalTokenExchanger{
+		metalAPIKey: "TODO",
+		client:      l.client.GetConfig().HTTPClient,
+	}
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, tokenExchanger)
+
+	loadBalancerId := "TODO"
+
+	// TODO delete other resources
+
+	// TODO lb, resp, err :=
+	_, err := l.client.LoadBalancersApi.DeleteLoadBalancer(ctx, loadBalancerId).Execute()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
