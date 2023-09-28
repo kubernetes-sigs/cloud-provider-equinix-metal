@@ -4,28 +4,24 @@ package emlb
 import (
 	"context"
 
-	lbaas "github.com/equinix/cloud-provider-equinix-metal/internal/lbaas/v1"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"k8s.io/client-go/kubernetes"
 )
 
 type LB struct {
-	controller           *controller
-	loadBalancerLocation *lbaas.LoadBalancerLocation
+	controller *controller
 }
 
-func NewLB(k8sclient kubernetes.Interface, config string) *LB {
+func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string) *LB {
 	// Parse config for Equinix Metal Load Balancer
-	// An example config using Dallas as the location would look like
 	// The format is emlb://<location>
+	// An example config using Dallas as the location would look like emlb://da
 	// it may have an extra slash at the beginning or end, so get rid of it
-
-	metalAPIKey := "TODO"
+	metro := config
 
 	lb := &LB{}
-	lb.loadBalancerLocation.Id = &config
+	lb.controller = NewController(metalAPIKey, projectID, metro)
 
-	lb.controller = NewController(metalAPIKey)
 	return lb
 }
 

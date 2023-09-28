@@ -93,7 +93,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 		impl = empty.NewLB(k8sclient, lbconfig)
 	case "emlb":
 		klog.Info("loadbalancer implementation enabled: emlb")
-		impl = emlb.NewLB(k8sclient, lbconfig)
+		impl = emlb.NewLB(k8sclient, lbconfig, client.APIKey, projectID)
 	default:
 		klog.Info("loadbalancer implementation disabled")
 		impl = nil

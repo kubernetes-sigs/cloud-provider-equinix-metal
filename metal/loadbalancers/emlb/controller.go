@@ -19,9 +19,11 @@ var LBMetros = map[string]string{
 type controller struct {
 	client         *lbaas.APIClient
 	tokenExchanger *MetalTokenExchanger
+	projectID      string
+	metro          string
 }
 
-func NewController(metalAPIKey string) *controller {
+func NewController(metalAPIKey, projectID, metro string) *controller {
 	controller := &controller{}
 	emlbConfig := lbaas.NewConfiguration()
 
@@ -30,6 +32,8 @@ func NewController(metalAPIKey string) *controller {
 		metalAPIKey: metalAPIKey,
 		client:      controller.client.GetConfig().HTTPClient,
 	}
+	controller.projectID = projectID
+	controller.metro = metro
 
 	return controller
 }
