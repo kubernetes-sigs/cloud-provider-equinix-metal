@@ -47,7 +47,7 @@ func (c *controller) createLoadBalancer(ctx context.Context, config map[string]s
 
 	locationId, ok := LBMetros[metro]
 	if !ok {
-		return nil, fmt.Errorf("could not determine load balancer location for metro %v; valid values are %v", metro, reflect.ValueOf(LBMetros).Keys())
+		return nil, fmt.Errorf("could not determine load balancer location for metro %v; valid values are %v", metro, reflect.ValueOf(LBMetros).MapKeys())
 	}
 	lbCreateRequest := lbaas.LoadBalancerCreate{
 		Name:       "", // TODO generate from service definition.  Maybe "svcNamespace:svcName"?  Do we need to know the cluster name here?
