@@ -3,11 +3,21 @@ package emlb
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 
 	lbaas "github.com/equinix/cloud-provider-equinix-metal/internal/lbaas/v1"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"k8s.io/client-go/kubernetes"
 )
+
+const ProviderID = "loadpvd-gOB_-byp5ebFo7A3LHv2B"
+
+var LBMetros = map[string]string{
+	"da": "lctnloc--uxs0GLeAELHKV8GxO_AI",
+	"ny": "lctnloc-Vy-1Qpw31mPi6RJQwVf9A",
+	"sv": "lctnloc-H5rl2M2VL5dcFmdxhbEKx",
+}
 
 type LB struct {
 	client               *lbaas.APIClient
@@ -34,10 +44,16 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	}
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, tokenExchanger)
 
+	metro := "da" // TODO get this from somewhere else
+
+	locationId, ok := LBMetros[metro]
+	if !ok {
+		return fmt.Errorf("could not determine load balancer location for metro %v; valid values are %v", metro, reflect.ValueOf(LBMetros).Keys())
+	}
 	lbCreateRequest := lbaas.LoadBalancerCreate{
 		Name:       "", // TODO generate from service definition.  Maybe "svcNamespace:svcName"?  Do we need to know the cluster name here?
-		LocationId: "", // TODO In the first pass, this comes from the config string?  Or an annotation
-		ProviderId: "", // TODO I have a working value for this (same as what the portal uses) but waiting on feedback from LBaaS team
+		LocationId: locationId,
+		ProviderId: ProviderID,
 	}
 
 	// TODO lb, resp, err :=
