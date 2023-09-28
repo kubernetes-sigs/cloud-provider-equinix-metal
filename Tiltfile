@@ -1,5 +1,5 @@
 # Specify the registry you wish to store the image in
-registry = 'sabin1001'
+registry = 'your-registry-here'
 
 # List the k8s context you wish to run this in
 allow_k8s_contexts('capi-quicktest-admin@capi-quicktest')
