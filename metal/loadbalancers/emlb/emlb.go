@@ -3,24 +3,14 @@ package emlb
 
 import (
 	"context"
-	"fmt"
-	"reflect"
 
 	lbaas "github.com/equinix/cloud-provider-equinix-metal/internal/lbaas/v1"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"k8s.io/client-go/kubernetes"
 )
 
-const ProviderID = "loadpvd-gOB_-byp5ebFo7A3LHv2B"
-
-var LBMetros = map[string]string{
-	"da": "lctnloc--uxs0GLeAELHKV8GxO_AI",
-	"ny": "lctnloc-Vy-1Qpw31mPi6RJQwVf9A",
-	"sv": "lctnloc-H5rl2M2VL5dcFmdxhbEKx",
-}
-
 type LB struct {
-	client               *lbaas.APIClient
+	controller           *controller
 	loadBalancerLocation *lbaas.LoadBalancerLocation
 }
 
@@ -30,63 +20,60 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	// The format is emlb://<location>
 	// it may have an extra slash at the beginning or end, so get rid of it
 
+	metalAPIKey := "TODO"
+
 	lb := &LB{}
-	emlbConfig := lbaas.NewConfiguration()
-	lb.client = lbaas.NewAPIClient(emlbConfig)
 	lb.loadBalancerLocation.Id = &config
+
+	lb.controller = NewController(metalAPIKey)
 	return lb
 }
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node) error {
-	tokenExchanger := &MetalTokenExchanger{
-		metalAPIKey: "", // TODO pass this in somehow (maybe add it to the context?)
-		client:      l.client.GetConfig().HTTPClient,
-	}
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, tokenExchanger)
+	// 1. Gather the properties we need: Metal API key, port number(s), cluster name(?), target IP(s?)
+	additionalProperties := map[string]string{}
 
-	metro := "da" // TODO get this from somewhere else
+	// 2. Create the infrastructure (what do we need to return here?  lb name and/or ID? anything else?)
+	_, err := l.controller.createLoadBalancer(ctx, additionalProperties)
 
-	locationId, ok := LBMetros[metro]
-	if !ok {
-		return fmt.Errorf("could not determine load balancer location for metro %v; valid values are %v", metro, reflect.ValueOf(LBMetros).Keys())
-	}
-	lbCreateRequest := lbaas.LoadBalancerCreate{
-		Name:       "", // TODO generate from service definition.  Maybe "svcNamespace:svcName"?  Do we need to know the cluster name here?
-		LocationId: locationId,
-		ProviderId: ProviderID,
-	}
-
-	// TODO lb, resp, err :=
-	_, _, err := l.client.ProjectsApi.CreateLoadBalancer(ctx, "TODO: project ID").LoadBalancerCreate(lbCreateRequest).Execute()
 	if err != nil {
 		return err
 	}
 
-	// TODO create other resources
-
+	// 3. Add the annotations
 	return nil
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
-	tokenExchanger := &MetalTokenExchanger{
-		metalAPIKey: "TODO",
-		client:      l.client.GetConfig().HTTPClient,
-	}
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, tokenExchanger)
-
+	// 1. Gather the properties we need: Metal API key, port number(s), cluster name(?), target IP(s?)
 	loadBalancerId := "TODO"
+	additionalProperties := map[string]string{}
 
-	// TODO delete other resources
+	// 2. Delete the infrastructure (do we need to return anything here?)
+	_, err := l.controller.deleteLoadBalancer(ctx, loadBalancerId, additionalProperties)
 
-	// TODO lb, resp, err :=
-	_, err := l.client.LoadBalancersApi.DeleteLoadBalancer(ctx, loadBalancerId).Execute()
 	if err != nil {
 		return err
 	}
+
+	// 3. Remove the annotations
 
 	return nil
 }
 
 func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
+	// 1. Gather the properties we need: Metal API key, port number(s), cluster name(?), target IP(s?)
+	loadBalancerId := "TODO"
+	additionalProperties := map[string]string{}
+
+	// 2. Update infrastructure change (do we need to return anything here? or are all changes reflected by properties from [1]?)
+	_, err := l.controller.updateLoadBalancer(ctx, loadBalancerId, additionalProperties)
+
+	if err != nil {
+		return err
+	}
+
+	// 3. Update the annotations
+
 	return nil
 }
