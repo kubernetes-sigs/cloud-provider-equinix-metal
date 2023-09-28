@@ -30,7 +30,12 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 }
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node) error {
-	// 1. Gather the properties we need: Metal API key, port number(s), cluster name(?), target IP(s?)
+	/*
+		1. Gather the properties we need: Metal API key, port number(s), cluster name(?), target IP(s?)
+		What we need here is:
+			- The NodePort (for first pass we will use the same port on the LB, so if NodePort is 8000 we use 8000 on LB)
+			- The public IPs of the nodes on which the service is running
+	*/
 	additionalProperties := map[string]string{}
 
 	// 2. Create the infrastructure (what do we need to return here?  lb name and/or ID? anything else?)
@@ -40,12 +45,19 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 		return err
 	}
 
-	// 3. Add the annotations
+	/*
+		3. Add the annotations
+			- ID of the load balancer
+			- Name of the load balancer
+			- Metro of the load balancer
+			- IP address of the load balancer
+			- Listener port that this service is using
+	*/
 	return nil
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
-	// 1. Gather the properties we need: Metal API key, port number(s), cluster name(?), target IP(s?)
+	// 1. Gather the properties we need: ID of load balancer
 	loadBalancerId := "TODO"
 	additionalProperties := map[string]string{}
 
@@ -56,13 +68,18 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 		return err
 	}
 
-	// 3. Remove the annotations
+	// 3. No need to remove the annotations because the annotated object was deleted
 
 	return nil
 }
 
 func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
-	// 1. Gather the properties we need: Metal API key, port number(s), cluster name(?), target IP(s?)
+	/*
+		1. Gather the properties we need:
+			- load balancer ID
+			- NodePort
+			- Public IP addresses of the nodes on which the target pods are running
+	*/
 	loadBalancerId := "TODO"
 	additionalProperties := map[string]string{}
 
@@ -73,7 +90,10 @@ func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, no
 		return err
 	}
 
-	// 3. Update the annotations
+	/*
+		3. Update the annotations
+			- Listener port that this service is using
+	*/
 
 	return nil
 }
