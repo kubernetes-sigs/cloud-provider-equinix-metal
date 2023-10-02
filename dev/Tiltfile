@@ -1,22 +1,22 @@
 # Specify the registry you wish to store the image in
-registry = 'your-registry-here'
+registry = 'YOUR_REGISTRY_HERE'
 
 # List the k8s context you wish to run this in
-allow_k8s_contexts('capi-quicktest-admin@capi-quicktest')
+allow_k8s_contexts('YOUR_K8S_CONTEXT_HERE')
 
 # Specify docker registry you wish to store image in
 docker_build(registry + '/cloud-provider-equinix-metal',
             context='.',
             dockerfile='./Dockerfile',
-            ignore=['cloud-sa.json','dev/'],
+            ignore=['cloud-sa.json'],
 )
 
 # read in the yaml file and replace the image name with the one we built
 deployment = read_yaml_stream('deploy/template/deployment.yaml')
 deployment[0]['spec']['template']['spec']['containers'][0]['image'] = registry + '/cloud-provider-equinix-metal'
 deployment[0]['spec']['template']['spec']['containers'][0]['env']=[]
-deployment[0]['spec']['template']['spec']['containers'][0]['env'].append({"name": "METAL_METRO_NAME","value":"da"})
-deployment[0]['spec']['template']['spec']['containers'][0]['env'].append({"name": "METAL_LOAD_BALANCER","value":"emlb:///da"})
+deployment[0]['spec']['template']['spec']['containers'][0]['env'].append({"name": "METAL_METRO_NAME","value":"YOUR_METRO_HERE"})
+deployment[0]['spec']['template']['spec']['containers'][0]['env'].append({"name": "METAL_LOAD_BALANCER","value":"YOUR_LOAD_BALANCER_HERE"})
 k8s_yaml(encode_yaml_stream(deployment))
 k8s_resource(workload='cloud-provider-equinix-metal',objects=['cloud-controller-manager:ServiceAccount:kube-system','system\\:cloud-controller-manager:ClusterRole:default','system\\:cloud-controller-manager:ClusterRoleBinding:default'])
 k8s_resource(new_name='metal-cloud-config',objects=['metal-cloud-config:Secret:kube-system'])

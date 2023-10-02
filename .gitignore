@@ -3,4 +3,5 @@ vendor/
 hacks/
 tmp/
 .idea
-cloud-sa.json
+/cloud-sa.json
+/Tiltfile
