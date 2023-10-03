@@ -38,7 +38,9 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 		return errors.New("cannot add loadbalancer service; no nodeport assigned")
 	}
 
-	port := svc.Spec.Ports[0].NodePort
+	// TODO: Loop through and add ALL the ports
+	port := svc.Spec.Ports[0].Port
+	nodePort := svc.Spec.Ports[0].NodePort
 	var ips []string
 
 	for _, node := range n {
@@ -52,8 +54,8 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	if len(ips) < 1 {
 		return errors.New("cannot add loadbalancer service; failed to find an external IP address for any node")
 	}
-
-	loadBalancer, err := l.controller.createLoadBalancer(ctx, name, port, ips)
+	// TODO move port looping inside of here so we don't get a new loadbalancer per port
+	loadBalancer, err := l.controller.createLoadBalancer(ctx, name, port, nodePort, ips)
 
 	if err != nil {
 		return err
@@ -67,6 +69,8 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 		// TODO: this is here for backwards compatibility and should be removed ASAP
 		svc.Spec.LoadBalancerIP = ip
 	}
+
+	// TODO: THIS DOES NOT ACTUALLY UPDATE THE SERVICE!
 	svc.Status.LoadBalancer.Ingress = ingress
 
 	svc.Annotations["equinix.com/loadbalancerID"] = loadBalancer.GetId()
