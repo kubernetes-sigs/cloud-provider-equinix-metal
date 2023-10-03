@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 )
 
@@ -112,7 +113,8 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 	return l, nil
 }
 
-// implementation of cloudprovider.LoadBalancer
+// validate our implementation of cloudprovider.LoadBalancer
+var _ cloudprovider.LoadBalancer = (*loadBalancers)(nil)
 
 // GetLoadBalancer returns whether the specified load balancer exists, and
 // if so, what its status is.
