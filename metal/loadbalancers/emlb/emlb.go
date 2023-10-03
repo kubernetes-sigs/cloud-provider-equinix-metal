@@ -12,6 +12,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// TODO: don't call this controller
+
 type LB struct {
 	controller *controller
 }
@@ -20,13 +22,13 @@ var _ loadbalancers.LB = (*LB)(nil)
 
 func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string) *LB {
 	// Parse config for Equinix Metal Load Balancer
-	// The format is emlb://<location>
-	// An example config using Dallas as the location would look like emlb://da
+	// The format is emlb:///<location>
+	// An example config using Dallas as the location would look like emlb:///da
 	// it may have an extra slash at the beginning or end, so get rid of it
 	metro := strings.TrimPrefix(config, "/")
 
 	lb := &LB{}
-	lb.controller = NewController(metalAPIKey, projectID, metro)
+	lb.controller = NewController(k8sclient, metalAPIKey, projectID, metro)
 
 	return lb
 }
