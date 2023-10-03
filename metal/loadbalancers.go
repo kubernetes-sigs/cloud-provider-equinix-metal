@@ -176,14 +176,19 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
 		}
 	}
-	// get the IP only
-	ip := strings.SplitN(ipCidr, "/", 2)
 
-	return &v1.LoadBalancerStatus{
-		Ingress: []v1.LoadBalancerIngress{
-			{IP: ip[0]},
-		},
-	}, nil
+	if l.usesBGP {
+		// get the IP only
+		ip := strings.SplitN(ipCidr, "/", 2)
+
+		return &v1.LoadBalancerStatus{
+			Ingress: []v1.LoadBalancerIngress{
+				{IP: ip[0]},
+			},
+		}, nil
+	} else {
+		return &service.Status.LoadBalancer, nil
+	}
 }
 
 // UpdateLoadBalancer updates hosts under the specified load balancer.
