@@ -35,7 +35,7 @@ func (m *MetalTokenExchanger) Token() (*oauth2.Token, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token exchange request failed with status %v, body %v", resp.StatusCode, body)
+		return nil, fmt.Errorf("token exchange request failed with status %v, body %v", resp.StatusCode, string(body[:]))
 	}
 
 	token := oauth2.Token{}

@@ -38,31 +38,77 @@ func NewController(metalAPIKey, projectID, metro string) *controller {
 	return controller
 }
 
-func (c *controller) createLoadBalancer(ctx context.Context, config map[string]string) (map[string]string, error) {
-	outputProperties := map[string]string{}
-
+func (c *controller) createLoadBalancer(ctx context.Context, name string, port int32, ips []string) (*lbaas.LoadBalancer, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, c.tokenExchanger)
 
-	metro := config["metro"]
-
-	locationId, ok := LBMetros[metro]
+	locationId, ok := LBMetros[c.metro]
 	if !ok {
-		return nil, fmt.Errorf("could not determine load balancer location for metro %v; valid values are %v", metro, reflect.ValueOf(LBMetros).MapKeys())
+		return nil, fmt.Errorf("could not determine load balancer location for metro %v; valid values are %v", c.metro, reflect.ValueOf(LBMetros).MapKeys())
 	}
+
 	lbCreateRequest := lbaas.LoadBalancerCreate{
-		Name:       "", // TODO generate from service definition.  Maybe "svcNamespace:svcName"?  Do we need to know the cluster name here?
+		Name:       name,
 		LocationId: locationId,
 		ProviderId: ProviderID,
 	}
 
 	// TODO lb, resp, err :=
-	_, _, err := c.client.ProjectsApi.CreateLoadBalancer(ctx, "TODO: project ID").LoadBalancerCreate(lbCreateRequest).Execute()
+	lbCreated, _, err := c.client.ProjectsApi.CreateLoadBalancer(ctx, c.projectID).LoadBalancerCreate(lbCreateRequest).Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO create other resources
-	return outputProperties, nil
+	loadBalancerID := lbCreated.GetId()
+
+	createPoolRequest := lbaas.LoadBalancerPoolCreate{
+		Name: fmt.Sprintf("%v-pool", name),
+		Protocol: lbaas.LoadBalancerPoolCreateProtocol{
+			LoadBalancerPoolProtocol: lbaas.LOADBALANCERPOOLPROTOCOL_TCP.Ptr(),
+		},
+	}
+
+	poolCreated, _, err := c.client.ProjectsApi.CreatePool(ctx, c.projectID).LoadBalancerPoolCreate(createPoolRequest).Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	poolID := poolCreated.GetId()
+
+	for i, ip := range ips {
+		createOriginRequest := lbaas.LoadBalancerPoolOriginCreate{
+			Name:   fmt.Sprintf("%v-origin-%v", name, i),
+			Target: ip,
+			PortNumber: lbaas.LoadBalancerPoolOriginPortNumber{
+				Int32: &port,
+			},
+			Active: true,
+			PoolId: poolID,
+		}
+		// TODO do we need the origin IDs for something?
+		_, _, err := c.client.PoolsApi.CreateLoadBalancerPoolOrigin(ctx, poolID).LoadBalancerPoolOriginCreate(createOriginRequest).Execute()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	createPortRequest := lbaas.LoadBalancerPortCreate{
+		Name:    fmt.Sprintf("%v-port-%v", name, port),
+		Number:  port,
+		PoolIds: []string{poolID},
+	}
+
+	// TODO do we need the port ID for something?
+	_, _, err = c.client.PortsApi.CreateLoadBalancerPort(ctx, loadBalancerID).LoadBalancerPortCreate(createPortRequest).Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	lb, _, err := c.client.LoadBalancersApi.GetLoadBalancer(ctx, loadBalancerID).Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	return lb, nil
 }
 
 func (c *controller) updateLoadBalancer(ctx context.Context, id string, config map[string]string) (map[string]string, error) {
@@ -83,12 +129,7 @@ func (c *controller) updateLoadBalancer(ctx context.Context, id string, config m
 
 func (c *controller) deleteLoadBalancer(ctx context.Context, id string, config map[string]string) (map[string]string, error) {
 	outputProperties := map[string]string{}
-
-	tokenExchanger := &MetalTokenExchanger{
-		metalAPIKey: "TODO",
-		client:      c.client.GetConfig().HTTPClient,
-	}
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, c.tokenExchanger)
 
 	// TODO delete other resources
 

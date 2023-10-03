@@ -519,7 +519,7 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 		}
 	}
 
-	return svcIPCidr, l.implementor.AddService(ctx, svc.Namespace, svc.Name, svcIPCidr, n)
+	return svcIPCidr, l.implementor.AddService(ctx, svc.Namespace, svc.Name, svcIPCidr, n, svc, nodes)
 }
 
 func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, tag string) (string, error) {

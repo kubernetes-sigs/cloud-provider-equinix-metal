@@ -9,6 +9,7 @@ import (
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -115,7 +116,7 @@ func NewLB(k8sclient kubernetes.Interface, config string, featureFlags url.Value
 	return lb
 }
 
-func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node) error {
+func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
 	config := l.configurer
 	if err := config.Get(ctx); err != nil {
 		return fmt.Errorf("unable to add service: %w", err)
