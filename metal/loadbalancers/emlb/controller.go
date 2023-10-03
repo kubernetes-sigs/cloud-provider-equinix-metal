@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	lbaas "github.com/equinix/cloud-provider-equinix-metal/internal/lbaas/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 const ProviderID = "loadpvd-gOB_-byp5ebFo7A3LHv2B"
@@ -18,12 +19,13 @@ var LBMetros = map[string]string{
 
 type controller struct {
 	client         *lbaas.APIClient
-	tokenExchanger *MetalTokenExchanger
-	projectID      string
+	k8sclient      kubernetes.Interface
 	metro          string
+	projectID      string
+	tokenExchanger *MetalTokenExchanger
 }
 
-func NewController(metalAPIKey, projectID, metro string) *controller {
+func NewController(k8sclient kubernetes.Interface, metalAPIKey, projectID, metro string) *controller {
 	controller := &controller{}
 	emlbConfig := lbaas.NewConfiguration()
 
