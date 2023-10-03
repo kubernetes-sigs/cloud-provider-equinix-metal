@@ -8,7 +8,7 @@ allow_k8s_contexts('YOUR_K8S_CONTEXT_HERE')
 docker_build(registry + '/cloud-provider-equinix-metal',
             context='.',
             dockerfile='./Dockerfile',
-            ignore=['cloud-sa.json'],
+            ignore=['cloud-sa.json','dev/'],
 )
 
 # read in the yaml file and replace the image name with the one we built
