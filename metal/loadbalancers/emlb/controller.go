@@ -38,7 +38,7 @@ func NewController(metalAPIKey, projectID, metro string) *controller {
 	return controller
 }
 
-func (c *controller) createLoadBalancer(ctx context.Context, name string, port int32, ips []string) (*lbaas.LoadBalancer, error) {
+func (c *controller) createLoadBalancer(ctx context.Context, name string, port int32, nodePort int32, ips []string) (*lbaas.LoadBalancer, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, c.tokenExchanger)
 
 	locationId, ok := LBMetros[c.metro]
@@ -79,7 +79,7 @@ func (c *controller) createLoadBalancer(ctx context.Context, name string, port i
 			Name:   fmt.Sprintf("%v-origin-%v", name, i),
 			Target: ip,
 			PortNumber: lbaas.LoadBalancerPoolOriginPortNumber{
-				Int32: &port,
+				Int32: &nodePort,
 			},
 			Active: true,
 			PoolId: poolID,
