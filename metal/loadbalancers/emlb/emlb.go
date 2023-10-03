@@ -64,6 +64,8 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 		ingress = append(ingress, v1.LoadBalancerIngress{
 			IP: ip,
 		})
+		// TODO: this is here for backwards compatibility and should be removed ASAP
+		svc.Spec.LoadBalancerIP = ip
 	}
 	svc.Status.LoadBalancer.Ingress = ingress
 
