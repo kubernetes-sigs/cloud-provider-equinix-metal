@@ -1,4 +1,4 @@
-package emlb
+package infrastructure
 
 import (
 	"encoding/json"
@@ -10,12 +10,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type MetalTokenExchanger struct {
+type TokenExchanger struct {
 	metalAPIKey string
 	client      *http.Client
 }
 
-func (m *MetalTokenExchanger) Token() (*oauth2.Token, error) {
+func (m *TokenExchanger) Token() (*oauth2.Token, error) {
 	tokenExchangeURL := "https://iam.metalctrl.io/api-keys/exchange"
 	tokenExchangeRequest, err := http.NewRequest("POST", tokenExchangeURL, nil)
 	if err != nil {

@@ -7,15 +7,15 @@ import (
 	"strings"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/emlb/infrastructure"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 )
 
-// TODO: don't call this controller
-
 type LB struct {
-	controller *controller
+	manager   *infrastructure.Manager
+	k8sclient kubernetes.Interface
 }
 
 var _ loadbalancers.LB = (*LB)(nil)
@@ -28,7 +28,8 @@ func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string
 	metro := strings.TrimPrefix(config, "/")
 
 	lb := &LB{}
-	lb.controller = NewController(k8sclient, metalAPIKey, projectID, metro)
+	lb.manager = infrastructure.NewManager(metalAPIKey, projectID, metro)
+	lb.k8sclient = k8sclient
 
 	return lb
 }
@@ -57,7 +58,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 		return errors.New("cannot add loadbalancer service; failed to find an external IP address for any node")
 	}
 	// TODO move port looping inside of here so we don't get a new loadbalancer per port
-	loadBalancer, err := l.controller.createLoadBalancer(ctx, name, port, nodePort, ips)
+	loadBalancer, err := l.manager.CreateLoadBalancer(ctx, name, port, nodePort, ips)
 
 	if err != nil {
 		return err
@@ -76,7 +77,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	svc.Status.LoadBalancer.Ingress = ingress
 
 	svc.Annotations["equinix.com/loadbalancerID"] = loadBalancer.GetId()
-	svc.Annotations["equinix.com/loadbalancerMetro"] = l.controller.metro
+	svc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
 
 	return nil
 }
@@ -87,7 +88,7 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	additionalProperties := map[string]string{}
 
 	// 2. Delete the infrastructure (do we need to return anything here?)
-	_, err := l.controller.deleteLoadBalancer(ctx, loadBalancerId, additionalProperties)
+	_, err := l.manager.DeleteLoadBalancer(ctx, loadBalancerId, additionalProperties)
 
 	if err != nil {
 		return err
@@ -109,7 +110,7 @@ func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, no
 	additionalProperties := map[string]string{}
 
 	// 2. Update infrastructure change (do we need to return anything here? or are all changes reflected by properties from [1]?)
-	_, err := l.controller.updateLoadBalancer(ctx, loadBalancerId, additionalProperties)
+	_, err := l.manager.UpdateLoadBalancer(ctx, loadBalancerId, additionalProperties)
 
 	if err != nil {
 		return err
