@@ -16,6 +16,13 @@ var LBMetros = map[string]string{
 	"sv": "lctnloc-H5rl2M2VL5dcFmdxhbEKx",
 }
 
+type Pools map[int32][]Target
+
+type Target struct {
+	IP   string
+	Port int32
+}
+
 type Manager struct {
 	client         *lbaas.APIClient
 	metro          string
@@ -42,7 +49,7 @@ func (m *Manager) GetMetro() string {
 	return m.metro
 }
 
-func (m *Manager) CreateLoadBalancer(ctx context.Context, name string, port int32, nodePort int32, ips []string) (*lbaas.LoadBalancer, error) {
+func (m *Manager) CreateLoadBalancer(ctx context.Context, name string, pools Pools) (*lbaas.LoadBalancer, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
 
 	locationId, ok := LBMetros[m.metro]
@@ -64,47 +71,24 @@ func (m *Manager) CreateLoadBalancer(ctx context.Context, name string, port int3
 
 	loadBalancerID := lbCreated.GetId()
 
-	createPoolRequest := lbaas.LoadBalancerPoolCreate{
-		Name: fmt.Sprintf("%v-pool", name),
-		Protocol: lbaas.LoadBalancerPoolCreateProtocol{
-			LoadBalancerPoolProtocol: lbaas.LOADBALANCERPOOLPROTOCOL_TCP.Ptr(),
-		},
-	}
-
-	poolCreated, _, err := m.client.ProjectsApi.CreatePool(ctx, m.projectID).LoadBalancerPoolCreate(createPoolRequest).Execute()
-	if err != nil {
-		return nil, err
-	}
-
-	poolID := poolCreated.GetId()
-
-	for i, ip := range ips {
-		createOriginRequest := lbaas.LoadBalancerPoolOriginCreate{
-			Name:   fmt.Sprintf("%v-origin-%v", name, i),
-			Target: ip,
-			PortNumber: lbaas.LoadBalancerPoolOriginPortNumber{
-				Int32: &nodePort,
-			},
-			Active: true,
-			PoolId: poolID,
-		}
-		// TODO do we need the origin IDs for something?
-		_, _, err := m.client.PoolsApi.CreateLoadBalancerPoolOrigin(ctx, poolID).LoadBalancerPoolOriginCreate(createOriginRequest).Execute()
+	for externalPort, pool := range pools {
+		poolName := fmt.Sprintf("%v-pool-%v", name, externalPort)
+		poolID, err := m.createPool(ctx, poolName, pool)
 		if err != nil {
 			return nil, err
 		}
-	}
 
-	createPortRequest := lbaas.LoadBalancerPortCreate{
-		Name:    fmt.Sprintf("%v-port-%v", name, port),
-		Number:  port,
-		PoolIds: []string{poolID},
-	}
+		createPortRequest := lbaas.LoadBalancerPortCreate{
+			Name:    fmt.Sprintf("%v-port-%v", name, externalPort),
+			Number:  externalPort,
+			PoolIds: []string{poolID},
+		}
 
-	// TODO do we need the port ID for something?
-	_, _, err = m.client.PortsApi.CreateLoadBalancerPort(ctx, loadBalancerID).LoadBalancerPortCreate(createPortRequest).Execute()
-	if err != nil {
-		return nil, err
+		// TODO do we need the port ID for something?
+		_, _, err = m.client.PortsApi.CreateLoadBalancerPort(ctx, loadBalancerID).LoadBalancerPortCreate(createPortRequest).Execute()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	lb, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, loadBalancerID).Execute()
@@ -144,4 +128,40 @@ func (m *Manager) DeleteLoadBalancer(ctx context.Context, id string, config map[
 	}
 
 	return outputProperties, nil
+}
+
+func (m *Manager) createPool(ctx context.Context, name string, targets []Target) (string, error) {
+	createPoolRequest := lbaas.LoadBalancerPoolCreate{
+		Name: name,
+		Protocol: lbaas.LoadBalancerPoolCreateProtocol{
+			LoadBalancerPoolProtocol: lbaas.LOADBALANCERPOOLPROTOCOL_TCP.Ptr(),
+		},
+	}
+
+	poolCreated, _, err := m.client.ProjectsApi.CreatePool(ctx, m.projectID).LoadBalancerPoolCreate(createPoolRequest).Execute()
+
+	if err != nil {
+		return "", err
+	}
+
+	poolID := poolCreated.GetId()
+
+	for i, target := range targets {
+		createOriginRequest := lbaas.LoadBalancerPoolOriginCreate{
+			Name:   fmt.Sprintf("%v-origin-%v", name, i),
+			Target: target.IP,
+			PortNumber: lbaas.LoadBalancerPoolOriginPortNumber{
+				Int32: &target.Port,
+			},
+			Active: true,
+			PoolId: poolID,
+		}
+		// TODO do we need the origin IDs for something?
+		_, _, err := m.client.PoolsApi.CreateLoadBalancerPoolOrigin(ctx, poolID).LoadBalancerPoolOriginCreate(createOriginRequest).Execute()
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return poolID, nil
 }

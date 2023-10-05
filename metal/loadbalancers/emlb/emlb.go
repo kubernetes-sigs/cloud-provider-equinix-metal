@@ -38,27 +38,12 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	name := rand.String(32)
 
 	if len(svc.Spec.Ports) < 1 {
-		return errors.New("cannot add loadbalancer service; no nodeport assigned")
+		return errors.New("cannot add loadbalancer service; no ports assigned")
 	}
 
-	// TODO: Loop through and add ALL the ports
-	port := svc.Spec.Ports[0].Port
-	nodePort := svc.Spec.Ports[0].NodePort
-	var ips []string
+	pools := l.convertToPools(svc, n)
 
-	for _, node := range n {
-		for _, address := range node.Status.Addresses {
-			if address.Type == v1.NodeExternalIP {
-				ips = append(ips, address.Address)
-			}
-		}
-	}
-
-	if len(ips) < 1 {
-		return errors.New("cannot add loadbalancer service; failed to find an external IP address for any node")
-	}
-	// TODO move port looping inside of here so we don't get a new loadbalancer per port
-	loadBalancer, err := l.manager.CreateLoadBalancer(ctx, name, port, nodePort, ips)
+	loadBalancer, err := l.manager.CreateLoadBalancer(ctx, name, pools)
 
 	if err != nil {
 		return err
@@ -122,4 +107,24 @@ func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, no
 	*/
 
 	return nil
+}
+
+func (l *LB) convertToPools(svc *v1.Service, nodes []*v1.Node) infrastructure.Pools {
+	pools := infrastructure.Pools{}
+	for _, svcPort := range svc.Spec.Ports {
+		targets := []infrastructure.Target{}
+		for _, node := range nodes {
+			for _, address := range node.Status.Addresses {
+				if address.Type == v1.NodeExternalIP {
+					targets = append(targets, infrastructure.Target{
+						IP:   address.Address,
+						Port: svcPort.NodePort,
+					})
+				}
+			}
+		}
+		pools[svcPort.Port] = targets
+	}
+
+	return pools
 }
