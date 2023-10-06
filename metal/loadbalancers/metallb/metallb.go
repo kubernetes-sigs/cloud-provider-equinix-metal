@@ -116,7 +116,7 @@ func NewLB(k8sclient kubernetes.Interface, config string, featureFlags url.Value
 	return lb
 }
 
-func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
+func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node, loadBalancerName string) error {
 	config := l.configurer
 	if err := config.Get(ctx); err != nil {
 		return fmt.Errorf("unable to add service: %w", err)

@@ -173,7 +173,8 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
 		}
 	} else {
-		ipCidr, err = l.addService(ctx, service, filterNodes(nodes, l.nodeSelector))
+		loadBalancerName := l.GetLoadBalancerName(ctx, clusterName, service)
+		ipCidr, err = l.addService(ctx, service, filterNodes(nodes, l.nodeSelector), loadBalancerName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
 		}
@@ -385,7 +386,7 @@ func (l *loadBalancers) annotateNode(ctx context.Context, node *v1.Node) error {
 }
 
 // addService add a single service; wraps the implementation
-func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes []*v1.Node) (string, error) {
+func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes []*v1.Node, loadBalancerName string) (string, error) {
 	svcName := serviceRep(svc)
 	svcTag := serviceTag(svc)
 	svcRegion := serviceAnnotation(svc, l.eipMetroAnnotation)
@@ -526,7 +527,7 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 		}
 	}
 
-	return svcIPCidr, l.implementor.AddService(ctx, svc.Namespace, svc.Name, svcIPCidr, n, svc, nodes)
+	return svcIPCidr, l.implementor.AddService(ctx, svc.Namespace, svc.Name, svcIPCidr, n, svc, nodes, loadBalancerName)
 }
 
 func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, tag string) (string, error) {

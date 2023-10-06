@@ -8,7 +8,7 @@ import (
 
 type LB interface {
 	// AddService add a service with the provided name and IP
-	AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []Node, svc *v1.Service, n []*v1.Node) error
+	AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []Node, svc *v1.Service, n []*v1.Node, loadBalancerName string) error
 	// RemoveService remove service with the given IP
 	RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error
 	// UpdateService ensure that the nodes handled by the service are correct

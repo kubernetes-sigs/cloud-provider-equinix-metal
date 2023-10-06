@@ -17,7 +17,7 @@ func NewLB(k8sclient kubernetes.Interface, config string) *LB {
 	return &LB{}
 }
 
-func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
+func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node, loadBalancerName string) error {
 	return nil
 }
 

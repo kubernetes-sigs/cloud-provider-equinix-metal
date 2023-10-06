@@ -9,7 +9,6 @@ import (
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/emlb/infrastructure"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -34,8 +33,7 @@ func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string
 	return lb
 }
 
-func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
-	name := rand.String(32)
+func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node, loadBalancerName string) error {
 
 	if len(svc.Spec.Ports) < 1 {
 		return errors.New("cannot add loadbalancer service; no ports assigned")
@@ -43,7 +41,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 
 	pools := l.convertToPools(svc, n)
 
-	loadBalancer, err := l.manager.CreateLoadBalancer(ctx, name, pools)
+	loadBalancer, err := l.manager.CreateLoadBalancer(ctx, loadBalancerName, pools)
 
 	if err != nil {
 		return err
