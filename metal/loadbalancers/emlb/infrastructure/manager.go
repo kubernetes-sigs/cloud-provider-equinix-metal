@@ -107,7 +107,7 @@ func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, config map[
 	// TODO delete other resources
 
 	// TODO lb, resp, err :=
-	_, err := m.client.LoadBalancersApi.DeleteLoadBalancer(ctx, id).Execute()
+	_, _, err := m.client.LoadBalancersApi.UpdateLoadBalancer(ctx, id).Execute()
 	if err != nil {
 		return nil, err
 	}

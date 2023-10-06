@@ -21,6 +21,10 @@ type LB struct {
 	client    client.Client
 }
 
+const (
+	LoadBalancerIDAnnotation = "equinix.com/loadbalancerID"
+)
+
 var _ loadbalancers.LB = (*LB)(nil)
 
 func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string) *LB {
@@ -55,7 +59,10 @@ func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string
 }
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node, loadBalancerName string) error {
-
+	if svc.Annotations[LoadBalancerIDAnnotation] != "" {
+		// TODO UpdateService will be updated later to accept *v1.Service and []*v1.Nodes
+		return l.UpdateService(ctx, svcNamespace, svcName, nodes)
+	}
 	if len(svc.Spec.Ports) < 1 {
 		return errors.New("cannot add loadbalancer service; no ports assigned")
 	}
@@ -80,7 +87,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	// TODO: THIS DOES NOT ACTUALLY UPDATE THE SERVICE!
 	svc.Status.LoadBalancer.Ingress = ingress
 
-	svc.Annotations["equinix.com/loadbalancerID"] = loadBalancer.GetId()
+	svc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
 	svc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
 
 	return l.client.Update(ctx, svc)
@@ -92,7 +99,7 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	additionalProperties := map[string]string{}
 
 	// 2. Delete the infrastructure (do we need to return anything here?)
-	_, err := l.manager.DeleteLoadBalancer(ctx, loadBalancerId, additionalProperties)
+	_, err := l.manager.UpdateLoadBalancer(ctx, loadBalancerId, additionalProperties)
 
 	if err != nil {
 		return err
@@ -110,15 +117,8 @@ func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, no
 			- NodePort
 			- Public IP addresses of the nodes on which the target pods are running
 	*/
-	loadBalancerId := "TODO"
-	additionalProperties := map[string]string{}
 
 	// 2. Update infrastructure change (do we need to return anything here? or are all changes reflected by properties from [1]?)
-	_, err := l.manager.UpdateLoadBalancer(ctx, loadBalancerId, additionalProperties)
-
-	if err != nil {
-		return err
-	}
 
 	/*
 		3. Update the annotations
