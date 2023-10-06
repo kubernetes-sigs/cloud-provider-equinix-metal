@@ -9,12 +9,16 @@ import (
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/emlb/infrastructure"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	clientconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type LB struct {
 	manager   *infrastructure.Manager
 	k8sclient kubernetes.Interface
+	client    client.Client
 }
 
 var _ loadbalancers.LB = (*LB)(nil)
@@ -26,9 +30,26 @@ func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string
 	// it may have an extra slash at the beginning or end, so get rid of it
 	metro := strings.TrimPrefix(config, "/")
 
+	// Create a new LB object.
 	lb := &LB{}
+
+	// Set the manager subobject to have the API key and project id and metro.
 	lb.manager = infrastructure.NewManager(metalAPIKey, projectID, metro)
+
+	// Pass the k8sclient into the LB object.
 	lb.k8sclient = k8sclient
+
+	// Set up a new controller-runtime k8s client for LB object.
+	scheme := runtime.NewScheme()
+	err := v1.AddToScheme(scheme)
+	if err != nil {
+		panic(err)
+	}
+	newClient, err := client.New(clientconfig.GetConfigOrDie(), client.Options{Scheme: scheme})
+	if err != nil {
+		panic(err)
+	}
+	lb.client = newClient
 
 	return lb
 }
@@ -62,7 +83,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	svc.Annotations["equinix.com/loadbalancerID"] = loadBalancer.GetId()
 	svc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
 
-	return nil
+	return l.client.Update(ctx, svc)
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {

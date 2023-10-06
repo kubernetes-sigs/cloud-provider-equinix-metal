@@ -127,27 +127,31 @@ func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string,
 	svcIP := service.Spec.LoadBalancerIP
 
 	var svcIPCidr string
+	if l.usesBGP {
+		// get IP address reservations and check if they any exists for this svc
+		ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
+		if err != nil {
+			return nil, false, fmt.Errorf("unable to retrieve IP reservations for project %s: %w", l.project, err)
+		}
 
-	// get IP address reservations and check if they any exists for this svc
-	ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
-	if err != nil {
-		return nil, false, fmt.Errorf("unable to retrieve IP reservations for project %s: %w", l.project, err)
+		ipReservation := ipReservationByAllTags([]string{svcTag, emTag, clsTag}, ips)
+
+		klog.V(2).Infof("GetLoadBalancer(): remove: %s with existing IP assignment %s", svcName, svcIP)
+
+		// get the IPs and see if there is anything to clean up
+		if ipReservation == nil {
+			return nil, false, nil
+		}
+		svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
+		return &v1.LoadBalancerStatus{
+			Ingress: []v1.LoadBalancerIngress{
+				{IP: svcIPCidr},
+			},
+		}, true, nil
+	} else {
+		// TODO: Actually check if the load balancer exists
+		return &service.Status.LoadBalancer, &service.Status.LoadBalancer == nil, nil
 	}
-
-	ipReservation := ipReservationByAllTags([]string{svcTag, emTag, clsTag}, ips)
-
-	klog.V(2).Infof("GetLoadBalancer(): remove: %s with existing IP assignment %s", svcName, svcIP)
-
-	// get the IPs and see if there is anything to clean up
-	if ipReservation == nil {
-		return nil, false, nil
-	}
-	svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
-	return &v1.LoadBalancerStatus{
-		Ingress: []v1.LoadBalancerIngress{
-			{IP: svcIPCidr},
-		},
-	}, true, nil
 }
 
 // GetLoadBalancerName returns the name of the load balancer. Implementations must treat the
