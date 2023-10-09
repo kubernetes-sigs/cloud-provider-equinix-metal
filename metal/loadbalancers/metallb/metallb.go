@@ -132,7 +132,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	return nil
 }
 
-func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
+func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string, svc *v1.Service) error {
 	config := l.configurer
 	if err := config.Get(ctx); err != nil {
 		return fmt.Errorf("unable to remove service: %w", err)

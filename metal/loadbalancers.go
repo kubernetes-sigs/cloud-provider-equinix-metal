@@ -265,7 +265,6 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 	var svcIPCidr string
 
 	if l.usesBGP {
-
 		// get IP address reservations and check if they any exists for this svc
 		ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
 		if err != nil {
@@ -291,7 +290,7 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 		klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s entry %s", svcName, svcIPCidr)
 	}
 
-	if err := l.implementor.RemoveService(ctx, service.Namespace, service.Name, svcIPCidr); err != nil {
+	if err := l.implementor.RemoveService(ctx, service.Namespace, service.Name, svcIPCidr, service); err != nil {
 		return fmt.Errorf("error removing IP from configmap for %s: %w", svcName, err)
 	}
 	klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: removed service %s from implementation", svcName)

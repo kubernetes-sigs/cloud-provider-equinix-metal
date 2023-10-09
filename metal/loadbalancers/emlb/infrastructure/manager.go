@@ -49,6 +49,27 @@ func (m *Manager) GetMetro() string {
 	return m.metro
 }
 
+func (m *Manager) GetLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalancerCollection, error) {
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
+
+	LoadBalancers, _, err := m.client.ProjectsApi.ListLoadBalancers(ctx, m.projectID).Execute()
+	return LoadBalancers, err
+}
+
+func (m *Manager) GetLoadBalancers(ctx context.Context) (*lbaas.LoadBalancerCollection, error) {
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
+
+	LoadBalancers, _, err := m.client.ProjectsApi.ListLoadBalancers(ctx, m.projectID).Execute()
+	return LoadBalancers, err
+}
+
+func (m *Manager) GetPools(ctx context.Context) (*lbaas.LoadBalancerPoolCollection, error) {
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
+
+	LoadBalancerPools, _, err := m.client.ProjectsApi.ListPools(ctx, m.projectID).Execute()
+	return LoadBalancerPools, err
+}
+
 func (m *Manager) CreateLoadBalancer(ctx context.Context, name string, pools Pools) (*lbaas.LoadBalancer, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
 
@@ -115,19 +136,14 @@ func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, config map[
 	return outputProperties, nil
 }
 
-func (m *Manager) DeleteLoadBalancer(ctx context.Context, id string, config map[string]string) (map[string]string, error) {
-	outputProperties := map[string]string{}
+func (m *Manager) DeleteLoadBalancer(ctx context.Context, id string) error {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
 
 	// TODO delete other resources
 
 	// TODO lb, resp, err :=
 	_, err := m.client.LoadBalancersApi.DeleteLoadBalancer(ctx, id).Execute()
-	if err != nil {
-		return nil, err
-	}
-
-	return outputProperties, nil
+	return err
 }
 
 func (m *Manager) createPool(ctx context.Context, name string, targets []Target) (string, error) {

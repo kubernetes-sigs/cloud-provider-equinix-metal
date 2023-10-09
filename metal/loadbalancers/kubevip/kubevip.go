@@ -21,7 +21,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	return nil
 }
 
-func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
+func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string, svc *v1.Service) error {
 	return nil
 }
 

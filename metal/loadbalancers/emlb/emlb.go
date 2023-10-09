@@ -93,21 +93,14 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	return l.client.Update(ctx, svc)
 }
 
-func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
+func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string, svc *v1.Service) error {
 	// 1. Gather the properties we need: ID of load balancer
-	loadBalancerId := "TODO"
-	additionalProperties := map[string]string{}
+	loadBalancerId := svc.Annotations[LoadBalancerIDAnnotation]
 
 	// 2. Delete the infrastructure (do we need to return anything here?)
-	_, err := l.manager.UpdateLoadBalancer(ctx, loadBalancerId, additionalProperties)
+	err := l.manager.DeleteLoadBalancer(ctx, loadBalancerId)
 
-	if err != nil {
-		return err
-	}
-
-	// 3. No need to remove the annotations because the annotated object was deleted
-
-	return nil
+	return err
 }
 
 func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
