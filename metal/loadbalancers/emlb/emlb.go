@@ -140,3 +140,14 @@ func (l *LB) convertToPools(svc *v1.Service, nodes []*v1.Node) infrastructure.Po
 
 	return pools
 }
+func (l *LB) GetLoadBalancerList(ctx context.Context) ([]string, error) {
+	var lbList []string
+
+	lbCollection, err := l.manager.GetLoadBalancers(ctx)
+
+	for _, lb := range lbCollection.Loadbalancers {
+		lbList = append(lbList, lb.Name)
+	}
+
+	return lbList, err
+}

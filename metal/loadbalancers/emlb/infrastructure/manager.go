@@ -49,13 +49,15 @@ func (m *Manager) GetMetro() string {
 	return m.metro
 }
 
-func (m *Manager) GetLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalancerCollection, error) {
+// Returns a Load Balancer object given an id
+func (m *Manager) GetLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalancer, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
 
-	LoadBalancers, _, err := m.client.ProjectsApi.ListLoadBalancers(ctx, m.projectID).Execute()
-	return LoadBalancers, err
+	LoadBalancer, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
+	return LoadBalancer, err
 }
 
+// Returns a list of Load Balancer objects in the project
 func (m *Manager) GetLoadBalancers(ctx context.Context) (*lbaas.LoadBalancerCollection, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
 

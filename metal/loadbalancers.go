@@ -150,8 +150,17 @@ func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string,
 		}, true, nil
 	} else {
 		// TODO: Actually check if the load balancer exists
-		return &service.Status.LoadBalancer, &service.Status.LoadBalancer == nil, nil
+		lbList, err := l.implementor.GetLoadBalancerList(ctx)
+		if err != nil {
+			return nil, false, fmt.Errorf("unable to retrieve load balancers for project %s: %w", l.project, err)
+		}
+		for i := range lbList {
+			if lbList[i] == l.GetLoadBalancerName(ctx, clusterName, service) {
+				return &service.Status.LoadBalancer, true, nil
+			}
+		}
 	}
+	return nil, false, nil
 }
 
 // GetLoadBalancerName returns the name of the load balancer. Implementations must treat the
@@ -299,7 +308,6 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 }
 
 // utility funcs
-
 // annotateNode ensure a node has the correct annotations.
 func (l *loadBalancers) annotateNode(ctx context.Context, node *v1.Node) error {
 	klog.V(2).Infof("annotateNode: %s", node.Name)

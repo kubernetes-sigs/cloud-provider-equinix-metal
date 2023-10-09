@@ -165,6 +165,10 @@ func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, no
 	return nil
 }
 
+func (l *LB) GetLoadBalancerList(ctx context.Context) ([]string, error) {
+	return []string{}, nil
+}
+
 // updateNodes add/delete one or more nodes with the provided name, srcIP, and bgp information
 func (l *LB) updateNodes(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
 	config := l.configurer

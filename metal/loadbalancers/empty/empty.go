@@ -28,3 +28,6 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
 	return nil
 }
+func (l *LB) GetLoadBalancerList(ctx context.Context) ([]string, error) {
+	return []string{}, nil
+}
