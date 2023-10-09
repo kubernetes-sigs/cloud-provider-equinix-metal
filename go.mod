@@ -8,7 +8,6 @@ require (
 	github.com/packethost/packet-api-server v0.0.0-20230223042617-bc7d1539adbb
 	github.com/packethost/packngo v0.30.0
 	github.com/pallinder/go-randomdata v1.2.0
-	github.com/spf13/pflag v1.0.5
 	go.universe.tf/metallb v0.13.7
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	k8s.io/api v0.26.4
@@ -41,6 +40,7 @@ require (
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-logr/zapr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect
@@ -71,6 +71,7 @@ require (
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/spf13/cobra v1.6.0 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.5 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.5 // indirect
