@@ -141,10 +141,24 @@ func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, config map[
 func (m *Manager) DeleteLoadBalancer(ctx context.Context, id string) error {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
 
-	// TODO delete other resources
+	lb, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
+
+	if err != nil {
+		return err
+	}
+
+	for _, poolGroups := range lb.Pools {
+		for _, pool := range poolGroups {
+			_, err := m.client.PoolsApi.DeleteLoadBalancerPool(ctx, pool.GetId().(string)).Execute()
+			if err != nil {
+				return err
+			}
+		}
+
+	}
 
 	// TODO lb, resp, err :=
-	_, err := m.client.LoadBalancersApi.DeleteLoadBalancer(ctx, id).Execute()
+	_, err = m.client.LoadBalancersApi.DeleteLoadBalancer(ctx, id).Execute()
 	return err
 }
 
