@@ -85,13 +85,15 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 		svc.Spec.LoadBalancerIP = ip
 	}
 
-	// TODO: THIS DOES NOT ACTUALLY UPDATE THE SERVICE!
-	svc.Status.LoadBalancer.Ingress = ingress
+	// Per cloud-provider docs, we have to treat `svc` as read-only
+	updatedSvc := svc.DeepCopy()
+	updatedSvc.Status.LoadBalancer.Ingress = ingress
 
-	svc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
-	svc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
+	updatedSvc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
+	updatedSvc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
 
-	return l.client.Update(ctx, svc)
+	patch := client.MergeFrom(svc)
+	return l.client.Patch(ctx, updatedSvc, patch)
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string, svc *v1.Service) error {
