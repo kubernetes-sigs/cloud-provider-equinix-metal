@@ -149,17 +149,9 @@ func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string,
 			},
 		}, true, nil
 	} else {
-		// TODO: Actually check if the load balancer exists
-		lbList, err := l.implementor.GetLoadBalancerList(ctx)
-		if err != nil {
-			return nil, false, fmt.Errorf("unable to retrieve load balancers for project %s: %w", l.project, err)
-		}
-		for i := range lbList {
-			if lbList[i] == l.GetLoadBalancerName(ctx, clusterName, service) {
-				return &service.Status.LoadBalancer, true, nil
-			}
-		}
+		return l.implementor.GetLoadBalancer(ctx, clusterName, service)
 	}
+
 	return nil, false, nil
 }
 

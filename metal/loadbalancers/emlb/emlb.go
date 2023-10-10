@@ -4,6 +4,7 @@ package emlb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
@@ -140,14 +141,21 @@ func (l *LB) convertToPools(svc *v1.Service, nodes []*v1.Node) infrastructure.Po
 
 	return pools
 }
-func (l *LB) GetLoadBalancerList(ctx context.Context) ([]string, error) {
-	var lbList []string
+func (l *LB) GetLoadBalancer(ctx context.Context, clusterName string, svc *v1.Service) (*v1.LoadBalancerStatus, bool, error) {
+	loadBalancerId := svc.Annotations[LoadBalancerIDAnnotation]
 
-	lbCollection, err := l.manager.GetLoadBalancers(ctx)
+	if loadBalancerId != "" {
+		// TODO probably need to check if err is 404, maybe others?
+		lb, err := l.manager.GetLoadBalancer(ctx, loadBalancerId)
 
-	for _, lb := range lbCollection.Loadbalancers {
-		lbList = append(lbList, lb.Name)
+		if err != nil {
+			return nil, false, fmt.Errorf("unable to retrieve load balancer: %w", err)
+		}
+
+		if lb != nil {
+			return &svc.Status.LoadBalancer, true, nil
+		}
 	}
 
-	return lbList, err
+	return nil, false, nil
 }

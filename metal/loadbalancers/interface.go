@@ -13,6 +13,6 @@ type LB interface {
 	RemoveService(ctx context.Context, svcNamespace, svcName, ip string, svc *v1.Service) error
 	// UpdateService ensure that the nodes handled by the service are correct
 	UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []Node) error
-	// GetLoadBalancerList returns the load balancer objects
-	GetLoadBalancerList(ctx context.Context) ([]string, error)
+	// GetLoadBalancer implements cloudprovider.GetLoadBalancer
+	GetLoadBalancer(ctx context.Context, clusterName string, svc *v1.Service) (*v1.LoadBalancerStatus, bool, error)
 }

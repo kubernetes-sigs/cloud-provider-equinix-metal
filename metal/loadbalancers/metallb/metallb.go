@@ -165,8 +165,9 @@ func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, no
 	return nil
 }
 
-func (l *LB) GetLoadBalancerList(ctx context.Context) ([]string, error) {
-	return []string{}, nil
+func (l *LB) GetLoadBalancer(ctx context.Context, clusterName string, svc *v1.Service) (*v1.LoadBalancerStatus, bool, error) {
+	// TODO
+	return nil, false, nil
 }
 
 // updateNodes add/delete one or more nodes with the provided name, srcIP, and bgp information
