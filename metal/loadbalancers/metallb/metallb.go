@@ -157,7 +157,7 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	return nil
 }
 
-func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
+func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
 	// ensure nodes are correct
 	if err := l.updateNodes(ctx, svcNamespace, svcName, nodes); err != nil {
 		return fmt.Errorf("failed to add nodes: %w", err)

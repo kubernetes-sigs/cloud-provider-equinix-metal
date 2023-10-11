@@ -61,8 +61,7 @@ func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node, loadBalancerName string) error {
 	if svc.Annotations[LoadBalancerIDAnnotation] != "" {
-		// TODO UpdateService will be updated later to accept *v1.Service and []*v1.Nodes
-		return l.UpdateService(ctx, svcNamespace, svcName, nodes)
+		return l.UpdateService(ctx, svcNamespace, svcName, nodes, svc, n)
 	}
 	if len(svc.Spec.Ports) < 1 {
 		return errors.New("cannot add loadbalancer service; no ports assigned")
@@ -94,22 +93,36 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	return err
 }
 
-func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
-	/*
-		1. Gather the properties we need:
-			- load balancer ID
-			- NodePort
-			- Public IP addresses of the nodes on which the target pods are running
-	*/
+func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
+	// 1. Gather the properties we need: ID of load balancer
+	loadBalancerId := svc.Annotations[LoadBalancerIDAnnotation]
 
-	// 2. Update infrastructure change (do we need to return anything here? or are all changes reflected by properties from [1]?)
+	pools := l.convertToPools(svc, n)
 
-	/*
-		3. Update the annotations
-			- Listener port that this service is using
-	*/
+	loadBalancer, err := l.manager.UpdateLoadBalancer(ctx, loadBalancerId, pools)
 
-	return nil
+	if err != nil {
+		return err
+	}
+
+	var ingress []v1.LoadBalancerIngress
+	for _, ip := range loadBalancer.GetIps() {
+		ingress = append(ingress, v1.LoadBalancerIngress{
+			IP: ip,
+		})
+		// TODO: this is here for backwards compatibility and should be removed ASAP
+		svc.Spec.LoadBalancerIP = ip
+	}
+
+	// Per cloud-provider docs, we have to treat `svc` as read-only
+	updatedSvc := svc.DeepCopy()
+	updatedSvc.Status.LoadBalancer.Ingress = ingress
+
+	updatedSvc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
+	updatedSvc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
+
+	patch := client.MergeFrom(svc)
+	return l.client.Patch(ctx, updatedSvc, patch)
 }
 
 func (l *LB) convertToPools(svc *v1.Service, nodes []*v1.Node) infrastructure.Pools {

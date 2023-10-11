@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"reflect"
 
 	lbaas "github.com/equinix/cloud-provider-equinix-metal/internal/lbaas/v1"
@@ -95,14 +96,14 @@ func (m *Manager) CreateLoadBalancer(ctx context.Context, name string, pools Poo
 	loadBalancerID := lbCreated.GetId()
 
 	for externalPort, pool := range pools {
-		poolName := fmt.Sprintf("%v-pool-%v", name, externalPort)
+		poolName := getResourceName(name, "pool", externalPort)
 		poolID, err := m.createPool(ctx, poolName, pool)
 		if err != nil {
 			return nil, err
 		}
 
 		createPortRequest := lbaas.LoadBalancerPortCreate{
-			Name:    fmt.Sprintf("%v-port-%v", name, externalPort),
+			Name:    getResourceName(name, "port", externalPort),
 			Number:  externalPort,
 			PoolIds: []string{poolID},
 		}
@@ -115,27 +116,93 @@ func (m *Manager) CreateLoadBalancer(ctx context.Context, name string, pools Poo
 	}
 
 	lb, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, loadBalancerID).Execute()
-	if err != nil {
-		return nil, err
-	}
 
-	return lb, nil
+	return lb, err
 }
 
-func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, config map[string]string) (map[string]string, error) {
-	outputProperties := map[string]string{}
-
+func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, pools Pools) (*lbaas.LoadBalancer, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
 
-	// TODO delete other resources
-
-	// TODO lb, resp, err :=
-	_, _, err := m.client.LoadBalancersApi.UpdateLoadBalancer(ctx, id).Execute()
+	lb, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	return outputProperties, nil
+	existingPorts := map[int32]struct{}{}
+
+	// Update or delete existing targets
+	for _, port := range lb.GetPorts() {
+		portNumber := port.GetNumber()
+		existingPoolIds := port.GetPoolIds()
+		targets, wanted := pools[portNumber]
+		if wanted {
+			// We have a pool for this port and we want to keep it
+			existingPorts[portNumber] = struct{}{}
+
+			for _, poolID := range existingPoolIds {
+				existingPool, _, err := m.client.PoolsApi.GetLoadBalancerPool(ctx, poolID).Execute()
+				if err != nil {
+					return nil, err
+				}
+
+				// TODO: can/should we be more granular here? figure out which to add and which to update?
+
+				// Create new origins for all targets
+				for i, target := range targets {
+					_, _, err := m.createOrigin(ctx, poolID, existingPool.GetName(), int32(i), target)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				// Delete old origins (some of which may be duplicates of the new ones)
+				for _, origin := range existingPool.Origins {
+					_, err := m.client.OriginsApi.DeleteLoadBalancerOrigin(ctx, origin.GetId()).Execute()
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+		} else {
+			// We have a pool for this port and we want to get rid of it
+			for _, poolID := range existingPoolIds {
+				_, err := m.client.PoolsApi.DeleteLoadBalancerPool(ctx, poolID).Execute()
+				if err != nil {
+					return nil, err
+				}
+			}
+			_, err := m.client.PortsApi.DeleteLoadBalancerPort(ctx, port.GetId()).Execute()
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Create ports & pools for new targets
+	for externalPort, pool := range pools {
+		if _, exists := existingPorts[externalPort]; !exists {
+			poolID, err := m.createPool(ctx, getResourceName(lb.GetName(), "pool", externalPort), pool)
+			if err != nil {
+				return nil, err
+			}
+
+			createPortRequest := lbaas.LoadBalancerPortCreate{
+				Name:    getResourceName(lb.GetName(), "port", externalPort),
+				Number:  externalPort,
+				PoolIds: []string{poolID},
+			}
+
+			// TODO do we need the port ID for something?
+			_, _, err = m.client.PortsApi.CreateLoadBalancerPort(ctx, id).LoadBalancerPortCreate(createPortRequest).Execute()
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	lb, _, err = m.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
+
+	return lb, err
 }
 
 func (m *Manager) DeleteLoadBalancer(ctx context.Context, id string) error {
@@ -179,21 +246,30 @@ func (m *Manager) createPool(ctx context.Context, name string, targets []Target)
 	poolID := poolCreated.GetId()
 
 	for i, target := range targets {
-		createOriginRequest := lbaas.LoadBalancerPoolOriginCreate{
-			Name:   fmt.Sprintf("%v-origin-%v", name, i),
-			Target: target.IP,
-			PortNumber: lbaas.LoadBalancerPoolOriginPortNumber{
-				Int32: &target.Port,
-			},
-			Active: true,
-			PoolId: poolID,
-		}
 		// TODO do we need the origin IDs for something?
-		_, _, err := m.client.PoolsApi.CreateLoadBalancerPoolOrigin(ctx, poolID).LoadBalancerPoolOriginCreate(createOriginRequest).Execute()
+		_, _, err := m.createOrigin(ctx, poolID, name, int32(i), target)
 		if err != nil {
 			return "", err
 		}
 	}
 
 	return poolID, nil
+}
+
+func (m *Manager) createOrigin(ctx context.Context, poolID, poolName string, number int32, target Target) (*lbaas.ResourceCreatedResponse, *http.Response, error) {
+	createOriginRequest := lbaas.LoadBalancerPoolOriginCreate{
+		Name:   getResourceName(poolName, "origin", number),
+		Target: target.IP,
+		PortNumber: lbaas.LoadBalancerPoolOriginPortNumber{
+			Int32: &target.Port,
+		},
+		Active: true,
+		PoolId: poolID,
+	}
+	return m.client.PoolsApi.CreateLoadBalancerPoolOrigin(ctx, poolID).LoadBalancerPoolOriginCreate(createOriginRequest).Execute()
+
+}
+
+func getResourceName(loadBalancerName, resourceType string, number int32) string {
+	return fmt.Sprintf("%v-%v-%v", loadBalancerName, resourceType, number)
 }

@@ -247,7 +247,7 @@ func (l *loadBalancers) UpdateLoadBalancer(ctx context.Context, clusterName stri
 		}
 	}
 
-	return l.implementor.UpdateService(ctx, service.Namespace, service.Name, n)
+	return l.implementor.UpdateService(ctx, service.Namespace, service.Name, n, service, nodes)
 }
 
 // EnsureLoadBalancerDeleted deletes the specified load balancer if it

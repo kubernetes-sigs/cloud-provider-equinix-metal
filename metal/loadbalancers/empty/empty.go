@@ -25,7 +25,7 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	return nil
 }
 
-func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
+func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
 	return nil
 }
 
