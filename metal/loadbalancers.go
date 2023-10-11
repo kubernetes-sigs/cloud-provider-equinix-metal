@@ -151,8 +151,6 @@ func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string,
 	} else {
 		return l.implementor.GetLoadBalancer(ctx, clusterName, service)
 	}
-
-	return nil, false, nil
 }
 
 // GetLoadBalancerName returns the name of the load balancer. Implementations must treat the
@@ -167,25 +165,22 @@ func (l *loadBalancers) GetLoadBalancerName(ctx context.Context, clusterName str
 // Implementations must treat the *v1.Service and *v1.Node
 // parameters as read-only and not modify them.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
-func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName string, readOnlyService *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+	service := readOnlyService.DeepCopy()
 	klog.V(2).Infof("EnsureLoadBalancer(): add: service %s/%s", service.Namespace, service.Name)
 	var ipCidr string
 	var err error
+
+	// TODO: Split out most of this to "reconcileLoadBalancer"
+	// TODO: Split out status checking to a separate function that reconcileLoadBalancer calls
+
 	// handling is completely different if it is the control plane vs a regular service of type=LoadBalancer
 	if service.Name == externalServiceName && service.Namespace == externalServiceNamespace {
 		ipCidr, err = l.retrieveIPByTag(ctx, service, l.eipTag)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
 		}
-	} else {
-		loadBalancerName := l.GetLoadBalancerName(ctx, clusterName, service)
-		ipCidr, err = l.addService(ctx, service, filterNodes(nodes, l.nodeSelector), loadBalancerName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
-		}
-	}
 
-	if l.usesBGP {
 		// get the IP only
 		ip := strings.SplitN(ipCidr, "/", 2)
 
@@ -195,8 +190,15 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 			},
 		}, nil
 	} else {
-		return &service.Status.LoadBalancer, nil
+		loadBalancerName := l.GetLoadBalancerName(ctx, clusterName, service)
+		_, err = l.addService(ctx, service, filterNodes(nodes, l.nodeSelector), loadBalancerName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
+		}
 	}
+
+	status, _, err := l.GetLoadBalancer(ctx, clusterName, service)
+	return status, err
 }
 
 // UpdateLoadBalancer updates hosts under the specified load balancer.

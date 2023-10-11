@@ -76,24 +76,12 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 		return err
 	}
 
-	var ingress []v1.LoadBalancerIngress
-	for _, ip := range loadBalancer.GetIps() {
-		ingress = append(ingress, v1.LoadBalancerIngress{
-			IP: ip,
-		})
-		// TODO: this is here for backwards compatibility and should be removed ASAP
-		svc.Spec.LoadBalancerIP = ip
-	}
+	patch := client.MergeFrom(svc.DeepCopy())
 
-	// Per cloud-provider docs, we have to treat `svc` as read-only
-	updatedSvc := svc.DeepCopy()
-	updatedSvc.Status.LoadBalancer.Ingress = ingress
+	svc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
+	svc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
 
-	updatedSvc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
-	updatedSvc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
-
-	patch := client.MergeFrom(svc)
-	return l.client.Patch(ctx, updatedSvc, patch)
+	return l.client.Patch(ctx, svc, patch)
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string, svc *v1.Service) error {
@@ -148,14 +136,24 @@ func (l *LB) GetLoadBalancer(ctx context.Context, clusterName string, svc *v1.Se
 
 	if loadBalancerId != "" {
 		// TODO probably need to check if err is 404, maybe others?
-		lb, err := l.manager.GetLoadBalancer(ctx, loadBalancerId)
+		loadBalancer, err := l.manager.GetLoadBalancer(ctx, loadBalancerId)
 
 		if err != nil {
 			return nil, false, fmt.Errorf("unable to retrieve load balancer: %w", err)
 		}
 
-		if lb != nil {
-			return &svc.Status.LoadBalancer, true, nil
+		if loadBalancer != nil {
+			var ingress []v1.LoadBalancerIngress
+			for _, ip := range loadBalancer.GetIps() {
+				ingress = append(ingress, v1.LoadBalancerIngress{
+					IP: ip,
+				})
+			}
+
+			loadBalancerStatus := v1.LoadBalancerStatus{
+				Ingress: ingress,
+			}
+			return &loadBalancerStatus, true, nil
 		}
 	}
 
