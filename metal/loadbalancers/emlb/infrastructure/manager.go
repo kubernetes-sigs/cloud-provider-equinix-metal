@@ -216,7 +216,7 @@ func (m *Manager) DeleteLoadBalancer(ctx context.Context, id string) error {
 
 	for _, poolGroups := range lb.Pools {
 		for _, pool := range poolGroups {
-			_, err := m.client.PoolsApi.DeleteLoadBalancerPool(ctx, pool.GetId().(string)).Execute()
+			_, err := m.client.PoolsApi.DeleteLoadBalancerPool(ctx, pool.GetId()).Execute()
 			if err != nil {
 				return err
 			}
