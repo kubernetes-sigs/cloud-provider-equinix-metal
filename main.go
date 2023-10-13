@@ -7,7 +7,6 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/cloud-provider/app"
 	cloudcontrollerconfig "k8s.io/cloud-provider/app/config"
-	"k8s.io/cloud-provider/names"
 	"k8s.io/cloud-provider/options"
 	"k8s.io/component-base/cli"
 	cliflag "k8s.io/component-base/cli/flag"
@@ -26,7 +25,6 @@ func main() {
 	}
 
 	controllerInitializers := app.DefaultInitFuncConstructors
-	controllerAliases := names.CCMControllerAliases()
 
 	// Remove the route controller which cloud provider equinix metal does not use.
 	delete(controllerInitializers, "route")
@@ -35,7 +33,7 @@ func main() {
 	ccmOptions.KubeCloudShared.CloudProvider.Name = metal.ProviderName
 
 	fss := cliflag.NamedFlagSets{}
-	command := app.NewCloudControllerManagerCommand(ccmOptions, cloudInitializer, controllerInitializers, controllerAliases, fss, wait.NeverStop)
+	command := app.NewCloudControllerManagerCommand(ccmOptions, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
 	code := cli.Run(command)
 	os.Exit(code)
 }
