@@ -18,7 +18,7 @@ deployment[0]['spec']['template']['spec']['containers'][0]['env']=[]
 deployment[0]['spec']['template']['spec']['containers'][0]['env'].append({"name": "METAL_METRO_NAME","value":"YOUR_METRO_HERE"})
 deployment[0]['spec']['template']['spec']['containers'][0]['env'].append({"name": "METAL_LOAD_BALANCER","value":"YOUR_LOAD_BALANCER_HERE"})
 k8s_yaml(encode_yaml_stream(deployment))
-k8s_resource(workload='cloud-provider-equinix-metal',objects=['cloud-controller-manager:ServiceAccount:kube-system','system\\:cloud-controller-manager:ClusterRole:default','system\\:cloud-controller-manager:ClusterRoleBinding:default'])
+k8s_resource(workload='cloud-provider-equinix-metal',objects=['cloud-provider-equinix-metal:ServiceAccount:kube-system','cloud-provider-equinix-metal:ClusterRole:default','cloud-provider-equinix-metal:ClusterRoleBinding:default'])
 k8s_resource(new_name='metal-cloud-config',objects=['metal-cloud-config:Secret:kube-system'])
 
 # Load the secret extension
