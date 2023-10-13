@@ -129,18 +129,17 @@ func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, pools Pools
 	}
 
 	existingPorts := map[int32]struct{}{}
-
+	existingPools := lb.GetPools()
 	// Update or delete existing targets
-	for _, port := range lb.GetPorts() {
+	for i, port := range lb.GetPorts() {
 		portNumber := port.GetNumber()
-		existingPoolIds := port.GetPoolIds()
 		targets, wanted := pools[portNumber]
 		if wanted {
 			// We have a pool for this port and we want to keep it
 			existingPorts[portNumber] = struct{}{}
 
-			for _, poolID := range existingPoolIds {
-				existingPool, _, err := m.client.PoolsApi.GetLoadBalancerPool(ctx, poolID).Execute()
+			for _, existingPool := range existingPools[i] {
+				existingOrigins, _, err := m.client.PoolsApi.ListLoadBalancerPoolOrigins(ctx, existingPool.GetId()).Execute()
 				if err != nil {
 					return nil, err
 				}
@@ -148,15 +147,15 @@ func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, pools Pools
 				// TODO: can/should we be more granular here? figure out which to add and which to update?
 
 				// Create new origins for all targets
-				for i, target := range targets {
-					_, _, err := m.createOrigin(ctx, poolID, existingPool.GetName(), int32(i), target)
+				for j, target := range targets {
+					_, _, err := m.createOrigin(ctx, existingPool.GetId(), existingPool.GetName(), int32(j), target)
 					if err != nil {
 						return nil, err
 					}
 				}
 
 				// Delete old origins (some of which may be duplicates of the new ones)
-				for _, origin := range existingPool.Origins {
+				for _, origin := range existingOrigins.GetOrigins() {
 					_, err := m.client.OriginsApi.DeleteLoadBalancerOrigin(ctx, origin.GetId()).Execute()
 					if err != nil {
 						return nil, err
@@ -165,8 +164,8 @@ func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, pools Pools
 			}
 		} else {
 			// We have a pool for this port and we want to get rid of it
-			for _, poolID := range existingPoolIds {
-				_, err := m.client.PoolsApi.DeleteLoadBalancerPool(ctx, poolID).Execute()
+			for _, existingPool := range existingPools[i] {
+				_, err := m.client.PoolsApi.DeleteLoadBalancerPool(ctx, existingPool.GetId()).Execute()
 				if err != nil {
 					return nil, err
 				}
