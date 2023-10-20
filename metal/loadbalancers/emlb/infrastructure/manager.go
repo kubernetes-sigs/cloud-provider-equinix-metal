@@ -73,55 +73,52 @@ func (m *Manager) GetPools(ctx context.Context) (*lbaas.LoadBalancerPoolCollecti
 	return LoadBalancerPools, err
 }
 
-func (m *Manager) CreateLoadBalancer(ctx context.Context, name string, pools Pools) (*lbaas.LoadBalancer, error) {
+func (m *Manager) DeleteLoadBalancer(ctx context.Context, id string) error {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
 
-	locationId, ok := LBMetros[m.metro]
-	if !ok {
-		return nil, fmt.Errorf("could not determine load balancer location for metro %v; valid values are %v", m.metro, reflect.ValueOf(LBMetros).MapKeys())
+	lb, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
+
+	if err != nil {
+		return err
 	}
 
-	lbCreateRequest := lbaas.LoadBalancerCreate{
-		Name:       name,
-		LocationId: locationId,
-		ProviderId: ProviderID,
+	for _, poolGroups := range lb.Pools {
+		for _, pool := range poolGroups {
+			_, err := m.client.PoolsApi.DeleteLoadBalancerPool(ctx, pool.GetId()).Execute()
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
 	// TODO lb, resp, err :=
-	lbCreated, _, err := m.client.ProjectsApi.CreateLoadBalancer(ctx, m.projectID).LoadBalancerCreate(lbCreateRequest).Execute()
-	if err != nil {
-		return nil, err
-	}
-
-	loadBalancerID := lbCreated.GetId()
-
-	for externalPort, pool := range pools {
-		poolName := getResourceName(name, "pool", externalPort)
-		poolID, err := m.createPool(ctx, poolName, pool)
-		if err != nil {
-			return nil, err
-		}
-
-		createPortRequest := lbaas.LoadBalancerPortCreate{
-			Name:    getResourceName(name, "port", externalPort),
-			Number:  externalPort,
-			PoolIds: []string{poolID},
-		}
-
-		// TODO do we need the port ID for something?
-		_, _, err = m.client.PortsApi.CreateLoadBalancerPort(ctx, loadBalancerID).LoadBalancerPortCreate(createPortRequest).Execute()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	lb, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, loadBalancerID).Execute()
-
-	return lb, err
+	_, err = m.client.LoadBalancersApi.DeleteLoadBalancer(ctx, id).Execute()
+	return err
 }
 
-func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, pools Pools) (*lbaas.LoadBalancer, error) {
+func (m *Manager) ReconcileLoadBalancer(ctx context.Context, id, name string, pools Pools) (*lbaas.LoadBalancer, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
+
+	if id == "" {
+		locationId, ok := LBMetros[m.metro]
+		if !ok {
+			return nil, fmt.Errorf("could not determine load balancer location for metro %v; valid values are %v", m.metro, reflect.ValueOf(LBMetros).MapKeys())
+		}
+
+		lbCreateRequest := lbaas.LoadBalancerCreate{
+			Name:       name,
+			LocationId: locationId,
+			ProviderId: ProviderID,
+		}
+
+		lbCreated, _, err := m.client.ProjectsApi.CreateLoadBalancer(ctx, m.projectID).LoadBalancerCreate(lbCreateRequest).Execute()
+		if err != nil {
+			return nil, err
+		}
+
+		id = lbCreated.GetId()
+	}
 
 	lb, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
 	if err != nil {
@@ -202,30 +199,6 @@ func (m *Manager) UpdateLoadBalancer(ctx context.Context, id string, pools Pools
 	lb, _, err = m.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
 
 	return lb, err
-}
-
-func (m *Manager) DeleteLoadBalancer(ctx context.Context, id string) error {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, m.tokenExchanger)
-
-	lb, _, err := m.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
-
-	if err != nil {
-		return err
-	}
-
-	for _, poolGroups := range lb.Pools {
-		for _, pool := range poolGroups {
-			_, err := m.client.PoolsApi.DeleteLoadBalancerPool(ctx, pool.GetId()).Execute()
-			if err != nil {
-				return err
-			}
-		}
-
-	}
-
-	// TODO lb, resp, err :=
-	_, err = m.client.LoadBalancersApi.DeleteLoadBalancer(ctx, id).Execute()
-	return err
 }
 
 func (m *Manager) createPool(ctx context.Context, name string, targets []Target) (string, error) {

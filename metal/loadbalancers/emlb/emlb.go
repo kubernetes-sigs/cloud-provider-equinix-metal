@@ -3,7 +3,6 @@ package emlb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -60,27 +59,7 @@ func NewLB(k8sclient kubernetes.Interface, config, metalAPIKey, projectID string
 }
 
 func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node, loadBalancerName string) error {
-	if svc.Annotations[LoadBalancerIDAnnotation] != "" {
-		return l.UpdateService(ctx, svcNamespace, svcName, nodes, svc, n)
-	}
-	if len(svc.Spec.Ports) < 1 {
-		return errors.New("cannot add loadbalancer service; no ports assigned")
-	}
-
-	pools := l.convertToPools(svc, n)
-
-	loadBalancer, err := l.manager.CreateLoadBalancer(ctx, loadBalancerName, pools)
-
-	if err != nil {
-		return err
-	}
-
-	patch := client.MergeFrom(svc.DeepCopy())
-
-	svc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
-	svc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
-
-	return l.client.Patch(ctx, svc, patch)
+	return l.reconcileService(ctx, svc, n, loadBalancerName)
 }
 
 func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string, svc *v1.Service) error {
@@ -94,35 +73,27 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 }
 
 func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
-	// 1. Gather the properties we need: ID of load balancer
+	loadBalancerName := "" // TODO should UpdateService accept the load balancer name?
+	return l.reconcileService(ctx, svc, n, loadBalancerName)
+}
+
+func (l *LB) reconcileService(ctx context.Context, svc *v1.Service, n []*v1.Node, loadBalancerName string) error {
 	loadBalancerId := svc.Annotations[LoadBalancerIDAnnotation]
 
 	pools := l.convertToPools(svc, n)
 
-	loadBalancer, err := l.manager.UpdateLoadBalancer(ctx, loadBalancerId, pools)
+	loadBalancer, err := l.manager.ReconcileLoadBalancer(ctx, loadBalancerId, loadBalancerName, pools)
 
 	if err != nil {
 		return err
 	}
 
-	var ingress []v1.LoadBalancerIngress
-	for _, ip := range loadBalancer.GetIps() {
-		ingress = append(ingress, v1.LoadBalancerIngress{
-			IP: ip,
-		})
-		// TODO: this is here for backwards compatibility and should be removed ASAP
-		svc.Spec.LoadBalancerIP = ip
-	}
+	patch := client.MergeFrom(svc.DeepCopy())
 
-	// Per cloud-provider docs, we have to treat `svc` as read-only
-	updatedSvc := svc.DeepCopy()
-	updatedSvc.Status.LoadBalancer.Ingress = ingress
+	svc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
+	svc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
 
-	updatedSvc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
-	updatedSvc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
-
-	patch := client.MergeFrom(svc)
-	return l.client.Patch(ctx, updatedSvc, patch)
+	return l.client.Patch(ctx, svc, patch)
 }
 
 func (l *LB) convertToPools(svc *v1.Service, nodes []*v1.Node) infrastructure.Pools {
