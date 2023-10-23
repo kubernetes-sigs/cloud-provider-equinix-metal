@@ -174,8 +174,8 @@ func (l *loadBalancers) EnsureLoadBalancer(ctx context.Context, clusterName stri
 	// TODO: Split out most of this to "reconcileLoadBalancer"
 	// TODO: Split out status checking to a separate function that reconcileLoadBalancer calls
 
-	// handling is completely different if it is the control plane vs a regular service of type=LoadBalancer
-	if service.Name == externalServiceName && service.Namespace == externalServiceNamespace {
+	// For EIP-based (BGP) load balancers, handling is completely different if it is the control plane vs a regular service of type=LoadBalancer
+	if l.usesBGP && service.Name == externalServiceName && service.Namespace == externalServiceNamespace {
 		ipCidr, err = l.retrieveIPByTag(ctx, service, l.eipTag)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add service %s: %w", service.Name, err)
