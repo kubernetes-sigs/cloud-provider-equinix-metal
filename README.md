@@ -233,6 +233,7 @@ This section lists each configuration option, and whether it can be set by each 
 | Kubernetes Service annotation to set EIP metro                                                                                                               |                | `METAL_ANNOTATION_EIP_METRO`            | `annotationEIPMetro`           | `"metal.equinix.com/eip-metro"`                              |
 | Kubernetes Service annotation to set EIP facility                                                                                                            |                | `METAL_ANNOTATION_EIP_FACILITY`         | `annotationEIPFacility`        | `"metal.equinix.com/eip-facility"`                           |
 | Tag for control plane Elastic IP                                                                                                                             |                | `METAL_EIP_TAG`                         | `eipTag`                       | No control plane Elastic IP                                  |
+| ID for control plane Equinix Metal Load Balancer                                                                                                                             |                | `METAL_LOAD_BALANCER_ID`                         | `loadBalancerID`                       | No control plane Equinix Metal Load Balancer                                  |
 | Kubernetes API server port for Elastic IP                                                                                                                    |                | `METAL_API_SERVER_PORT`                 | `apiServerPort`                | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP                                                                                                              |                | `METAL_BGP_NODE_SELECTOR`               | `bgpNodeSelector`              | All nodes                                                    |
 | Use host IP for Control Plane endpoint health checks                                                                                                         |                | `METAL_EIP_HEALTH_CHECK_USE_HOST_IP`    | `eipHealthCheckUseHostIP`      | false                                                        |
@@ -253,50 +254,20 @@ The Kubernetes CCM for Equinix Metal deploys as a `Deployment` into your cluster
 
 ### Service Load Balancers
 
-~~Equinix Metal does not offer managed load balancers like [AWS ELB](https://aws.amazon.com/elasticloadbalancing/)
-or [GCP Load Balancers](https://cloud.google.com/load-balancing/). Instead, if configured to do so,
-Equinix Metal CCM will interface with and configure external bare-metal loadbalancers.~~
+Equinix CCM supports two approaches to load balancing:
 
-When a load balancer is enabled, the CCM does the following:
+1. If configured to do so, Equinix Metal CCM will interface with and configure external bare-metal load balancers
+2. If configured to do so, and if the feature is available on your Equinix Metal account, Equinix Metal CCM will interface with and configure external, managed Equinix Metal Load Balancers (EMLB)
+
+When any load balancer is enabled, the CCM does the following:
 
 1. Enable BGP for the project
 1. Enable BGP on each node as it comes up
 1. Sets ASNs based on configuration or default
-1. Unless you are using EMLB, for each `Service` of `type=LoadBalancer`:
+1. If you are using bare-metal load balancers, then for each `Service` of `type=LoadBalancer`:
    - If you have specified a load balancer IP on `Service.Spec.LoadBalancerIP` (bring your own IP, or BYOIP), do nothing
    - If you have not specified a load balancer IP on `Service.Spec.LoadBalancerIP`, get an Equinix Metal Elastic IP and set it on `Service.Spec.LoadBalancerIP`, see below
-1. Then, depending on the load balancer implementation:
-
-   1. If MetalLB, set up the CRDs necessary for MetalLB to create the load balancer and configure it on the relevant nodes
-   1. If EMLB
-
-      1. Ensure preferred load balancer metro is configured (make it part of the schema?)
-      1. Create an origin pool per service
-         1. Pool Name, based on service
-         1. Node IP
-         1. Port (the nodeport) - chris's guess
-      1. Reuse or Create load balancer
-         1. Check annotation for load balancer name/metro
-         1. Already exists?
-            1. Yes
-               1. Get the load balancer
-               1. Make sure public port is free
-                  1. If not, do we enable creating new load balancers? $$$$$
-               1. Specify Origin Pool created above
-            1. No
-               1. Create it
-               1. Listener Port (public port requested in Service.Spec.Port)
-               1. Specify Origin Pool created above
-      1. Delete Load Balancer
-         1. Remove origin pool
-         1. Remove listener Port
-         1. If no more listeners, delete load balancer ?
-      1. Update Load Balancer
-         1. Get Origin Pool
-         1. Diff
-         1. Update if needed
-
-   1. If Kube-vip or empty, do nothing
+1. Pass control to the specific load balancer implementation
 
 #### Service Load Balancer IP
 
@@ -354,12 +325,6 @@ are created at a system-wide level, ignoring the annotations.
 
 Using these flags and annotations, you can run the CCM on a node in a different metro or facility, or even outside of Equinix Metal entirely.
 
-#### Control Plane LoadBalancer Implementation
-
-For the control plane nodes, the Equinix Metal CCM uses static Elastic IP assignment, via the Equinix Metal API, to tell the
-Equinix Metal network which control plane node should receive the traffic. For more details on the control plane
-load-balancer, see [this section](#control-plane-load-balancing).
-
 #### Service LoadBalancer Implementations
 
 Loadbalancing is enabled as follows.
@@ -375,12 +340,31 @@ The value of the loadbalancing configuration is `<type>:///<detail>` where:
 
 For loadbalancing for Kubernetes `Service` of `type=LoadBalancer`, the following implementations are supported:
 
+
+- [Equinix Metal Load Balancer](#EquinixMetalLoadBalancer)
 - [kube-vip](#kube-vip)
 - [MetalLB](#metallb)
 - [empty](#empty)
 
 CCM does **not** deploy _any_ load balancers for you. It limits itself to managing the Equinix Metal-specific
 API calls to support a load balancer, and providing configuration for supported load balancers.
+
+##### Equinix Metal Load Balancer
+
+Equinix Metal Load Balancer (EMLB) is a beta service that is available to a limited number of Equinix Metal customers that provides managed layer 4 load balancers.
+
+When the EMLB option is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`, the Equinix Metal CCM:
+- creates an Equinix Metal Load Balancer for the service
+- creates listener ports on the Equinix Metal Load Balancer for each port on the service
+- creates origin pools for each listener port that send traffic to the corresponding NodePorts in your cluster
+
+To enable EMLB, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
+
+```
+emlb://<metro>
+```
+
+Where `<metro>` is the Equinix metro in which you want CCM to deploy your external load balancers.  For example, to deploy your load balancers in Silicon Valley, you would set the configuration to `emlb://sv`.  Note that EMLB is available in a limited number of Equinix metros (as of this writing, `sv`, `da`, and `ny`).
 
 ##### kube-vip
 
@@ -602,8 +586,10 @@ load balancer to work, the IP address needs to be all of: Reserved, Assigned, Ma
 
 ## Control Plane Load Balancing
 
-CCM implements an optional control plane load balancer using an Equinix Metal Elastic IP (EIP) and the Equinix Metal API's
-ability to assign that EIP to different devices.
+CCM implements an optional control plane load balancer using one of two approaches:
+
+1. an Equinix Metal Load Balancer
+1. an Equinix Metal Elastic IP (EIP) and the Equinix Metal API's ability to assign that EIP to different devices.
 
 You have several options for control plane load-balancing:
 
@@ -612,6 +598,19 @@ You have several options for control plane load-balancing:
 - No control plane load-balancing (or at least, none known to CCM)
 
 ### CCM Managed
+
+#### Equinix Metal Load Balancer
+
+If you have configured the CCM to use Equinix Metal Load Balancers (EMLB) for service load balancing, you can also choose to use EMLB for control plane load balancing.  To enable control plane load balancing with EMLB:
+
+1. Create a Load Balancer using the Equinix Metal API or Web UI
+1. When starting the CCM
+   - set the [configuration](#Configuration) for load balancing with EMLB, e.g. env var `METAL_LOAD_BALANCER=emlb://<metro>`, where `<metro>` is the metro in which you want the CCM to create your load balancers
+   - set the [configuration](#Configuration) for the control plane EIP tag, e.g. env var `METAL_LOAD_BALANCER_ID=<id>`, where `<id>` is the ID of the Load Balancer you created earlier
+
+When run with the correct configuration, on startup, CCM will automatically update your Load Balancer to send traffic to your control plane nodes. 
+
+#### Elastic IP Load Balancer
 
 It is a common procedure to use Elastic IP as Control Plane endpoint in order to
 have a static endpoint that you can use from the outside, or when configuring
@@ -622,9 +621,9 @@ To enable CCM to manage the control plane EIP:
 1. Create an Elastic IP, using the Equinix Metal API, Web UI or CLI
 1. Put an arbitrary but unique tag on the EIP
 1. When starting the CCM
-   - set the [configuration][Configuration] for the control plane EIP tag, e.g. env var `METAL_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
+   - set the [configuration](#Configuration) for the control plane EIP tag, e.g. env var `METAL_EIP_TAG=<tag>`, where `<tag>` is whatever tag you set on the EIP
    - (optional) set the port that the EIP should listen on; by default, or when set to `0`, it will use the same port as the `kube-apiserver` on the control plane nodes. This port can also be specified with `METAL_API_SERVER_PORT=<port>.`
-   - (optional) set the [configuration][Configuration] for using the host IP for control plane endpoint health checks. This is
+   - (optional) set the [configuration](#Configuration) for using the host IP for control plane endpoint health checks. This is
      needed when the EIP is configured as an loopback IP address, such as the case with [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet)
 
 In [CAPP](https://github.com/kubernetes-sigs/cluster-api-provider-packet) we
@@ -655,7 +654,7 @@ The logic will circle over all the available control planes looking for an
 active api server. As soon as it can find one the Elastic IP will be unassigned
 and reassigned to the working node.
 
-#### How the Elastic IP Traffic is Routed
+##### How the Elastic IP Traffic is Routed
 
 Of course, even if the router sends traffic for your Elastic IP (EIP) to a given control
 plane node, that node needs to know to process the traffic. Rather than require you to
