@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -28,7 +27,6 @@ type controlPlaneLoadBalancerManager struct {
 	loadBalancerID        string
 	httpClient            *http.Client
 	k8sclient             kubernetes.Interface
-	assignmentMutex       sync.Mutex
 	serviceMutex          sync.Mutex
 	endpointsMutex        sync.Mutex
 	controlPlaneSelectors []labels.Selector
@@ -149,10 +147,6 @@ func newControlPlaneLoadBalancerManager(k8sclient kubernetes.Interface, stop <-c
 	sharedInformer.WaitForCacheSync(stop)
 
 	return m, nil
-}
-
-func (m *controlPlaneLoadBalancerManager) healthURLFromControlPlaneLoadBalancer(controlPlaneLoadBalancer *packngo.IPAddressReservation) string {
-	return fmt.Sprintf("https://%s:%d/healthz", controlPlaneLoadBalancer.Address, m.apiServerPort)
 }
 
 func (m *controlPlaneLoadBalancerManager) syncEndpoints(ctx context.Context, k8sEndpoints *v1.Endpoints) error {
