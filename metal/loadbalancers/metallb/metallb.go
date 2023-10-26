@@ -9,6 +9,7 @@ import (
 
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -115,7 +116,7 @@ func NewLB(k8sclient kubernetes.Interface, config string, featureFlags url.Value
 	return lb
 }
 
-func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node) error {
+func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node, loadBalancerName string) error {
 	config := l.configurer
 	if err := config.Get(ctx); err != nil {
 		return fmt.Errorf("unable to add service: %w", err)
@@ -131,7 +132,7 @@ func (l *LB) AddService(ctx context.Context, svcNamespace, svcName, ip string, n
 	return nil
 }
 
-func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string) error {
+func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string, svc *v1.Service) error {
 	config := l.configurer
 	if err := config.Get(ctx); err != nil {
 		return fmt.Errorf("unable to remove service: %w", err)
@@ -156,12 +157,17 @@ func (l *LB) RemoveService(ctx context.Context, svcNamespace, svcName, ip string
 	return nil
 }
 
-func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node) error {
+func (l *LB) UpdateService(ctx context.Context, svcNamespace, svcName string, nodes []loadbalancers.Node, svc *v1.Service, n []*v1.Node) error {
 	// ensure nodes are correct
 	if err := l.updateNodes(ctx, svcNamespace, svcName, nodes); err != nil {
 		return fmt.Errorf("failed to add nodes: %w", err)
 	}
 	return nil
+}
+
+func (l *LB) GetLoadBalancer(ctx context.Context, clusterName string, svc *v1.Service) (*v1.LoadBalancerStatus, bool, error) {
+	// TODO
+	return nil, false, nil
 }
 
 // updateNodes add/delete one or more nodes with the provided name, srcIP, and bgp information
