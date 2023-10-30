@@ -126,7 +126,6 @@ func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string,
 	clsTag := clusterTag(l.clusterID)
 	svcIP := service.Spec.LoadBalancerIP
 
-	var svcIPCidr string
 	if l.usesBGP {
 		// get IP address reservations and check if they any exists for this svc
 		ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
@@ -142,10 +141,9 @@ func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string,
 		if ipReservation == nil {
 			return nil, false, nil
 		}
-		svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
 		return &v1.LoadBalancerStatus{
 			Ingress: []v1.LoadBalancerIngress{
-				{IP: svcIPCidr},
+				{IP: ipReservation.Address},
 			},
 		}, true, nil
 	} else {
