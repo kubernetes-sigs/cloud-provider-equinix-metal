@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/emlb"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -173,21 +174,25 @@ func (m *controlPlaneLoadBalancerManager) syncService(ctx context.Context, k8sSe
 	m.serviceMutex.Lock()
 	defer m.serviceMutex.Unlock()
 
+	existingService := k8sService.DeepCopy()
+
 	// get the target port
-	existingPorts := k8sService.Spec.Ports
+	existingPorts := existingService.Spec.Ports
 	if len(existingPorts) < 1 {
 		return errors.New("default/kubernetes service does not have any ports defined")
 	}
 
 	// track which port the kube-apiserver actually is listening on
 	m.nodeAPIServerPort = existingPorts[0].TargetPort.IntVal
-	// did we set a specific port, or did we request that it just be left as is?
-	if m.apiServerPort == 0 {
-		m.apiServerPort = m.nodeAPIServerPort
+	// if a specific port was requested, use that instead of the one from the original service
+	if m.apiServerPort != 0 {
+		existingPorts[0].Port = m.apiServerPort
+	} else {
+		existingPorts[0].Port = m.nodeAPIServerPort
 	}
 
 	annotations := map[string]string{}
-	annotations["equinix.com/loadbalancerID"] = m.loadBalancerID
+	annotations[emlb.LoadBalancerIDAnnotation] = m.loadBalancerID
 
 	specApplyConfig := v1applyconfig.ServiceSpec().WithType(v1.ServiceTypeLoadBalancer)
 
