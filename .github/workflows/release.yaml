@@ -9,7 +9,6 @@ env:
   GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_ORG }}
   QUAY_REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
-  REGISTRY: ghcr.io/${{ github.repository_owner }}
   metadata_flavor: latest=true
   metadata_tags: type=ref,event=tag
 jobs:
@@ -94,7 +93,7 @@ jobs:
 
     - name: release template
       env:
-        RELEASE_IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+        RELEASE_IMG: ${{ env.QUAY_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
       run: cat deploy/template/deployment.yaml | sed 's#RELEASE_IMG#${{ env.RELEASE_IMG }}#g' > /tmp/deployment.yaml
     - name: Generate Release Notes
       run: |
