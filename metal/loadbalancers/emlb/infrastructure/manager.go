@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 
 	lbaas "github.com/equinix/cloud-provider-equinix-metal/internal/lbaas/v1"
@@ -34,6 +35,7 @@ type Manager struct {
 func NewManager(metalAPIKey, projectID, metro string) *Manager {
 	manager := &Manager{}
 	emlbConfig := lbaas.NewConfiguration()
+	emlbConfig.Debug = checkDebugEnabled()
 
 	manager.client = lbaas.NewAPIClient(emlbConfig)
 	manager.tokenExchanger = &TokenExchanger{
@@ -244,4 +246,9 @@ func (m *Manager) createOrigin(ctx context.Context, poolID, poolName string, num
 
 func getResourceName(loadBalancerName, resourceType string, number int32) string {
 	return fmt.Sprintf("%v-%v-%v", loadBalancerName, resourceType, number)
+}
+
+func checkDebugEnabled() bool {
+	_, legacyVarIsSet := os.LookupEnv("PACKNGO_DEBUG")
+	return legacyVarIsSet
 }
