@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/packethost/packngo"
-
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/component-base/version"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 )
 
 const (
@@ -27,7 +26,7 @@ const (
 
 // cloud implements cloudprovider.Interface
 type cloud struct {
-	client                          *packngo.Client
+	client                          *metal.APIClient
 	config                          Config
 	instances                       *instances
 	loadBalancer                    *loadBalancers
@@ -39,7 +38,7 @@ type cloud struct {
 
 var _ cloudprovider.Interface = (*cloud)(nil)
 
-func newCloud(metalConfig Config, client *packngo.Client) (cloudprovider.Interface, error) {
+func newCloud(metalConfig Config, client *metal.APIClient) (cloudprovider.Interface, error) {
 	return &cloud{
 		client: client,
 		config: metalConfig,
@@ -59,8 +58,10 @@ func init() {
 		printMetalConfig(metalConfig)
 
 		// set up our client and create the cloud interface
-		client := packngo.NewClientWithAuth("cloud-provider-equinix-metal", metalConfig.AuthToken, nil)
-		client.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), client.UserAgent)
+		configuration := metal.NewConfiguration()
+		configuration.AddDefaultHeader("X-Auth-Token", metalConfig.AuthToken)
+		configuration.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), configuration.UserAgent)
+		client := metal.NewAPIClient(configuration)
 		cloud, err := newCloud(metalConfig, client)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create new cloud handler: %w", err)
@@ -77,7 +78,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	klog.V(5).Info("called Initialize")
 	clientset := clientBuilder.ClientOrDie("cloud-provider-equinix-metal-shared-informers")
 	// initialize the individual services
-	epm, err := newControlPlaneEndpointManager(clientset, stop, c.config.EIPTag, c.config.ProjectID, c.client.DeviceIPs, c.client.ProjectIPs, c.config.APIServerPort, c.config.EIPHealthCheckUseHostIP)
+	epm, err := newControlPlaneEndpointManager(clientset, stop, c.config.EIPTag, c.config.ProjectID, c.client, c.config.APIServerPort, c.config.EIPHealthCheckUseHostIP)
 	if err != nil {
 		klog.Fatalf("could not initialize ControlPlaneEndpointManager: %v", err)
 	}
@@ -85,18 +86,18 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	if err != nil {
 		klog.Fatalf("could not initialize ControlPlaneEndpointManager: %v", err)
 	}
-	bgp, err := newBGP(c.client, clientset, c.config)
+	bgp, err := newBGP(c.client.BGPApi, clientset, c.config)
 	if err != nil {
 		klog.Fatalf("could not initialize BGP: %v", err)
 	}
-	lb, err := newLoadBalancers(c.client, clientset, c.config.ProjectID, c.config.Metro, c.config.Facility, c.config.LoadBalancerSetting, bgp.localASN, bgp.bgpPass, c.config.AnnotationNetworkIPv4Private, c.config.AnnotationLocalASN, c.config.AnnotationPeerASN, c.config.AnnotationPeerIP, c.config.AnnotationSrcIP, c.config.AnnotationBGPPass, c.config.AnnotationEIPMetro, c.config.AnnotationEIPFacility, c.config.BGPNodeSelector, c.config.EIPTag)
+	lb, err := newLoadBalancers(c.client, clientset, c.config.AuthToken, c.config.ProjectID, c.config.Metro, c.config.Facility, c.config.LoadBalancerSetting, bgp.localASN, bgp.bgpPass, c.config.AnnotationNetworkIPv4Private, c.config.AnnotationLocalASN, c.config.AnnotationPeerASN, c.config.AnnotationPeerIP, c.config.AnnotationSrcIP, c.config.AnnotationBGPPass, c.config.AnnotationEIPMetro, c.config.AnnotationEIPFacility, c.config.BGPNodeSelector, c.config.EIPTag)
 	if err != nil {
 		klog.Fatalf("could not initialize LoadBalancers: %v", err)
 	}
 
 	c.loadBalancer = lb
 	c.bgp = bgp
-	c.instances = newInstances(c.client, c.config.ProjectID)
+	c.instances = newInstances(c.client.DevicesApi, c.config.ProjectID)
 	c.controlPlaneEndpointManager = epm
 	c.controlPlaneLoadBalancerManager = lbm
 

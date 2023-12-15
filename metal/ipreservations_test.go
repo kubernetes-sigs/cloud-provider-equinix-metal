@@ -3,16 +3,18 @@ package metal
 import (
 	"testing"
 
-	"github.com/packethost/packngo"
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 )
 
 func TestIPReservationByAllTags(t *testing.T) {
-	ips := []packngo.IPAddressReservation{
-		{IpAddressCommon: packngo.IpAddressCommon{Tags: []string{"a", "b"}}},
-		{IpAddressCommon: packngo.IpAddressCommon{Tags: []string{"c", "d"}}},
-		{IpAddressCommon: packngo.IpAddressCommon{Tags: []string{"a", "d"}}},
-		{IpAddressCommon: packngo.IpAddressCommon{Tags: []string{"b", "c"}}},
-		{IpAddressCommon: packngo.IpAddressCommon{Tags: []string{"b", "q"}}},
+	ips := &metal.IPReservationList{
+		IpAddresses: []metal.IPReservationListIpAddressesInner{
+			{IPReservation: &metal.IPReservation{Tags: []string{"a", "b"}}},
+			{IPReservation: &metal.IPReservation{Tags: []string{"c", "d"}}},
+			{IPReservation: &metal.IPReservation{Tags: []string{"a", "d"}}},
+			{IPReservation: &metal.IPReservation{Tags: []string{"b", "c"}}},
+			{IPReservation: &metal.IPReservation{Tags: []string{"b", "q"}}},
+		},
 	}
 	tests := []struct {
 		tags  []string
@@ -36,7 +38,7 @@ func TestIPReservationByAllTags(t *testing.T) {
 			t.Errorf("%d: found a match but expected none", i)
 		case matched == nil && tt.match < 0:
 			// this is good
-		case matched != &ips[tt.match]:
+		case matched != ips.GetIpAddresses()[tt.match].IPReservation:
 			t.Errorf("%d: match did not find index %d", i, tt.match)
 		}
 	}

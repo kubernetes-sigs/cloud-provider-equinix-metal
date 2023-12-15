@@ -1,20 +1,20 @@
 package metal
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	"github.com/google/uuid"
-	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	emServer "github.com/packethost/packet-api-server/pkg/server"
 	"github.com/packethost/packet-api-server/pkg/store"
-	"github.com/packethost/packngo"
-
 	clientset "k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	restclient "k8s.io/client-go/rest"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/component-base/version"
 )
 
 const (
@@ -211,14 +211,32 @@ func TestHasClusterID(t *testing.T) {
 }
 
 // builds an Equinix Metal client
-func constructClient(authToken string, baseURL *string) *packngo.Client {
-	client := retryablehttp.NewClient()
-
-	// client.Transport = logging.NewTransport("EquinixMetal", client.Transport)
-	if baseURL != nil {
-		// really should handle error, but packngo does not distinguish now or handle errors, so ignoring for now
-		client, _ := packngo.NewClientWithBaseURL(ConsumerToken, authToken, client.StandardClient(), *baseURL)
-		return client
+func constructClient(authToken string, baseUrl *string) *metal.APIClient {
+	configuration := &metal.Configuration{
+		DefaultHeader:    make(map[string]string),
+		UserAgent:        "metal-go/0.29.0",
+		Debug:            false,
+		Servers:          metal.ServerConfigurations{},
+		OperationServers: map[string]metal.ServerConfigurations{},
 	}
-	return packngo.NewClientWithAuth(ConsumerToken, authToken, client.StandardClient())
+
+	servers := metal.ServerConfigurations{
+		{
+			URL:         "https://api.equinix.com/metal/v1",
+			Description: "No description provided",
+		},
+	}
+	if baseUrl != nil {
+		servers = metal.ServerConfigurations{
+			{
+				URL:         *baseUrl,
+				Description: "No description provided",
+			},
+		}
+	}
+
+	configuration.Servers = servers
+	configuration.AddDefaultHeader("X-Auth-Token", authToken)
+	configuration.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), configuration.UserAgent)
+	return metal.NewAPIClient(configuration)
 }
