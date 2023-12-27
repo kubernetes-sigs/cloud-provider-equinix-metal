@@ -8,8 +8,6 @@ import (
 
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	"github.com/google/uuid"
-	emServer "github.com/packethost/packet-api-server/pkg/server"
-	"github.com/packethost/packet-api-server/pkg/store"
 	clientset "k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	restclient "k8s.io/client-go/rest"
@@ -23,9 +21,6 @@ const (
 	validRegionCode = "ME"
 	validRegionName = "Metro"
 	validZoneCode   = "ewr1"
-	validZoneName   = "Parsippany, NJ"
-	validPlanSlug   = "hourly"
-	validPlanName   = "Bill by the hour"
 )
 
 // mockControllerClientBuilder mock implementation of https://pkg.go.dev/k8s.io/cloud-provider#ControllerClientBuilder
@@ -48,27 +43,10 @@ func (m mockControllerClientBuilder) ClientOrDie(name string) clientset.Interfac
 	return k8sfake.NewSimpleClientset()
 }
 
-type apiServerError struct {
-	t *testing.T
-}
-
-func (a *apiServerError) Error(err error) {
-	a.t.Fatal(err)
-}
-
 // create a valid cloud with a client
-func testGetValidCloud(t *testing.T, LoadBalancerSetting string) (*cloud, *store.Memory) {
+func testGetValidCloud(t *testing.T, LoadBalancerSetting string) *cloud {
 	// mock endpoint so our client can handle it
-	backend := store.NewMemory()
-	fake := emServer.PacketServer{
-		Store: backend,
-		ErrorHandler: &apiServerError{
-			t: t,
-		},
-	}
-	// ensure we have a single region
-	_, _ = backend.CreateFacility(validZoneName, validZoneCode)
-	ts := httptest.NewServer(fake.CreateHandler())
+	ts := httptest.NewServer(nil)
 
 	url, _ := url.Parse(ts.URL)
 	urlString := url.String()
@@ -84,11 +62,11 @@ func testGetValidCloud(t *testing.T, LoadBalancerSetting string) (*cloud, *store
 	ccb := &mockControllerClientBuilder{}
 	c.Initialize(ccb, nil)
 
-	return c.(*cloud), backend
+	return c.(*cloud)
 }
 
 func TestLoadBalancerDefaultDisabled(t *testing.T) {
-	vc, _ := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	response, supported := vc.LoadBalancer()
 	var (
 		expectedSupported = false
@@ -104,7 +82,7 @@ func TestLoadBalancerDefaultDisabled(t *testing.T) {
 
 func TestLoadBalancerMetalLB(t *testing.T) {
 	t.Skip("Test needs a k8s client to work")
-	vc, _ := testGetValidCloud(t, "metallb:///metallb-system/config")
+	vc := testGetValidCloud(t, "metallb:///metallb-system/config")
 	response, supported := vc.LoadBalancer()
 	var (
 		expectedSupported = true
@@ -120,7 +98,7 @@ func TestLoadBalancerMetalLB(t *testing.T) {
 
 func TestLoadBalancerEmpty(t *testing.T) {
 	t.Skip("Test needs a k8s client to work")
-	vc, _ := testGetValidCloud(t, "empty://")
+	vc := testGetValidCloud(t, "empty://")
 	response, supported := vc.LoadBalancer()
 	var (
 		expectedSupported = true
@@ -136,7 +114,7 @@ func TestLoadBalancerEmpty(t *testing.T) {
 
 func TestLoadBalancerKubeVIP(t *testing.T) {
 	t.Skip("Test needs a k8s client to work")
-	vc, _ := testGetValidCloud(t, "kube-vip://")
+	vc := testGetValidCloud(t, "kube-vip://")
 	response, supported := vc.LoadBalancer()
 	var (
 		expectedSupported = true
@@ -151,7 +129,7 @@ func TestLoadBalancerKubeVIP(t *testing.T) {
 }
 
 func TestInstances(t *testing.T) {
-	vc, _ := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	response, supported := vc.Instances()
 	expectedSupported := false
 	expectedResponse := cloudprovider.Instances(nil)
@@ -164,7 +142,7 @@ func TestInstances(t *testing.T) {
 }
 
 func TestClusters(t *testing.T) {
-	vc, _ := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	response, supported := vc.Clusters()
 	var (
 		expectedSupported = false
@@ -179,7 +157,7 @@ func TestClusters(t *testing.T) {
 }
 
 func TestRoutes(t *testing.T) {
-	vc, _ := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	response, supported := vc.Routes()
 	var (
 		expectedSupported = false
@@ -194,7 +172,7 @@ func TestRoutes(t *testing.T) {
 }
 
 func TestProviderName(t *testing.T) {
-	vc, _ := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	name := vc.ProviderName()
 	if name != ProviderName {
 		t.Errorf("returned %s instead of expected %s", name, ProviderName)
@@ -202,7 +180,7 @@ func TestProviderName(t *testing.T) {
 }
 
 func TestHasClusterID(t *testing.T) {
-	vc, _ := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	cid := vc.HasClusterID()
 	expectedCid := true
 	if cid != expectedCid {

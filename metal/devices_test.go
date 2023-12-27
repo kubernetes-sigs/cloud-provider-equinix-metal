@@ -6,14 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	"github.com/google/uuid"
-	"github.com/packethost/packngo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	cpapi "k8s.io/cloud-provider/api"
 )
-
-var projectID = uuid.New().String()
 
 // testNode provides a simple Node object satisfying the lookup requirements of InstanceMetadata()
 func testNodeWithIP(providerID, nodeName, nodeIP string) *v1.Node {
@@ -36,39 +34,43 @@ func testNode(providerID, nodeName string) *v1.Node {
 }
 
 func TestNodeAddresses(t *testing.T) {
-	vc, backend := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	if inst == nil {
 		t.Fatal("inst is nil")
 	}
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	//facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
+	//plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
+	//dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	uid := uuid.New().String()
+	state := metal.DEVICESTATE_ACTIVE
+	dev := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &state,
+		Plan:     metal.NewPlan(),
+	}
 	// update the addresses on the device; normally created by Equinix Metal itself
-	networks := []*packngo.IPAddressAssignment{
+	networks := []metal.IPAssignment{
 		testCreateAddress(false, false), // private ipv4
 		testCreateAddress(false, true),  // public ipv4
 		testCreateAddress(true, true),   // public ipv6
 	}
 	kubeletNodeIP := testCreateAddress(false, false)
-	dev.Network = networks
-	err := backend.UpdateDevice(dev.ID, dev)
-	if err != nil {
-		t.Fatalf("unable to update inactive device: %v", err)
-	}
+	dev.IpAddresses = networks
 
 	validAddresses := []v1.NodeAddress{
 		{Type: v1.NodeHostName, Address: devName},
-		{Type: v1.NodeInternalIP, Address: networks[0].Address},
-		{Type: v1.NodeExternalIP, Address: networks[1].Address},
+		{Type: v1.NodeInternalIP, Address: networks[0].GetAddress()},
+		{Type: v1.NodeExternalIP, Address: networks[1].GetAddress()},
 	}
 
 	validAddressesWithProvidedIP := []v1.NodeAddress{
 		{Type: v1.NodeHostName, Address: devName},
-		{Type: v1.NodeInternalIP, Address: kubeletNodeIP.Address},
-		{Type: v1.NodeInternalIP, Address: networks[0].Address},
-		{Type: v1.NodeExternalIP, Address: networks[1].Address},
+		{Type: v1.NodeInternalIP, Address: kubeletNodeIP.GetAddress()},
+		{Type: v1.NodeInternalIP, Address: networks[0].GetAddress()},
+		{Type: v1.NodeExternalIP, Address: networks[1].GetAddress()},
 	}
 
 	tests := []struct {
@@ -81,10 +83,10 @@ func TestNodeAddresses(t *testing.T) {
 		{"instance not found", testNode("", nodeName), nil, fmt.Errorf("instance not found")},
 		{"invalid id", testNode("equinixmetal://123", nodeName), nil, fmt.Errorf("123 is not a valid UUID")},
 		{"unknown name", testNode("equinixmetal://"+randomID, nodeName), nil, fmt.Errorf("instance not found")},
-		{"valid both", testNode("equinixmetal://"+dev.ID, devName), validAddresses, nil},
-		{"valid provider id", testNode("equinixmetal://"+dev.ID, nodeName), validAddresses, nil},
+		{"valid both", testNode("equinixmetal://"+dev.GetId(), devName), validAddresses, nil},
+		{"valid provider id", testNode("equinixmetal://"+dev.GetId(), nodeName), validAddresses, nil},
 		{"valid node name", testNode("", devName), validAddresses, nil},
-		{"with node IP", testNodeWithIP("equinixmetal://"+dev.ID, nodeName, kubeletNodeIP.Address), validAddressesWithProvidedIP, nil},
+		{"with node IP", testNodeWithIP("equinixmetal://"+dev.GetId(), nodeName, kubeletNodeIP.GetAddress()), validAddressesWithProvidedIP, nil},
 	}
 
 	for i, tt := range tests {
@@ -106,28 +108,33 @@ func TestNodeAddresses(t *testing.T) {
 }
 
 func TestNodeAddressesByProviderID(t *testing.T) {
-	vc, backend := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	//facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
+	//plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
+	//dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	uid := uuid.New().String()
+	state := metal.DEVICESTATE_ACTIVE
+	dev := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &state,
+		Plan:     metal.NewPlan(),
+	}
+
 	// update the addresses on the device; normally created by Equinix Metal itself
-	networks := []*packngo.IPAddressAssignment{
+	networks := []metal.IPAssignment{
 		testCreateAddress(false, false), // private ipv4
 		testCreateAddress(false, true),  // public ipv4
 		testCreateAddress(true, true),   // public ipv6
 	}
-	dev.Network = networks
-	err := backend.UpdateDevice(dev.ID, dev)
-	if err != nil {
-		t.Fatalf("unable to update inactive device: %v", err)
-	}
+	dev.IpAddresses = networks
 
 	validAddresses := []v1.NodeAddress{
 		{Type: v1.NodeHostName, Address: devName},
-		{Type: v1.NodeInternalIP, Address: networks[0].Address},
-		{Type: v1.NodeExternalIP, Address: networks[1].Address},
+		{Type: v1.NodeInternalIP, Address: networks[0].GetAddress()},
+		{Type: v1.NodeExternalIP, Address: networks[1].GetAddress()},
 	}
 
 	tests := []struct {
@@ -140,9 +147,9 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 		{"invalid format", randomID, nil, fmt.Errorf("instance not found")},
 		{"not equinixmetal", "aws://" + randomID, nil, fmt.Errorf("provider name from providerID should be equinixmetal")},
 		{"unknown ID", "equinixmetal://" + randomID, nil, fmt.Errorf("instance not found")},
-		{"valid prefix", fmt.Sprintf("equinixmetal://%s", dev.ID), validAddresses, nil},
-		{"valid legacy prefix", fmt.Sprintf("packet://%s", dev.ID), validAddresses, nil},
-		{"valid without prefix", dev.ID, validAddresses, nil},
+		{"valid prefix", fmt.Sprintf("equinixmetal://%s", dev.GetId()), validAddresses, nil},
+		{"valid legacy prefix", fmt.Sprintf("packet://%s", dev.GetId()), validAddresses, nil},
+		{"valid without prefix", dev.GetId(), validAddresses, nil},
 	}
 
 	for i, tt := range tests {
@@ -165,7 +172,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 
 /*
 	func TestInstanceID(t *testing.T) {
-		vc, backend := testGetValidCloud(t, "")
+		vc := testGetValidCloud(t, "")
 		inst, _ := vc.InstancesV2()
 		devName := testGetNewDevName()
 		facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
@@ -179,7 +186,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 		}{
 			{"", "", fmt.Errorf("node name cannot be empty")},          // empty name
 			{"thisdoesnotexist", "", fmt.Errorf("instance not found")}, // unknown name
-			{devName, dev.ID, nil},                                     // valid
+			{devName, dev.GetId(), nil},                                     // valid
 		}
 
 		for i, tt := range tests {
@@ -199,17 +206,32 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	}
 */
 func TestInstanceType(t *testing.T) {
-	vc, backend := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	uid := uuid.New().String()
+	state := metal.DEVICESTATE_ACTIVE
+	dev := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &state,
+		Plan:     metal.NewPlan(),
+	}
 	privateIP := "10.1.1.2"
 	publicIP := "25.50.75.100"
-	dev.Network = append(dev.Network, []*packngo.IPAddressAssignment{
-		{IpAddressCommon: packngo.IpAddressCommon{Address: privateIP, Management: true, AddressFamily: 4}},
-		{IpAddressCommon: packngo.IpAddressCommon{Address: publicIP, Public: true, AddressFamily: 4}},
+	trueBool := true
+	ipv4 := int32(metal.IPADDRESSADDRESSFAMILY__4)
+	dev.IpAddresses = append(dev.IpAddresses, []metal.IPAssignment{
+		{
+			Address:       &privateIP,
+			Management:    &trueBool,
+			AddressFamily: &ipv4,
+		},
+		{
+			Address:       &publicIP,
+			Public:        &trueBool,
+			AddressFamily: &ipv4,
+		},
 	}...)
 
 	tests := []struct {
@@ -221,7 +243,7 @@ func TestInstanceType(t *testing.T) {
 		{"empty name", "", "", fmt.Errorf("instance not found")},
 		{"invalid id", "thisdoesnotexist", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")},
 		{"unknown name", randomID, "", fmt.Errorf("instance not found")},
-		{"valid", "equinixmetal://" + dev.ID, dev.Plan.Slug, nil},
+		{"valid", "equinixmetal://" + dev.GetId(), dev.Plan.GetSlug(), nil},
 	}
 
 	for i, tt := range tests {
@@ -242,20 +264,40 @@ func TestInstanceType(t *testing.T) {
 }
 
 func TestInstanceZone(t *testing.T) {
-	vc, backend := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	uid := uuid.New().String()
+	state := metal.DEVICESTATE_ACTIVE
+	dev := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &state,
+		Plan:     metal.NewPlan(),
+	}
 	privateIP := "10.1.1.2"
 	publicIP := "25.50.75.100"
-	metro := &packngo.Metro{ID: "123", Code: validRegionCode, Name: validRegionName, Country: "Country"}
+
+	metroId := "123"
+	regionCode := validRegionCode
+	regionName := validRegionName
+	country := "Country"
+	metro := &metal.DeviceMetro{Id: &metroId, Code: &regionCode, Name: &regionName, Country: &country}
 	dev.Metro = metro
-	facility.Metro = metro
-	dev.Network = append(dev.Network, []*packngo.IPAddressAssignment{
-		{IpAddressCommon: packngo.IpAddressCommon{Address: privateIP, Management: true, AddressFamily: 4}},
-		{IpAddressCommon: packngo.IpAddressCommon{Address: publicIP, Public: true, AddressFamily: 4}},
+
+	trueBool := true
+	ipv4 := int32(metal.IPADDRESSADDRESSFAMILY__4)
+	dev.IpAddresses = append(dev.IpAddresses, []metal.IPAssignment{
+		{
+			Address:       &privateIP,
+			Management:    &trueBool,
+			AddressFamily: &ipv4,
+		},
+		{
+			Address:       &publicIP,
+			Public:        &trueBool,
+			AddressFamily: &ipv4,
+		},
 	}...)
 
 	tests := []struct {
@@ -268,7 +310,7 @@ func TestInstanceZone(t *testing.T) {
 		{"empty name", "", "", "", fmt.Errorf("instance not found")},
 		{"invalid id", "thisdoesnotexist", "", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")},
 		{"unknown name", randomID, "", "", fmt.Errorf("instance not found")},
-		{"valid", "equinixmetal://" + dev.ID, validRegionCode, validZoneCode, nil},
+		{"valid", "equinixmetal://" + dev.GetId(), validRegionCode, validZoneCode, nil},
 	}
 
 	for i, tt := range tests {
@@ -293,12 +335,17 @@ func TestInstanceZone(t *testing.T) {
 
 /*
 func TestInstanceTypeByProviderID(t *testing.T) {
-	vc, backend := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	inst, _ := vc.Instances()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	uid := uuid.New().String()
+	state := metal.DEVICESTATE_ACTIVE
+	dev := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &state,
+		Plan:     metal.NewPlan(),
+	}
 
 	tests := []struct {
 		id   string
@@ -309,8 +356,8 @@ func TestInstanceTypeByProviderID(t *testing.T) {
 		{randomID, "", fmt.Errorf("instance not found")},                                              // invalid format
 		{"aws://" + randomID, "", fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetalk
 		{"equinixmetal://" + randomID, "", fmt.Errorf("instance not found")},                          // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", dev.ID), dev.Plan.Name, nil},                                // valid
-		{fmt.Sprintf("packet://%s", dev.ID), dev.Plan.Name, nil},                                      // valid
+		{fmt.Sprintf("equinixmetal://%s", dev.GetId()), dev.Plan.Name, nil},                                // valid
+		{fmt.Sprintf("packet://%s", dev.GetId()), dev.Plan.Name, nil},                                      // valid
 	}
 
 	for i, tt := range tests {
@@ -342,11 +389,16 @@ func TestCurrentNodeName(t *testing.T) {
 		expectedName  = types.NodeName(devName)
 	)
 
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	uid := uuid.New().String()
+	state := metal.DEVICESTATE_ACTIVE
+	dev := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &state,
+		Plan:     metal.NewPlan(),
+	}
 
-	md, err := inst.InstanceMetadata(context.TODO(), testNode("equinixmetal://"+dev.ID, nodeName))
+	md, err := inst.InstanceMetadata(context.TODO(), testNode("equinixmetal://"+dev.GetId(), nodeName))
 
 	if err != expectedError {
 		t.Errorf("mismatched errors, actual %v expected %v", err, expectedError)
@@ -359,12 +411,17 @@ func TestCurrentNodeName(t *testing.T) {
 */
 
 func TestInstanceExistsByProviderID(t *testing.T) {
-	vc, backend := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
+	uid := uuid.New().String()
+	state := metal.DEVICESTATE_ACTIVE
+	dev := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &state,
+		Plan:     metal.NewPlan(),
+	}
 
 	tests := []struct {
 		id     string
@@ -375,9 +432,9 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 		{randomID, false, nil},                                // invalid format
 		{"aws://" + randomID, false, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
 		{"equinixmetal://" + randomID, false, nil},                                                       // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", dev.ID), true, nil},                                            // valid
-		{fmt.Sprintf("packet://%s", dev.ID), true, nil},                                                  // valid
-		{dev.ID, true, nil}, // valid
+		{fmt.Sprintf("equinixmetal://%s", dev.GetId()), true, nil},                                       // valid
+		{fmt.Sprintf("packet://%s", dev.GetId()), true, nil},                                             // valid
+		{dev.GetId(), true, nil},                                                                         // valid
 	}
 
 	for i, tt := range tests {
@@ -392,17 +449,25 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 }
 
 func TestInstanceShutdownByProviderID(t *testing.T) {
-	vc, backend := testGetValidCloud(t, "")
+	vc := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	devActive, _ := backend.CreateDevice(projectID, devName, plan, facility)
-	devInactive, _ := backend.CreateDevice(projectID, devName, plan, facility)
-	devInactive.State = "inactive"
-	err := backend.UpdateDevice(devInactive.ID, devInactive)
-	if err != nil {
-		t.Fatalf("unable to update inactive device: %v", err)
+	uid := uuid.New().String()
+	activeState := metal.DEVICESTATE_ACTIVE
+	devActive := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &activeState,
+		Plan:     metal.NewPlan(),
+	}
+
+	uid = uuid.New().String()
+	inactiveState := metal.DEVICESTATE_INACTIVE
+	devInactive := &metal.Device{
+		Id:       &uid,
+		Hostname: &devName,
+		State:    &inactiveState,
+		Plan:     metal.NewPlan(),
 	}
 
 	tests := []struct {
@@ -414,12 +479,12 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 		{randomID, false, fmt.Errorf("instance not found")},                                              // invalid format
 		{"aws://" + randomID, false, fmt.Errorf("provider name from providerID should be equinixmetal")}, // not equinixmetal
 		{"equinixmetal://" + randomID, false, fmt.Errorf("instance not found")},                          // unknown ID
-		{fmt.Sprintf("equinixmetal://%s", devActive.ID), false, nil},                                     // valid
-		{fmt.Sprintf("packet://%s", devActive.ID), false, nil},                                           // valid
-		{devActive.ID, false, nil},                                                                       // valid
-		{fmt.Sprintf("equinixmetal://%s", devInactive.ID), true, nil},                                    // valid
-		{fmt.Sprintf("packet://%s", devInactive.ID), true, nil},                                          // valid
-		{devInactive.ID, true, nil},                                                                      // valid
+		{fmt.Sprintf("equinixmetal://%s", devActive.GetId()), false, nil},                                // valid
+		{fmt.Sprintf("packet://%s", devActive.GetId()), false, nil},                                      // valid
+		{devActive.GetId(), false, nil},                                                                  // valid
+		{fmt.Sprintf("equinixmetal://%s", devInactive.GetId()), true, nil},                               // valid
+		{fmt.Sprintf("packet://%s", devInactive.GetId()), true, nil},                                     // valid
+		{devInactive.GetId(), true, nil},                                                                 // valid
 	}
 
 	for i, tt := range tests {

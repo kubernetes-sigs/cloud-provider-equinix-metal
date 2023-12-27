@@ -4,9 +4,8 @@ go 1.21
 
 require (
 	github.com/equinix/equinix-sdk-go v0.30.0
-	github.com/google/uuid v1.5.0
-	github.com/packethost/packet-api-server v0.0.0-20230223042617-bc7d1539adbb
-	github.com/packethost/packngo v0.31.0
+	github.com/google/uuid v1.3.1
+	github.com/packethost/packngo v0.30.0
 	github.com/pallinder/go-randomdata v1.2.0
 	go.universe.tf/metallb v0.13.7
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
@@ -54,7 +53,6 @@ require (
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
@@ -116,4 +114,9 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.37 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
+)
+
+replace (
+	k8s.io/kubectl => k8s.io/kubectl v0.28.4
+	k8s.io/kubelet => k8s.io/kubelet v0.29.0
 )
