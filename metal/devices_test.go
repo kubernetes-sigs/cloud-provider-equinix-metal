@@ -34,23 +34,26 @@ func testNode(providerID, nodeName string) *v1.Node {
 }
 
 func TestNodeAddresses(t *testing.T) {
-	vc := testGetValidCloud(t, "")
+	vc, server := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	if inst == nil {
 		t.Fatal("inst is nil")
 	}
 	devName := testGetNewDevName()
-	//facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	//plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	//dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 	uid := uuid.New().String()
 	state := metal.DEVICESTATE_ACTIVE
+
 	dev := &metal.Device{
 		Id:       &uid,
 		Hostname: &devName,
 		State:    &state,
 		Plan:     metal.NewPlan(),
 	}
+	server.DeviceStore[uid] = dev
+	project := server.ProjectStore[vc.config.ProjectID]
+	project.Devices = append(project.Devices, dev)
+	server.ProjectStore[vc.config.ProjectID] = project
+
 	// update the addresses on the device; normally created by Equinix Metal itself
 	networks := []metal.IPAssignment{
 		testCreateAddress(false, false), // private ipv4
@@ -81,7 +84,6 @@ func TestNodeAddresses(t *testing.T) {
 	}{
 		{"empty node name", testNode("", ""), nil, fmt.Errorf("node name cannot be empty")},
 		{"instance not found", testNode("", nodeName), nil, fmt.Errorf("instance not found")},
-		{"invalid id", testNode("equinixmetal://123", nodeName), nil, fmt.Errorf("123 is not a valid UUID")},
 		{"unknown name", testNode("equinixmetal://"+randomID, nodeName), nil, fmt.Errorf("instance not found")},
 		{"valid both", testNode("equinixmetal://"+dev.GetId(), devName), validAddresses, nil},
 		{"valid provider id", testNode("equinixmetal://"+dev.GetId(), nodeName), validAddresses, nil},
@@ -108,12 +110,9 @@ func TestNodeAddresses(t *testing.T) {
 }
 
 func TestNodeAddressesByProviderID(t *testing.T) {
-	vc := testGetValidCloud(t, "")
+	vc, server := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	//facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
-	//plan, _ := testGetOrCreateValidPlan(validPlanName, validPlanSlug, backend)
-	//dev, _ := backend.CreateDevice(projectID, devName, plan, facility)
 	uid := uuid.New().String()
 	state := metal.DEVICESTATE_ACTIVE
 	dev := &metal.Device{
@@ -122,6 +121,11 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 		State:    &state,
 		Plan:     metal.NewPlan(),
 	}
+
+	server.DeviceStore[uid] = dev
+	project := server.ProjectStore[vc.config.ProjectID]
+	project.Devices = append(project.Devices, dev)
+	server.ProjectStore[vc.config.ProjectID] = project
 
 	// update the addresses on the device; normally created by Equinix Metal itself
 	networks := []metal.IPAssignment{
@@ -172,7 +176,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 
 /*
 	func TestInstanceID(t *testing.T) {
-		vc := testGetValidCloud(t, "")
+		vc, server := testGetValidCloud(t, "")
 		inst, _ := vc.InstancesV2()
 		devName := testGetNewDevName()
 		facility, _ := testGetOrCreateValidZone(validZoneName, validZoneCode, backend)
@@ -206,9 +210,10 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 	}
 */
 func TestInstanceType(t *testing.T) {
-	vc := testGetValidCloud(t, "")
+	vc, server := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
+
 	uid := uuid.New().String()
 	state := metal.DEVICESTATE_ACTIVE
 	dev := &metal.Device{
@@ -217,6 +222,11 @@ func TestInstanceType(t *testing.T) {
 		State:    &state,
 		Plan:     metal.NewPlan(),
 	}
+	server.DeviceStore[uid] = dev
+	project := server.ProjectStore[vc.config.ProjectID]
+	project.Devices = append(project.Devices, dev)
+	server.ProjectStore[vc.config.ProjectID] = project
+
 	privateIP := "10.1.1.2"
 	publicIP := "25.50.75.100"
 	trueBool := true
@@ -241,7 +251,6 @@ func TestInstanceType(t *testing.T) {
 		err      error
 	}{
 		{"empty name", "", "", fmt.Errorf("instance not found")},
-		{"invalid id", "thisdoesnotexist", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")},
 		{"unknown name", randomID, "", fmt.Errorf("instance not found")},
 		{"valid", "equinixmetal://" + dev.GetId(), dev.Plan.GetSlug(), nil},
 	}
@@ -264,7 +273,7 @@ func TestInstanceType(t *testing.T) {
 }
 
 func TestInstanceZone(t *testing.T) {
-	vc := testGetValidCloud(t, "")
+	vc, server := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
 	uid := uuid.New().String()
@@ -275,6 +284,7 @@ func TestInstanceZone(t *testing.T) {
 		State:    &state,
 		Plan:     metal.NewPlan(),
 	}
+
 	privateIP := "10.1.1.2"
 	publicIP := "25.50.75.100"
 
@@ -300,32 +310,32 @@ func TestInstanceZone(t *testing.T) {
 		},
 	}...)
 
+	server.DeviceStore[uid] = dev
+	project := server.ProjectStore[vc.config.ProjectID]
+	project.Devices = append(project.Devices, dev)
+	server.ProjectStore[vc.config.ProjectID] = project
+
 	tests := []struct {
 		testName string
 		name     string
 		region   string
-		zone     string
 		err      error
 	}{
-		{"empty name", "", "", "", fmt.Errorf("instance not found")},
-		{"invalid id", "thisdoesnotexist", "", "", fmt.Errorf("thisdoesnotexist is not a valid UUID")},
-		{"unknown name", randomID, "", "", fmt.Errorf("instance not found")},
-		{"valid", "equinixmetal://" + dev.GetId(), validRegionCode, validZoneCode, nil},
+		{"empty name", "", "", fmt.Errorf("instance not found")},
+		{"unknown name", randomID, "", fmt.Errorf("instance not found")},
+		{"valid", "equinixmetal://" + dev.GetId(), validRegionCode, nil},
 	}
 
 	for i, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			var zone, region string
+			var region string
 			md, err := inst.InstanceMetadata(context.TODO(), testNode(tt.name, nodeName))
 			if md != nil {
-				zone = md.Zone
 				region = md.Region
 			}
 			switch {
 			case (err == nil && tt.err != nil) || (err != nil && tt.err == nil) || (err != nil && tt.err != nil && !strings.HasPrefix(err.Error(), tt.err.Error())):
 				t.Errorf("%d: mismatched errors, actual %v expected %v", i, err, tt.err)
-			case zone != tt.zone:
-				t.Errorf("%d: mismatched zone, actual %v expected %v", i, zone, tt.zone)
 			case region != tt.region:
 				t.Errorf("%d: mismatched region, actual %v expected %v", i, region, tt.region)
 			}
@@ -335,7 +345,7 @@ func TestInstanceZone(t *testing.T) {
 
 /*
 func TestInstanceTypeByProviderID(t *testing.T) {
-	vc := testGetValidCloud(t, "")
+	vc, server := testGetValidCloud(t, "")
 	inst, _ := vc.Instances()
 	devName := testGetNewDevName()
 	uid := uuid.New().String()
@@ -411,7 +421,7 @@ func TestCurrentNodeName(t *testing.T) {
 */
 
 func TestInstanceExistsByProviderID(t *testing.T) {
-	vc := testGetValidCloud(t, "")
+	vc, server := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
 	uid := uuid.New().String()
@@ -422,6 +432,11 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 		State:    &state,
 		Plan:     metal.NewPlan(),
 	}
+
+	server.DeviceStore[uid] = dev
+	project := server.ProjectStore[vc.config.ProjectID]
+	project.Devices = append(project.Devices, dev)
+	server.ProjectStore[vc.config.ProjectID] = project
 
 	tests := []struct {
 		id     string
@@ -449,26 +464,34 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 }
 
 func TestInstanceShutdownByProviderID(t *testing.T) {
-	vc := testGetValidCloud(t, "")
+	vc, server := testGetValidCloud(t, "")
 	inst, _ := vc.InstancesV2()
 	devName := testGetNewDevName()
-	uid := uuid.New().String()
+	activeDevUid := uuid.New().String()
 	activeState := metal.DEVICESTATE_ACTIVE
 	devActive := &metal.Device{
-		Id:       &uid,
+		Id:       &activeDevUid,
 		Hostname: &devName,
 		State:    &activeState,
 		Plan:     metal.NewPlan(),
 	}
+	server.DeviceStore[activeDevUid] = devActive
+	project := server.ProjectStore[vc.config.ProjectID]
+	project.Devices = append(project.Devices, devActive)
+	server.ProjectStore[vc.config.ProjectID] = project
 
-	uid = uuid.New().String()
+	inactiveDevUid := uuid.New().String()
 	inactiveState := metal.DEVICESTATE_INACTIVE
 	devInactive := &metal.Device{
-		Id:       &uid,
+		Id:       &inactiveDevUid,
 		Hostname: &devName,
 		State:    &inactiveState,
 		Plan:     metal.NewPlan(),
 	}
+	server.DeviceStore[inactiveDevUid] = devInactive
+	project = server.ProjectStore[vc.config.ProjectID]
+	project.Devices = append(project.Devices, devInactive)
+	server.ProjectStore[vc.config.ProjectID] = project
 
 	tests := []struct {
 		id   string

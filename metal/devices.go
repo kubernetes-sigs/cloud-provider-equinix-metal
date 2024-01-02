@@ -83,9 +83,6 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 	//
 	// https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
 
-	if device.Facility != nil {
-		z = device.Facility.GetCode()
-	}
 	if device.Metro != nil {
 		r = device.Metro.GetCode()
 	}
@@ -158,8 +155,8 @@ func (i *instances) deviceByNode(node *v1.Node) (*metal.Device, error) {
 
 func deviceByID(client *metal.DevicesApiService, id string) (*metal.Device, error) {
 	klog.V(2).Infof("called deviceByID with ID %s", id)
-	device, _, err := client.FindDeviceById(context.Background(), id).Execute()
-	if isNotFound(err) {
+	device, resp, err := client.FindDeviceById(context.Background(), id).Execute()
+	if isNotFound(resp, err) {
 		return nil, cloudprovider.InstanceNotFound
 	}
 	return device, err
