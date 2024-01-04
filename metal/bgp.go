@@ -9,7 +9,6 @@ import (
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
 )
 
 type bgp struct {
@@ -62,7 +61,7 @@ func (b *bgp) enableBGP() error {
 		Asn:            int32(b.localASN),
 		Md5:            &b.bgpPass,
 		DeploymentType: "local",
-		UseCase:        pointer.String("kubernetes-load-balancer"),
+		UseCase:        metal.PtrString("kubernetes-load-balancer"),
 	}
 	_, err = b.client.
 		RequestBgpConfig(context.Background(), b.project).

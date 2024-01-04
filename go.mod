@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/equinix/equinix-sdk-go v0.30.0
 	github.com/google/uuid v1.3.1
-	github.com/packethost/packngo v0.30.0
+	github.com/gorilla/mux v1.8.1
 	github.com/pallinder/go-randomdata v1.2.0
 	go.universe.tf/metallb v0.13.7
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
@@ -15,7 +15,6 @@ require (
 	k8s.io/client-go v0.26.10
 	k8s.io/cloud-provider v0.26.10
 	k8s.io/component-base v0.26.10
-	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448
 	sigs.k8s.io/controller-runtime v0.14.7

@@ -1,16 +1,15 @@
 package metal
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	metaltest "github.com/equinix/cloud-provider-equinix-metal/metal/testing"
+
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	clientset "k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	restclient "k8s.io/client-go/rest"
@@ -25,16 +24,6 @@ const (
 	validRegionName = "Metro"
 	validZoneCode   = "ewr1"
 )
-
-type MockMetalServer struct {
-	DeviceStore  map[string]*metal.Device
-	ProjectStore map[string]struct {
-		Devices    []*metal.Device
-		BgpEnabled bool
-	}
-
-	T *testing.T
-}
 
 // mockControllerClientBuilder mock implementation of https://pkg.go.dev/k8s.io/cloud-provider#ControllerClientBuilder
 // so we can pass it to cloud.Initialize()
@@ -57,14 +46,9 @@ func (m mockControllerClientBuilder) ClientOrDie(name string) clientset.Interfac
 }
 
 // create a valid cloud with a client
-func testGetValidCloud(t *testing.T, LoadBalancerSetting string) (*cloud, *MockMetalServer) {
-	mockServer := &MockMetalServer{
-		DeviceStore: map[string]*metal.Device{},
-		ProjectStore: map[string]struct {
-			Devices    []*metal.Device
-			BgpEnabled bool
-		}{},
-	}
+func testGetValidCloud(t *testing.T, LoadBalancerSetting string) (*cloud, *metaltest.MockMetalServer) {
+	mockServer := metaltest.NewMockMetalServer(t)
+
 	// mock endpoint so our client can handle it
 	ts := httptest.NewServer(mockServer.CreateHandler())
 
@@ -210,22 +194,12 @@ func TestHasClusterID(t *testing.T) {
 
 // builds an Equinix Metal client
 func constructClient(authToken string, baseUrl *string) *metal.APIClient {
-	configuration := &metal.Configuration{
-		DefaultHeader:    make(map[string]string),
-		UserAgent:        "metal-go/0.29.0",
-		Debug:            false,
-		Servers:          metal.ServerConfigurations{},
-		OperationServers: map[string]metal.ServerConfigurations{},
-	}
+	configuration := metal.NewConfiguration()
+	configuration.AddDefaultHeader("X-Auth-Token", authToken)
+	configuration.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), configuration.UserAgent)
 
-	servers := metal.ServerConfigurations{
-		{
-			URL:         "https://api.equinix.com/metal/v1",
-			Description: "No description provided",
-		},
-	}
 	if baseUrl != nil {
-		servers = metal.ServerConfigurations{
+		configuration.Servers = metal.ServerConfigurations{
 			{
 				URL:         *baseUrl,
 				Description: "No description provided",
@@ -233,65 +207,5 @@ func constructClient(authToken string, baseUrl *string) *metal.APIClient {
 		}
 	}
 
-	configuration.Servers = servers
-	configuration.AddDefaultHeader("X-Auth-Token", authToken)
-	configuration.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), configuration.UserAgent)
 	return metal.NewAPIClient(configuration)
-}
-
-func (s *MockMetalServer) CreateHandler() http.Handler {
-	r := mux.NewRouter()
-	// create a BGP config for a project
-	r.HandleFunc("/projects/{projectID}/bgp-configs", s.createBGPHandler).Methods("POST")
-	// get all devices for a project
-	r.HandleFunc("/projects/{projectID}/devices", s.listDevicesHandler).Methods("GET")
-	// get a single device
-	r.HandleFunc("/devices/{deviceID}", s.getDeviceHandler).Methods("GET")
-	// handle metadata requests
-	return r
-}
-
-func (s *MockMetalServer) listDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	projectID := vars["projectID"]
-
-	data := s.ProjectStore[projectID]
-	devices := data.Devices
-	var resp = struct {
-		Devices []*metal.Device `json:"devices"`
-	}{
-		Devices: devices,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(&resp); err != nil {
-		s.T.Fatal(err.Error())
-	}
-}
-
-// get information about a specific device
-func (s *MockMetalServer) getDeviceHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	volID := vars["deviceID"]
-	dev := s.DeviceStore[volID]
-	w.Header().Set("Content-Type", "application/json")
-	if dev != nil {
-		err := json.NewEncoder(w).Encode(dev)
-		if err != nil {
-			s.T.Fatal(err)
-		}
-		return
-	}
-	w.WriteHeader(http.StatusNotFound)
-}
-
-// createBGPHandler enable BGP for a project
-func (s *MockMetalServer) createBGPHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	projectID := vars["projectID"]
-	projectData := s.ProjectStore[projectID]
-	projectData.BgpEnabled = true
-	s.ProjectStore[projectID] = projectData
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 }

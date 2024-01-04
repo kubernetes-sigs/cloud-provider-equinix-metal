@@ -7,7 +7,7 @@ import (
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/component-base/version"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (
