@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/packethost/packngo"
-	"github.com/packethost/packngo/metadata"
-
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
@@ -17,13 +15,13 @@ import (
 )
 
 type instances struct {
-	client  *packngo.Client
+	client  *metal.DevicesApiService
 	project string
 }
 
 var _ cloudprovider.InstancesV2 = (*instances)(nil)
 
-func newInstances(client *packngo.Client, projectID string) *instances {
+func newInstances(client *metal.DevicesApiService, projectID string) *instances {
 	return &instances{client: client, project: projectID}
 }
 
@@ -35,7 +33,7 @@ func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, 
 		return false, err
 	}
 
-	return device.State == "inactive", nil
+	return device.GetState() == metal.DEVICESTATE_INACTIVE, nil
 }
 
 // InstanceExists returns true if the node exists in cloudprovider
@@ -74,7 +72,7 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 
 	var p, r, z string
 	if device.Plan != nil {
-		p = device.Plan.Slug
+		p = device.Plan.GetSlug()
 	}
 
 	// "A zone represents a logical failure domain"
@@ -85,11 +83,8 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 	//
 	// https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
 
-	if device.Facility != nil {
-		z = device.Facility.Code
-	}
 	if device.Metro != nil {
-		r = device.Metro.Code
+		r = device.Metro.GetCode()
 	}
 
 	return &cloudprovider.InstanceMetadata{
@@ -101,13 +96,13 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 	}, nil
 }
 
-func nodeAddresses(device *packngo.Device, providedNodeIP string) ([]v1.NodeAddress, error) {
+func nodeAddresses(device *metal.Device, providedNodeIP string) ([]v1.NodeAddress, error) {
 	var (
 		addresses           []v1.NodeAddress
 		unique              = map[string]bool{}
 		privateIP, publicIP string
 	)
-	addr := v1.NodeAddress{Type: v1.NodeHostName, Address: device.Hostname}
+	addr := v1.NodeAddress{Type: v1.NodeHostName, Address: device.GetHostname()}
 	unique[addr.Address] = true
 	addresses = append(addresses, addr)
 
@@ -120,17 +115,17 @@ func nodeAddresses(device *packngo.Device, providedNodeIP string) ([]v1.NodeAddr
 			addresses = append(addresses, addr)
 		}
 	}
-	for _, address := range device.Network {
-		if address.AddressFamily == int(metadata.IPv4) {
+	for _, address := range device.IpAddresses {
+		if address.GetAddressFamily() == int32(metal.IPADDRESSADDRESSFAMILY__4) {
 			var addrType v1.NodeAddressType
-			if address.Public {
-				publicIP = address.Address
+			if address.GetPublic() {
+				publicIP = address.GetAddress()
 				addrType = v1.NodeExternalIP
 			} else {
-				privateIP = address.Address
+				privateIP = address.GetAddress()
 				addrType = v1.NodeInternalIP
 			}
-			addr = v1.NodeAddress{Type: addrType, Address: address.Address}
+			addr = v1.NodeAddress{Type: addrType, Address: address.GetAddress()}
 
 			if _, ok := unique[addr.Address]; !ok {
 				unique[addr.Address] = true
@@ -150,7 +145,7 @@ func nodeAddresses(device *packngo.Device, providedNodeIP string) ([]v1.NodeAddr
 	return addresses, nil
 }
 
-func (i *instances) deviceByNode(node *v1.Node) (*packngo.Device, error) {
+func (i *instances) deviceByNode(node *v1.Node) (*metal.Device, error) {
 	if node.Spec.ProviderID != "" {
 		return i.deviceFromProviderID(node.Spec.ProviderID)
 	}
@@ -158,30 +153,30 @@ func (i *instances) deviceByNode(node *v1.Node) (*packngo.Device, error) {
 	return deviceByName(i.client, i.project, types.NodeName(node.GetName()))
 }
 
-func deviceByID(client *packngo.Client, id string) (*packngo.Device, error) {
+func deviceByID(client *metal.DevicesApiService, id string) (*metal.Device, error) {
 	klog.V(2).Infof("called deviceByID with ID %s", id)
-	device, _, err := client.Devices.Get(id, nil)
-	if isNotFound(err) {
+	device, resp, err := client.FindDeviceById(context.Background(), id).Execute()
+	if isNotFound(resp, err) {
 		return nil, cloudprovider.InstanceNotFound
 	}
 	return device, err
 }
 
 // deviceByName returns an instance whose hostname matches the kubernetes node.Name
-func deviceByName(client *packngo.Client, projectID string, nodeName types.NodeName) (*packngo.Device, error) {
+func deviceByName(client *metal.DevicesApiService, projectID string, nodeName types.NodeName) (*metal.Device, error) {
 	klog.V(2).Infof("called deviceByName with projectID %s nodeName %s", projectID, nodeName)
 	if string(nodeName) == "" {
 		return nil, errors.New("node name cannot be empty string")
 	}
-	devices, _, err := client.Devices.List(projectID, nil)
+	devices, _, err := client.FindProjectDevices(context.Background(), projectID).Execute()
 	if err != nil {
 		klog.V(2).Infof("error listing devices for project %s: %v", projectID, err)
 		return nil, err
 	}
 
-	for _, device := range devices {
-		if device.Hostname == string(nodeName) {
-			klog.V(2).Infof("Found device %s for nodeName %s", device.ID, nodeName)
+	for _, device := range devices.GetDevices() {
+		if device.GetHostname() == string(nodeName) {
+			klog.V(2).Infof("Found device %s for nodeName %s", device.GetId(), nodeName)
 			return &device, nil
 		}
 	}
@@ -218,7 +213,7 @@ func deviceIDFromProviderID(providerID string) (string, error) {
 }
 
 // deviceFromProviderID uses providerID to get the device id and return the device
-func (i *instances) deviceFromProviderID(providerID string) (*packngo.Device, error) {
+func (i *instances) deviceFromProviderID(providerID string) (*metal.Device, error) {
 	klog.V(2).Infof("called deviceFromProviderID with providerID %s", providerID)
 	id, err := deviceIDFromProviderID(providerID)
 	if err != nil {
@@ -229,6 +224,6 @@ func (i *instances) deviceFromProviderID(providerID string) (*packngo.Device, er
 }
 
 // providerIDFromDevice returns a providerID from a device
-func providerIDFromDevice(device *packngo.Device) string {
-	return fmt.Sprintf("%s://%s", ProviderName, device.ID)
+func providerIDFromDevice(device *metal.Device) string {
+	return fmt.Sprintf("%s://%s", ProviderName, device.GetId())
 }

@@ -17,8 +17,8 @@ import (
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/empty"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/kubevip"
 	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/metallb"
-	"github.com/packethost/packngo"
 
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -26,10 +26,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 )
 
 type loadBalancers struct {
-	client                *packngo.Client
+	client                *metal.APIClient
 	k8sclient             kubernetes.Interface
 	project               string
 	metro                 string
@@ -52,7 +53,7 @@ type loadBalancers struct {
 	usesBGP               bool
 }
 
-func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector, eipTag string) (*loadBalancers, error) {
+func newLoadBalancers(client *metal.APIClient, k8sclient kubernetes.Interface, authToken, projectID, metro, facility, config string, localASN int, bgpPass, annotationNetwork, annotationLocalASN, annotationPeerASN, annotationPeerIP, annotationSrcIP, annotationBgpPass, eipMetroAnnotation, eipFacilityAnnotation, nodeSelector, eipTag string) (*loadBalancers, error) {
 	selector := labels.Everything()
 	if nodeSelector != "" {
 		selector, _ = labels.Parse(nodeSelector)
@@ -99,7 +100,7 @@ func newLoadBalancers(client *packngo.Client, k8sclient kubernetes.Interface, pr
 		impl = empty.NewLB(k8sclient, lbconfig)
 	case "emlb":
 		klog.Info("loadbalancer implementation enabled: emlb")
-		impl = emlb.NewLB(k8sclient, lbconfig, client.APIKey, projectID)
+		impl = emlb.NewLB(k8sclient, lbconfig, authToken, projectID)
 		// TODO remove when common BGP code has been refactored to somewhere else
 		l.usesBGP = false
 	default:
@@ -128,7 +129,9 @@ func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string,
 
 	if l.usesBGP {
 		// get IP address reservations and check if they any exists for this svc
-		ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
+		ips, _, err := l.client.IPAddressesApi.
+			FindIPReservations(context.Background(), l.project).
+			Execute()
 		if err != nil {
 			return nil, false, fmt.Errorf("unable to retrieve IP reservations for project %s: %w", l.project, err)
 		}
@@ -143,7 +146,7 @@ func (l *loadBalancers) GetLoadBalancer(ctx context.Context, clusterName string,
 		}
 		return &v1.LoadBalancerStatus{
 			Ingress: []v1.LoadBalancerIngress{
-				{IP: ipReservation.Address},
+				{IP: ipReservation.GetAddress()},
 			},
 		}, true, nil
 	} else {
@@ -228,7 +231,7 @@ func (l *loadBalancers) UpdateLoadBalancer(ctx context.Context, clusterName stri
 				return fmt.Errorf("failed to annotate node %s: %w", node.Name, err)
 			}
 			var (
-				peer *packngo.BGPNeighbor
+				peer *metal.BgpNeighborData
 				err  error
 			)
 			if peer, err = getNodeBGPConfig(id, l.client); err != nil || peer == nil {
@@ -236,11 +239,11 @@ func (l *loadBalancers) UpdateLoadBalancer(ctx context.Context, clusterName stri
 			}
 			n = append(n, loadbalancers.Node{
 				Name:     node.Name,
-				LocalASN: peer.CustomerAs,
-				PeerASN:  peer.PeerAs,
-				SourceIP: peer.CustomerIP,
-				Peers:    peer.PeerIps,
-				Password: peer.Md5Password,
+				LocalASN: int(peer.GetCustomerAs()),
+				PeerASN:  int(peer.GetPeerAs()),
+				SourceIP: peer.GetCustomerIp(),
+				Peers:    peer.GetPeerIps(),
+				Password: peer.GetMd5Password(),
 			})
 		}
 	}
@@ -267,7 +270,9 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 
 	if l.usesBGP {
 		// get IP address reservations and check if they any exists for this svc
-		ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
+		ips, _, err := l.client.IPAddressesApi.
+			FindIPReservations(context.Background(), l.project).
+			Execute()
 		if err != nil {
 			return fmt.Errorf("unable to retrieve IP reservations for project %s: %w", l.project, err)
 		}
@@ -282,12 +287,12 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 			return nil
 		}
 		// delete the reservation
-		klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s EIP ID %s", svcName, ipReservation.ID)
-		if _, err := l.client.ProjectIPs.Remove(ipReservation.ID); err != nil {
-			return fmt.Errorf("failed to remove IP address reservation %s from project: %w", ipReservation.String(), err)
+		klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s EIP ID %s", svcName, ipReservation.GetId())
+		if _, err := l.client.IPAddressesApi.DeleteIPAddress(context.Background(), ipReservation.GetId()).Execute(); err != nil {
+			return fmt.Errorf("failed to remove IP address reservation %s from project: %w", ipReservation.GetAddress(), err)
 		}
 		// remove it from any implementation-specific parts
-		svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.Address, ipReservation.CIDR)
+		svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.GetAddress(), ipReservation.GetCidr())
 		klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s entry %s", svcName, svcIPCidr)
 	}
 
@@ -338,9 +343,9 @@ func (l *loadBalancers) annotateNode(ctx context.Context, node *v1.Node) error {
 		klog.Errorf("got BGP info for node %s but it had no peer IPs", node.Name)
 	default:
 		// the localASN and peerASN are the same across peers
-		localASN := strconv.Itoa(peer.CustomerAs)
-		peerASN := strconv.Itoa(peer.PeerAs)
-		bgpPass := base64.StdEncoding.EncodeToString([]byte(peer.Md5Password))
+		localASN := strconv.Itoa(int(peer.GetCustomerAs()))
+		peerASN := strconv.Itoa(int(peer.GetPeerAs()))
+		bgpPass := base64.StdEncoding.EncodeToString([]byte(peer.GetMd5Password()))
 
 		// we always set the peer IPs as a sorted list, so that 0, 1, n are
 		// consistent in ordering
@@ -363,7 +368,7 @@ func (l *loadBalancers) annotateNode(ctx context.Context, node *v1.Node) error {
 			annotations[annotationLocalASN] = localASN
 			annotations[annotationPeerASN] = peerASN
 			annotations[annotationPeerIP] = ip
-			annotations[annotationSrcIP] = peer.CustomerIP
+			annotations[annotationSrcIP] = peer.GetCustomerIp()
 			annotations[annotationBgpPass] = bgpPass
 		}
 	}
@@ -401,12 +406,12 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 		svcIPCidr string
 		err       error
 		n         []loadbalancers.Node
-		ips       []packngo.IPAddressReservation
+		ips       *metal.IPReservationList
 	)
 
 	if l.usesBGP {
 		// get IP address reservations and check if they any exists for this svc
-		ips, _, err = l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
+		ips, _, err = l.client.IPAddressesApi.FindIPReservations(context.Background(), l.project).Execute()
 		if err != nil {
 			return "", fmt.Errorf("unable to retrieve IP reservations for project %s: %w", l.project, err)
 		}
@@ -431,34 +436,42 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 				// 5. Return error, cannot set an EIP
 				facility := l.facility
 				metro := l.metro
-				req := packngo.IPReservationRequest{
-					Type:        "public_ipv4",
-					Quantity:    1,
-					Description: ccmIPDescription,
+				input := &metal.IPReservationRequestInput{
+					Type:     "public_ipv4",
+					Quantity: 1,
+					Details:  pointer.String(ccmIPDescription),
 					Tags: []string{
 						emTag,
 						svcTag,
 						clsTag,
 					},
-					FailOnApprovalRequired: true,
+					FailOnApprovalRequired: pointer.Bool(true),
+				}
+				req := &metal.RequestIPReservationRequest{
+					IPReservationRequestInput: input,
 				}
 				switch {
 				case svcRegion != "":
-					req.Metro = &svcRegion
+					input.Metro = &svcRegion
 				case svcZone != "":
-					req.Facility = &svcZone
+					input.Facility = &svcZone
 				case metro != "":
-					req.Metro = &metro
+					input.Metro = &metro
 				case facility != "":
-					req.Facility = &facility
+					input.Facility = &facility
 				default:
 					return "", errors.New("unable to create load balancer when no IP, region or zone specified, either globally or on service")
 				}
 
-				ipReservation, _, err = l.client.ProjectIPs.Request(l.project, &req)
-				if err != nil {
+				resp, _, err := l.client.IPAddressesApi.
+					RequestIPReservation(context.Background(), l.project).
+					RequestIPReservationRequest(*req).
+					Execute()
+				if err != nil || resp == nil {
 					return "", fmt.Errorf("failed to request an IP for the load balancer: %w", err)
 				}
+
+				ipReservation = resp.IPReservation
 			}
 
 			// if we have no IP from existing or a new reservation, log it and return
@@ -469,7 +482,7 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 
 			// we have an IP, either found from existing reservations or a new reservation.
 			// map and assign it
-			svcIP = ipReservation.Address
+			svcIP = ipReservation.GetAddress()
 
 			// assign the IP and save it
 			klog.V(2).Infof("assigning IP %s to %s", svcIP, svcName)
@@ -489,9 +502,9 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 			klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
 		}
 		// our default CIDR for each address is 32
-		cidr := 32
+		cidr := int32(32)
 		if ipReservation != nil {
-			cidr = ipReservation.CIDR
+			cidr = ipReservation.GetCidr()
 		}
 		svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
 		// now need to pass it the nodes
@@ -521,11 +534,11 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 			}
 			n = append(n, loadbalancers.Node{
 				Name:     node.Name,
-				LocalASN: peer.CustomerAs,
-				PeerASN:  peer.PeerAs,
-				SourceIP: peer.CustomerIP,
-				Peers:    peer.PeerIps,
-				Password: peer.Md5Password,
+				LocalASN: int(peer.GetCustomerAs()),
+				PeerASN:  int(peer.GetPeerAs()),
+				SourceIP: peer.GetCustomerIp(),
+				Peers:    peer.GetPeerIps(),
+				Password: peer.GetMd5Password(),
 			})
 		}
 	}
@@ -539,7 +552,7 @@ func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, ta
 	cidr := 32
 
 	// get IP address reservations and check if they any exists for this svc
-	ips, _, err := l.client.ProjectIPs.List(l.project, &packngo.ListOptions{})
+	ips, _, err := l.client.IPAddressesApi.FindIPReservations(context.Background(), l.project).Execute()
 	if err != nil {
 		return "", err
 	}
@@ -559,7 +572,7 @@ func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, ta
 		}
 
 		// we have an IP, map and assign it
-		svcIP = ipReservation.Address
+		svcIP = ipReservation.GetAddress()
 
 		// assign the IP and save it
 		klog.V(2).Infof("assigning IP %s to %s", svcIP, svcName)
@@ -579,7 +592,7 @@ func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, ta
 		klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
 	}
 	if ipReservation != nil {
-		cidr = ipReservation.CIDR
+		cidr = int(ipReservation.GetCidr())
 	}
 	svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
 
@@ -616,21 +629,24 @@ func clusterTag(clusterID string) string {
 }
 
 // getNodePrivateNetwork use the Equinix Metal API to get the CIDR of the private network given a providerID.
-func getNodePrivateNetwork(deviceID string, client *packngo.Client) (string, error) {
-	device, _, err := client.Devices.Get(deviceID, &packngo.GetOptions{Includes: []string{"ip_addresses.parent_block,parent_block"}})
+func getNodePrivateNetwork(deviceID string, client *metal.APIClient) (string, error) {
+	device, _, err := client.DevicesApi.
+		FindDeviceById(context.Background(), deviceID).
+		Include([]string{"ip_addresses.parent_block,parent_block"}).
+		Execute()
 	if err != nil {
 		return "", err
 	}
-	for _, net := range device.Network {
+	for _, net := range device.GetIpAddresses() {
 		// we only want the private, management, ipv4 network
-		if net.Public || !net.Management || net.AddressFamily != 4 {
+		if net.GetPublic() || !net.GetManagement() || net.GetAddressFamily() != 4 {
 			continue
 		}
 		parent := net.ParentBlock
-		if parent == nil || parent.Network == "" || parent.CIDR == 0 {
-			return "", fmt.Errorf("no network information provided for private address %s", net.String())
+		if parent == nil || parent.GetNetwork() == "" || parent.GetCidr() == 0 {
+			return "", fmt.Errorf("no network information provided for private address %s", net.GetAddress())
 		}
-		return fmt.Sprintf("%s/%d", parent.Network, parent.CIDR), nil
+		return fmt.Sprintf("%s/%d", parent.GetNetwork(), parent.GetCidr()), nil
 	}
 	return "", nil
 }

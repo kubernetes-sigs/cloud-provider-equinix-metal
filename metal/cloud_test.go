@@ -1,20 +1,20 @@
 package metal
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
-	"github.com/google/uuid"
-	retryablehttp "github.com/hashicorp/go-retryablehttp"
-	emServer "github.com/packethost/packet-api-server/pkg/server"
-	"github.com/packethost/packet-api-server/pkg/store"
-	"github.com/packethost/packngo"
+	metaltest "github.com/equinix/cloud-provider-equinix-metal/metal/testing"
 
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
+	"github.com/google/uuid"
 	clientset "k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	restclient "k8s.io/client-go/rest"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/component-base/version"
 )
 
 const (
@@ -23,9 +23,6 @@ const (
 	validRegionCode = "ME"
 	validRegionName = "Metro"
 	validZoneCode   = "ewr1"
-	validZoneName   = "Parsippany, NJ"
-	validPlanSlug   = "hourly"
-	validPlanName   = "Bill by the hour"
 )
 
 // mockControllerClientBuilder mock implementation of https://pkg.go.dev/k8s.io/cloud-provider#ControllerClientBuilder
@@ -48,27 +45,12 @@ func (m mockControllerClientBuilder) ClientOrDie(name string) clientset.Interfac
 	return k8sfake.NewSimpleClientset()
 }
 
-type apiServerError struct {
-	t *testing.T
-}
-
-func (a *apiServerError) Error(err error) {
-	a.t.Fatal(err)
-}
-
 // create a valid cloud with a client
-func testGetValidCloud(t *testing.T, LoadBalancerSetting string) (*cloud, *store.Memory) {
+func testGetValidCloud(t *testing.T, LoadBalancerSetting string) (*cloud, *metaltest.MockMetalServer) {
+	mockServer := metaltest.NewMockMetalServer(t)
+
 	// mock endpoint so our client can handle it
-	backend := store.NewMemory()
-	fake := emServer.PacketServer{
-		Store: backend,
-		ErrorHandler: &apiServerError{
-			t: t,
-		},
-	}
-	// ensure we have a single region
-	_, _ = backend.CreateFacility(validZoneName, validZoneCode)
-	ts := httptest.NewServer(fake.CreateHandler())
+	ts := httptest.NewServer(mockServer.CreateHandler())
 
 	url, _ := url.Parse(ts.URL)
 	urlString := url.String()
@@ -84,7 +66,7 @@ func testGetValidCloud(t *testing.T, LoadBalancerSetting string) (*cloud, *store
 	ccb := &mockControllerClientBuilder{}
 	c.Initialize(ccb, nil)
 
-	return c.(*cloud), backend
+	return c.(*cloud), mockServer
 }
 
 func TestLoadBalancerDefaultDisabled(t *testing.T) {
@@ -211,14 +193,19 @@ func TestHasClusterID(t *testing.T) {
 }
 
 // builds an Equinix Metal client
-func constructClient(authToken string, baseURL *string) *packngo.Client {
-	client := retryablehttp.NewClient()
+func constructClient(authToken string, baseUrl *string) *metal.APIClient {
+	configuration := metal.NewConfiguration()
+	configuration.AddDefaultHeader("X-Auth-Token", authToken)
+	configuration.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), configuration.UserAgent)
 
-	// client.Transport = logging.NewTransport("EquinixMetal", client.Transport)
-	if baseURL != nil {
-		// really should handle error, but packngo does not distinguish now or handle errors, so ignoring for now
-		client, _ := packngo.NewClientWithBaseURL(ConsumerToken, authToken, client.StandardClient(), *baseURL)
-		return client
+	if baseUrl != nil {
+		configuration.Servers = metal.ServerConfigurations{
+			{
+				URL:         *baseUrl,
+				Description: "No description provided",
+			},
+		}
 	}
-	return packngo.NewClientWithAuth(ConsumerToken, authToken, client.StandardClient())
+
+	return metal.NewAPIClient(configuration)
 }

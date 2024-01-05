@@ -4,52 +4,22 @@ import (
 	"fmt"
 	"math/rand"
 
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	"github.com/google/uuid"
-	"github.com/packethost/packet-api-server/pkg/store"
-	"github.com/packethost/packngo"
-	"github.com/packethost/packngo/metadata"
 	randomdata "github.com/pallinder/go-randomdata"
 )
 
 var randomID = uuid.New().String()
-
-// find an ewr1 region or create it
-func testGetOrCreateValidZone(name, code string, backend store.DataStore) (*packngo.Facility, error) {
-	facility, err := backend.GetFacilityByCode(code)
-	if err != nil {
-		return nil, err
-	}
-	// if we already have it, use it
-	if facility != nil {
-		return facility, nil
-	}
-	// we do not have it, so create it
-	return backend.CreateFacility(name, code)
-}
-
-// find an ewr1 region or create it
-func testGetOrCreateValidPlan(name, slug string, backend store.DataStore) (*packngo.Plan, error) {
-	plan, err := backend.GetPlanBySlug(slug)
-	if err != nil {
-		return nil, err
-	}
-	// if we already have it, use it
-	if plan != nil {
-		return plan, nil
-	}
-	// we do not have it, so create it
-	return backend.CreatePlan(slug, name)
-}
 
 // get a unique name
 func testGetNewDevName() string {
 	return fmt.Sprintf("device-%d", rand.Intn(1000))
 }
 
-func testCreateAddress(ipv6, public bool) *packngo.IPAddressAssignment {
-	family := metadata.IPv4
+func testCreateAddress(ipv6, public bool) metal.IPAssignment {
+	family := int32(metal.IPADDRESSADDRESSFAMILY__4)
 	if ipv6 {
-		family = metadata.IPv6
+		family = int32(metal.IPADDRESSADDRESSFAMILY__6)
 	}
 	ipaddr := ""
 	if ipv6 {
@@ -57,12 +27,10 @@ func testCreateAddress(ipv6, public bool) *packngo.IPAddressAssignment {
 	} else {
 		ipaddr = randomdata.IpV4Address()
 	}
-	address := &packngo.IPAddressAssignment{
-		IpAddressCommon: packngo.IpAddressCommon{
-			Address:       ipaddr,
-			Public:        public,
-			AddressFamily: int(family),
-		},
+	address := metal.IPAssignment{
+		Address:       &ipaddr,
+		Public:        &public,
+		AddressFamily: &family,
 	}
 	return address
 }

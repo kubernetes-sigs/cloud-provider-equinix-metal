@@ -1,19 +1,17 @@
 package metal
 
 import (
-	"github.com/packethost/packngo"
+	"net/http"
+	"strings"
 )
 
 // isNotFound check if an error is a 404 not found
-func isNotFound(err error) bool {
+func isNotFound(resp *http.Response, err error) bool {
 	if err == nil {
 		return false
 	}
-	if perr, ok := err.(*packngo.ErrorResponse); ok {
-		if perr.Response == nil {
-			return false
-		}
-		return perr.Response.StatusCode == 404
+	if resp.StatusCode == http.StatusNotFound || strings.Contains(err.Error(), "Not Found") {
+		return true
 	}
 	return false
 }

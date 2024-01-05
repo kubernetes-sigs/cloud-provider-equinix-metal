@@ -9,7 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/packethost/packngo"
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -52,8 +53,7 @@ type controlPlaneEndpointManager struct {
 	apiServerPort         int32 // node on which the EIP is listening
 	nodeAPIServerPort     int32 // port on which the api server is listening on the control plane nodes
 	eipTag                string
-	deviceIPSrv           packngo.DeviceIPService
-	ipResSvr              packngo.ProjectIPService
+	apiClient             *metal.APIClient
 	projectID             string
 	httpClient            *http.Client
 	k8sclient             kubernetes.Interface
@@ -64,7 +64,7 @@ type controlPlaneEndpointManager struct {
 	useHostIP             bool
 }
 
-func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan struct{}, eipTag, projectID string, deviceIPSrv packngo.DeviceIPService, ipResSvr packngo.ProjectIPService, apiServerPort int32, useHostIP bool) (*controlPlaneEndpointManager, error) {
+func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan struct{}, eipTag, projectID string, client *metal.APIClient, apiServerPort int32, useHostIP bool) (*controlPlaneEndpointManager, error) {
 	klog.V(2).Info("newControlPlaneEndpointManager()")
 
 	if eipTag == "" {
@@ -81,8 +81,7 @@ func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan 
 		},
 		eipTag:        eipTag,
 		projectID:     projectID,
-		ipResSvr:      ipResSvr,
-		deviceIPSrv:   deviceIPSrv,
+		apiClient:     client,
 		apiServerPort: apiServerPort,
 		k8sclient:     k8sclient,
 		useHostIP:     useHostIP,
@@ -228,7 +227,7 @@ func newControlPlaneEndpointManager(k8sclient kubernetes.Interface, stop <-chan 
 	return m, nil
 }
 
-func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.Node, ip *packngo.IPAddressReservation, eipURL string) error {
+func (m *controlPlaneEndpointManager) reassign(_ context.Context, nodes []*v1.Node, ip *metal.IPReservation, eipURL string) error {
 	klog.V(2).Info("controlPlaneEndpoint.reassign")
 	// must have figured out the node port first, or nothing to do
 	if m.nodeAPIServerPort == 0 {
@@ -268,13 +267,17 @@ func (m *controlPlaneEndpointManager) reassign(ctx context.Context, nodes []*v1.
 					return err
 				}
 				if len(ip.Assignments) == 1 {
-					if _, err := m.deviceIPSrv.Unassign(ip.Assignments[0].ID); err != nil {
+					if _, err := m.apiClient.IPAddressesApi.
+						DeleteIPAddress(context.Background(), ip.Assignments[0].GetId()).
+						Execute(); err != nil {
 						return err
 					}
 				}
-				if _, _, err := m.deviceIPSrv.Assign(deviceID, &packngo.AddressStruct{
-					Address: ip.Address,
-				}); err != nil {
+				if _, _, err := m.apiClient.DevicesApi.
+					CreateIPAssignment(context.Background(), deviceID).
+					IPAssignmentInput(metal.IPAssignmentInput{
+						Address: ip.GetAddress(),
+					}).Execute(); err != nil {
 					return err
 				}
 				klog.Infof("control plane endpoint assigned to new device %s", node.Name)
@@ -296,10 +299,8 @@ func isControlPlaneNode(node *v1.Node) bool {
 	return false
 }
 
-func (m *controlPlaneEndpointManager) getControlPlaneEndpointReservation() (*packngo.IPAddressReservation, error) {
-	ipList, _, err := m.ipResSvr.List(m.projectID, &packngo.ListOptions{
-		Includes: []string{"assignments"},
-	})
+func (m *controlPlaneEndpointManager) getControlPlaneEndpointReservation() (*metal.IPReservation, error) {
+	ipList, _, err := m.apiClient.IPAddressesApi.FindIPReservations(context.Background(), m.projectID).Include([]string{"assignments"}).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -311,16 +312,16 @@ func (m *controlPlaneEndpointManager) getControlPlaneEndpointReservation() (*pac
 	}
 
 	if len(controlPlaneEndpoint.Assignments) > 1 {
-		return nil, fmt.Errorf("the elastic ip %s has more than one node assigned to it and this is currently not supported. Fix it manually unassigning devices", controlPlaneEndpoint.ID)
+		return nil, fmt.Errorf("the elastic ip %s has more than one node assigned to it and this is currently not supported. Fix it manually unassigning devices", controlPlaneEndpoint.GetId())
 	}
 
 	return controlPlaneEndpoint, nil
 }
 
-func (m *controlPlaneEndpointManager) nodeIsAssigned(ctx context.Context, node *v1.Node, ipReservation *packngo.IPAddressReservation) (bool, error) {
+func (m *controlPlaneEndpointManager) nodeIsAssigned(_ context.Context, node *v1.Node, ipReservation *metal.IPReservation) (bool, error) {
 	for _, a := range ipReservation.Assignments {
 		for _, na := range node.Status.Addresses {
-			if na.Address == a.Address {
+			if na.Address == a.GetAddress() {
 				return true, nil
 			}
 		}
@@ -402,7 +403,7 @@ func (m *controlPlaneEndpointManager) tryReassignAwayFromSelf(ctx context.Contex
 }
 
 // Anything calling this function should be wrapped by a lock on m.assignmentMutex
-func (m *controlPlaneEndpointManager) tryReassign(ctx context.Context, controlPlaneEndpoint *packngo.IPAddressReservation, filters ...nodeFilter) error {
+func (m *controlPlaneEndpointManager) tryReassign(ctx context.Context, controlPlaneEndpoint *metal.IPReservation, filters ...nodeFilter) error {
 	controlPlaneHealthURL := m.healthURLFromControlPlaneEndpoint(controlPlaneEndpoint)
 	nodeSet := newNodeSet()
 
@@ -426,8 +427,8 @@ func (m *controlPlaneEndpointManager) tryReassign(ctx context.Context, controlPl
 	return nil
 }
 
-func (m *controlPlaneEndpointManager) healthURLFromControlPlaneEndpoint(controlPlaneEndpoint *packngo.IPAddressReservation) string {
-	return fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.Address, m.apiServerPort)
+func (m *controlPlaneEndpointManager) healthURLFromControlPlaneEndpoint(controlPlaneEndpoint *metal.IPReservation) string {
+	return fmt.Sprintf("https://%s:%d/healthz", controlPlaneEndpoint.GetAddress(), m.apiServerPort)
 }
 
 func (m *controlPlaneEndpointManager) syncEndpoints(ctx context.Context, k8sEndpoints *v1.Endpoints) error {
@@ -473,7 +474,7 @@ func (m *controlPlaneEndpointManager) syncService(ctx context.Context, k8sServic
 	}
 
 	// for ease of use
-	eip := controlPlaneEndpoint.Address
+	eip := controlPlaneEndpoint.GetAddress()
 
 	applyConfig := v1applyconfig.Service(externalServiceName, externalServiceNamespace).
 		WithAnnotations(map[string]string{metallbAnnotation: metallbDisabledtag}).
@@ -543,7 +544,7 @@ func (m *controlPlaneEndpointManager) doHealthCheck(ctx context.Context, node *v
 		if m.useHostIP {
 			for _, a := range node.Status.Addresses {
 				// Find the non EIP external address for the node to use for the health check
-				if a.Type == v1.NodeExternalIP && a.Address != controlPlaneEndpoint.Address {
+				if a.Type == v1.NodeExternalIP && a.Address != controlPlaneEndpoint.GetAddress() {
 					controlPlaneHealthURL = fmt.Sprintf("https://%s:%d/healthz", a.Address, m.nodeAPIServerPort)
 				}
 			}
