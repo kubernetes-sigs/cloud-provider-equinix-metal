@@ -114,8 +114,3 @@ require (
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
-
-replace (
-	k8s.io/kubectl => k8s.io/kubectl v0.28.4
-	k8s.io/kubelet => k8s.io/kubelet v0.29.0
-)
