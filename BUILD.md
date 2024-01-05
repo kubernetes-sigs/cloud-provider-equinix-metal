@@ -72,7 +72,7 @@ The Equinix Metal CCM follows the standard design principles for external cloud 
 
 The main entrypoint command is in [main.go](./main.go), and provides fairly standard boilerplate for CCM.
 
-1. import the Equinix Metal implementation as `import _ "github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal"`:
+1. import the Equinix Metal implementation as `import _ "sigs.k8s.io/cloud-provider-equinix-metal/metal"`:
    1. calls `init()`, which..
    1. registers the Equinix Metal provider
 1. import the main app from [k8s.io/kubernetes/cmd/cloud-controller-manager/app](https://godoc.org/k8s.io/kubernetes/cmd/cloud-controller-manager/app)
@@ -80,7 +80,7 @@ The main entrypoint command is in [main.go](./main.go), and provides fairly stan
    1. initialize the command
    1. call `command.Execute()`
 
-The Equinix Metal-specific logic is in [github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal](./metal/), which, as described before,
+The Equinix Metal-specific logic is in [sigs.k8s.io/cloud-provider-equinix-metal/metal](./metal/), which, as described before,
 is imported into `main.go`. The blank `import _` is used solely for the side-effects, i.e. to cause the `init()`
 function in [metal/cloud.go](./metal/cloud.go) to run before executing the command. This `init()`
 registers the Equinix Metal cloud provider via `cloudprovider.RegisterCloudProvider`, where `cloudprovider` is

@@ -6,4 +6,4 @@ version: "0.1.0"
 appVersion: "main"
 home: https://metal.equinix.com
 sources:
-  - https://github.com/kubernetes-sigs/cloud-provider-equinix-metal
+  - https://sigs.k8s.io/cloud-provider-equinix-metal

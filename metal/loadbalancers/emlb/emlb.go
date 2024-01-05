@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers"
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/emlb/infrastructure"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers"
+	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers/emlb/infrastructure"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )

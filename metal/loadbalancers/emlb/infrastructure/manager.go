@@ -7,7 +7,7 @@ import (
 	"os"
 	"reflect"
 
-	lbaas "github.com/equinix/cloud-provider-equinix-metal/internal/lbaas/v1"
+	lbaas "sigs.k8s.io/cloud-provider-equinix-metal/internal/lbaas/v1"
 )
 
 const ProviderID = "loadpvd-gOB_-byp5ebFo7A3LHv2B"

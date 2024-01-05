@@ -1,4 +1,4 @@
-module github.com/kubernetes-sigs/cloud-provider-equinix-metal
+module sigs.k8s.io/cloud-provider-equinix-metal
 
 go 1.21
 

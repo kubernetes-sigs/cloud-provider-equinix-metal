@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"testing"
 
-	metaltest "github.com/equinix/cloud-provider-equinix-metal/metal/testing"
+	metaltest "sigs.k8s.io/cloud-provider-equinix-metal/metal/testing"
 
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	"github.com/google/uuid"

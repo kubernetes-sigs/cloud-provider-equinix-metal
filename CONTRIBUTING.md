@@ -24,7 +24,7 @@ All public functions and variables should include at least a short description
 of the functionality they provide. Comments should be formatted according to
 <https://golang.org/doc/effective_go.html#commentary>.
 
-Documentation at <https://godoc.org/github.com/kubernetes-sigs/cloud-provider-equinix-metal> will be
+Documentation at <https://godoc.org/sigs.k8s.io/cloud-provider-equinix-metal> will be
 generated from these comments.
 
 Although the Equinix Metal CCM is intended more as a standalone runtime container than

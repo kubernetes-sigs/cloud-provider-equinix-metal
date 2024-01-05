@@ -4,9 +4,9 @@ package kubevip
 import (
 	"context"
 
-	"github.com/kubernetes-sigs/cloud-provider-equinix-metal/metal/loadbalancers"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers"
 )
 
 type LB struct{}
