@@ -3,7 +3,7 @@ module github.com/equinix/cloud-provider-equinix-metal
 go 1.21
 
 require (
-	github.com/equinix/equinix-sdk-go v0.30.0
+	github.com/equinix/equinix-sdk-go v0.31.2
 	github.com/google/uuid v1.3.1
 	github.com/gorilla/mux v1.8.1
 	github.com/pallinder/go-randomdata v1.2.0
