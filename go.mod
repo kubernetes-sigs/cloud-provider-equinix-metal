@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/equinix/equinix-sdk-go v0.30.0
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/pallinder/go-randomdata v1.2.0
 	go.universe.tf/metallb v0.13.7
