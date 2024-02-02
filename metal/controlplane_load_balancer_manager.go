@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/equinix/cloud-provider-equinix-metal/metal/loadbalancers/emlb"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -19,6 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers/emlb"
 )
 
 type controlPlaneLoadBalancerManager struct {
