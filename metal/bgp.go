@@ -52,7 +52,7 @@ func (b *bgp) enableBGP() error {
 	// - bgpConfig struct does not have Status=="disabled"
 	if err == nil && bgpConfig != nil && bgpConfig.GetId() != "" && bgpConfig.GetStatus() != metal.BGPCONFIGSTATUS_DISABLED {
 		b.localASN = int(bgpConfig.GetAsn())
-		b.bgpPass = *bgpConfig.Md5.Get()
+		b.bgpPass = bgpConfig.GetMd5()
 		return nil
 	}
 
