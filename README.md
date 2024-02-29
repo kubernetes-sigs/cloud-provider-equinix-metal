@@ -361,10 +361,10 @@ When the EMLB option is enabled, for user-deployed Kubernetes `Service` of `type
 To enable EMLB, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
 
 ```
-emlb://<metro>
+emlb:///<metro>
 ```
 
-Where `<metro>` is the Equinix metro in which you want CCM to deploy your external load balancers. For example, to deploy your load balancers in Silicon Valley, you would set the configuration to `emlb://sv`. Note that EMLB is available in a limited number of Equinix metros (as of this writing, `sv`, `da`, and `ny`).
+Where `<metro>` is the Equinix metro in which you want CCM to deploy your external load balancers. For example, to deploy your load balancers in Silicon Valley, you would set the configuration to `emlb:///sv`. Note that EMLB is available in a limited number of Equinix metros (as of this writing, `sv`, `da`, and `ny`).
 
 ##### kube-vip
 
@@ -605,7 +605,7 @@ If you have configured the CCM to use Equinix Metal Load Balancers (EMLB) for se
 
 1. Create a Load Balancer using the Equinix Metal API or Web UI
 1. When starting the CCM
-   - set the [configuration](#Configuration) for load balancing with EMLB, e.g. env var `METAL_LOAD_BALANCER=emlb://<metro>`, where `<metro>` is the metro in which you want the CCM to create your load balancers
+   - set the [configuration](#Configuration) for load balancing with EMLB, e.g. env var `METAL_LOAD_BALANCER=emlb:///<metro>`, where `<metro>` is the metro in which you want the CCM to create your load balancers
    - set the [configuration](#Configuration) for the control plane EIP tag, e.g. env var `METAL_LOAD_BALANCER_ID=<id>`, where `<id>` is the ID of the Load Balancer you created earlier
 
 When run with the correct configuration, on startup, CCM will automatically update your Load Balancer to send traffic to your control plane nodes.
