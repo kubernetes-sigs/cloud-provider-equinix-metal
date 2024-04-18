@@ -3,7 +3,7 @@ module sigs.k8s.io/cloud-provider-equinix-metal
 go 1.21
 
 require (
-	github.com/equinix/equinix-sdk-go v0.32.0
+	github.com/equinix/equinix-sdk-go v0.36.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/pallinder/go-randomdata v1.2.0
