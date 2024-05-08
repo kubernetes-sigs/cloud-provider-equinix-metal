@@ -107,8 +107,8 @@ github.com/envoyproxy/go-control-plane v0.9.10-0.20210907150352-cf90f659a021/go.
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/envoyproxy/protoc-gen-validate v0.10.1 h1:c0g45+xCJhdgFGw7a5QAfdS4byAbud7miNWJ1WwEVf8=
 github.com/envoyproxy/protoc-gen-validate v0.10.1/go.mod h1:DRjgyB0I43LtJapqN6NiRwroiAU2PaFuvk/vjgh61ss=
-github.com/equinix/equinix-sdk-go v0.38.0 h1:o+6FMrSTIrCeUsvxNdd4pe1PCmocqoICVxbIYVLEYgs=
-github.com/equinix/equinix-sdk-go v0.38.0/go.mod h1:hEb3XLaedz7xhl/dpPIS6eOIiXNPeqNiVoyDrT6paIg=
+github.com/equinix/equinix-sdk-go v0.39.1 h1:UyiNYqlK+Hn1W8DTjM3bp25Zzq8ITQHodhLhU6MZHqQ=
+github.com/equinix/equinix-sdk-go v0.39.1/go.mod h1:hEb3XLaedz7xhl/dpPIS6eOIiXNPeqNiVoyDrT6paIg=
 github.com/evanphx/json-patch v0.5.2/go.mod h1:ZWS5hhDbVDyob71nXKNL0+PWn6ToqBHMikGIFbs31qQ=
 github.com/evanphx/json-patch v4.12.0+incompatible h1:4onqiflcdA9EOZ4RxV643DvftH5pOlLGNtQ5lPWQu84=
 github.com/evanphx/json-patch v4.12.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
