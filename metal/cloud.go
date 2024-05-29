@@ -3,6 +3,7 @@ package metal
 import (
 	"fmt"
 	"io"
+	"os"
 
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	cloudprovider "k8s.io/cloud-provider"
@@ -61,6 +62,7 @@ func init() {
 		configuration := metal.NewConfiguration()
 		configuration.AddDefaultHeader("X-Auth-Token", metalConfig.AuthToken)
 		configuration.UserAgent = fmt.Sprintf("cloud-provider-equinix-metal/%s %s", version.Get(), configuration.UserAgent)
+		configuration.Debug = checkDebugEnabled()
 		client := metal.NewAPIClient(configuration)
 		cloud, err := newCloud(metalConfig, client)
 		if err != nil {
@@ -151,4 +153,9 @@ func (c *cloud) ProviderName() string {
 func (c *cloud) HasClusterID() bool {
 	klog.V(5).Info("called HasClusterID")
 	return true
+}
+
+func checkDebugEnabled() bool {
+	_, legacyVarIsSet := os.LookupEnv("PACKNGO_DEBUG")
+	return legacyVarIsSet
 }
