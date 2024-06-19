@@ -7,6 +7,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/cloud-provider/app"
 	cloudcontrollerconfig "k8s.io/cloud-provider/app/config"
+	"k8s.io/cloud-provider/names"
 	"k8s.io/cloud-provider/options"
 	"k8s.io/component-base/cli"
 	cliflag "k8s.io/component-base/cli/flag"
@@ -24,16 +25,12 @@ func main() {
 		klog.Fatalf("unable to initialize command options: %v", err)
 	}
 
-	controllerInitializers := app.DefaultInitFuncConstructors
-
-	// Remove the route controller which cloud provider equinix metal does not use.
-	delete(controllerInitializers, "route")
-
 	// Set the name of our Cloud Provider
 	ccmOptions.KubeCloudShared.CloudProvider.Name = metal.ProviderName
 
 	fss := cliflag.NamedFlagSets{}
-	command := app.NewCloudControllerManagerCommand(ccmOptions, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
+	controllerAliases := names.CCMControllerAliases()
+	command := app.NewCloudControllerManagerCommand(ccmOptions, cloudInitializer, app.DefaultInitFuncConstructors, controllerAliases, fss, wait.NeverStop)
 	code := cli.Run(command)
 	os.Exit(code)
 }
