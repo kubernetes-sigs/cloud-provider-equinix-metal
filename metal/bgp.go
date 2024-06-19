@@ -58,7 +58,7 @@ func (b *bgp) enableBGP() error {
 
 	// we did not have a valid one, so create it
 	req := metal.BgpConfigRequestInput{
-		Asn:            int32(b.localASN),
+		Asn:            int64(b.localASN),
 		Md5:            &b.bgpPass,
 		DeploymentType: "local",
 		UseCase:        metal.PtrString("kubernetes-load-balancer"),
