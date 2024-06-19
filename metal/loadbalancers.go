@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 type loadBalancers struct {
@@ -439,13 +439,13 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 				input := &metal.IPReservationRequestInput{
 					Type:     "public_ipv4",
 					Quantity: 1,
-					Details:  pointer.String(ccmIPDescription),
+					Details:  ptr.To(ccmIPDescription),
 					Tags: []string{
 						emTag,
 						svcTag,
 						clsTag,
 					},
-					FailOnApprovalRequired: pointer.Bool(true),
+					FailOnApprovalRequired: ptr.To(true),
 				}
 				req := &metal.RequestIPReservationRequest{
 					IPReservationRequestInput: input,
