@@ -90,8 +90,15 @@ func (l *LB) reconcileService(ctx context.Context, svc *v1.Service, n []*v1.Node
 
 	patch := client.MergeFrom(svc.DeepCopy())
 
-	svc.Annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
-	svc.Annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
+	annotations := svc.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	annotations[LoadBalancerIDAnnotation] = loadBalancer.GetId()
+	annotations["equinix.com/loadbalancerMetro"] = l.manager.GetMetro()
+
+	svc.SetAnnotations(annotations)
 
 	return l.client.Patch(ctx, svc, patch)
 }
