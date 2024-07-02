@@ -5,7 +5,7 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
-	github.com/equinix/equinix-sdk-go v0.41.0
+	github.com/equinix/equinix-sdk-go v0.42.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/pallinder/go-randomdata v1.2.0
