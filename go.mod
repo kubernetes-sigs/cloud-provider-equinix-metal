@@ -12,11 +12,11 @@ require (
 	go.universe.tf/metallb v0.13.12
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
 	golang.org/x/oauth2 v0.21.0
-	k8s.io/api v0.30.2
-	k8s.io/apimachinery v0.30.2
-	k8s.io/client-go v0.30.2
-	k8s.io/cloud-provider v0.30.2
-	k8s.io/component-base v0.30.2
+	k8s.io/api v0.30.3
+	k8s.io/apimachinery v0.30.3
+	k8s.io/client-go v0.30.3
+	k8s.io/cloud-provider v0.30.3
+	k8s.io/component-base v0.30.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
 	sigs.k8s.io/controller-runtime v0.18.4
@@ -107,10 +107,10 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.30.2 // indirect
-	k8s.io/apiserver v0.30.2 // indirect
-	k8s.io/component-helpers v0.30.2 // indirect
-	k8s.io/controller-manager v0.30.2 // indirect
-	k8s.io/kms v0.30.2 // indirect
+	k8s.io/apiserver v0.30.3 // indirect
+	k8s.io/component-helpers v0.30.3 // indirect
+	k8s.io/controller-manager v0.30.3 // indirect
+	k8s.io/kms v0.30.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20240521193020-835d969ad83a // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
