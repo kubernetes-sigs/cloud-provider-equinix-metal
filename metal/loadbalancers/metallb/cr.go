@@ -6,18 +6,22 @@ import (
 	"strings"
 
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	defaultBgpAdvertisement = "equinix-metal-bgp-adv"
-	cpemLabelKey            = "cloud-provider"
-	cpemLabelValue          = "equinix-metal"
-	svcLabelKeyPrefix       = "service-"
-	svcLabelValuePrefix     = "namespace-"
+	defaultBgpAdvertisement   = "equinix-metal-bgp-adv"
+	cpemLabelKey              = "cloud-provider"
+	cpemLabelValue            = "equinix-metal"
+	svcLabelKeyPrefix         = "service-"
+	svcLabelValuePrefix       = "namespace-"
+	svcAnnotationSharedPrefix = "shared-"
+	metallbAnnotationSharedIP = "metallb.universe.tf/allow-shared-ip" // Not exported as a const from metallb package :(
 )
 
 type CRDConfigurer struct {
@@ -149,36 +153,62 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 
 	addIPAddr := convertToIPAddr(*add, m.namespace, svcNamespace, svcName)
 
+	svc := corev1.Service{}
+	if err = m.client.Get(ctx, client.ObjectKey{Namespace: svcNamespace, Name: svcName}, &svc); err != nil {
+		return false, fmt.Errorf("unable to retrieve service: %w", err)
+	}
+
 	// go through the pools and see if we have one that matches
 	// - if same service name return false
-	//
-	// TODO (ocobleseqx)
-	// - Metallb allows ip address sharing for services, so we need to find a way to share a pool
-	//   EnsureLoadBalancerDeleted filters ips by service tags, so when ip is specified and already exists
-	//   it must be updted to include the new serviceNamespace/service
 	for _, o := range olds.Items {
-		var updateLabels, updateAddresses bool
+		var updateLabels, updateAddresses, updateAnnotations bool
 		// if same name check services labels
 		if o.GetName() == addIPAddr.GetName() {
-			for k := range o.GetLabels() {
-				if strings.HasPrefix(k, svcLabelKeyPrefix) {
-					osvc := strings.TrimPrefix(k, svcLabelKeyPrefix)
-					if osvc == svcName {
-						// already exists
+			// if service label and key matches
+			klog.V(2).Info("found matching address pool")
+			if o.Labels[serviceLabelKey(svcName)] == serviceLabelValue(svcNamespace) {
+				// if is shared and service exsits in shared annotation
+				if k, ok := svc.Annotations[metallbAnnotationSharedIP]; ok {
+					if containsSharedService(o.Annotations[sharedAnnotationKey(k)], svcNamespace, svcName) {
+						// already exists, and in shared annotation
 						return false, nil
+					} else {
+						updateAnnotations = true
 					}
+				} else {
+					// already exists, and not shared
+					return false, nil
 				}
 			}
 			// if we got here, none matched exactly, update labels
 			updateLabels = true
 		}
-		for _, addr := range addIPAddr.Spec.Addresses {
-			if slices.Contains(o.Spec.Addresses, addr) {
-				updateAddresses = true
-				break
+
+		// If we already need to update the annotations, then this is the owning service and it's just adding a shared-ip annotation
+		if !updateAnnotations {
+			// Otherwise we need to check that the IP is new or can be shared
+			for _, addr := range addIPAddr.Spec.Addresses {
+				if slices.Contains(o.Spec.Addresses, addr) {
+					klog.V(2).Info("found matching ip in other address pool, checking if it can be shared")
+					// Check the Service is configured to share the IP
+					sharedIpKey, ok := svc.Annotations[metallbAnnotationSharedIP]
+					if !ok {
+						return false, fmt.Errorf("unable to configure IPAddressPool: requested ip %s already in use and no %s annotation found", addr, metallbAnnotationSharedIP)
+					}
+
+					// Check the shared IP key matches the pool annotation
+					if _, ok := o.Annotations[sharedAnnotationKey(sharedIpKey)]; !ok {
+						return false, fmt.Errorf("unable to configure IPAddressPool: requested ip %s already in use and %s annotation does not match", addr, metallbAnnotationSharedIP)
+					}
+
+					updateAnnotations = true
+					updateAddresses = true
+					break
+				}
 			}
 		}
-		if updateLabels || updateAddresses {
+
+		if updateLabels || updateAddresses || updateAnnotations {
 			// update pool
 			patch := client.MergeFrom(o.DeepCopy())
 			if updateLabels {
@@ -189,7 +219,19 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 				addresses := append(o.Spec.Addresses, addIPAddr.Spec.Addresses...)
 				slices.Sort(addresses)
 				o.Spec.Addresses = slices.Compact(addresses)
-				o.Spec.Addresses = addresses
+			}
+			if updateAnnotations {
+				sharedIpKey := sharedAnnotationKey(svc.Annotations[metallbAnnotationSharedIP])
+				if sharedSvcs, ok := o.Annotations[sharedIpKey]; !ok {
+					// Safer way to set annotations in case the annotation map itself is nil
+					o.SetAnnotations(map[string]string{sharedIpKey: sharedServiceName(svcNamespace, svcName)})
+				} else {
+					sharedSvcs := strings.Split(sharedSvcs, ",")
+					sharedSvcs = append(sharedSvcs, sharedServiceName(svcNamespace, svcName))
+					slices.Sort(sharedSvcs)
+					sharedSvcs = slices.Compact(sharedSvcs)
+					o.Annotations[sharedIpKey] = strings.Join(sharedSvcs, ",")
+				}
 			}
 			err := m.client.Patch(ctx, &o, patch)
 			if err != nil {
@@ -204,7 +246,7 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 	if err != nil {
 		return false, fmt.Errorf("unable to add IPAddressPool %s: %w", addIPAddr.GetName(), err)
 	}
-
+	
 	// - if there's no BGPAdvertisement, create the default BGPAdvertisement
 	// - if default BGPAdvertisement exists, update IPAddressPools
 	advs, err := m.listBGPAdvertisements(ctx)
@@ -234,6 +276,53 @@ func (m *CRDConfigurer) AddAddressPool(ctx context.Context, add *AddressPool, sv
 		}
 	}
 	return true, nil
+}
+
+// RemoveFromAddressPool removes a service from a pool by name. If the matching pool is not found, do not change anything
+func (m *CRDConfigurer) RemoveFromAddressPool(ctx context.Context, svcNamespace, svcName string) error {
+	if svcNamespace == "" || svcName == "" {
+		return nil
+	}
+
+	olds, err := m.listIPAddressPools(ctx)
+	if err != nil {
+		return err
+	}
+
+	// go through the pools and see if we have a match
+	pool := poolName(svcNamespace, svcName)
+	for _, o := range olds.Items {
+		if slices.ContainsFunc(maps.Keys(o.GetAnnotations()), func(s string) bool {
+			return strings.HasPrefix(s, svcAnnotationSharedPrefix) && containsSharedService(o.Annotations[s], svcNamespace, svcName)
+		}) {
+			// If there are more services sharing this pool, we only need to remove this service from the annotation
+			for k, v := range o.GetAnnotations() {
+				if strings.HasPrefix(k, svcAnnotationSharedPrefix) && containsSharedService(v, svcNamespace, svcName) {
+					svcList := slices.DeleteFunc(strings.Split(v, ","), func(s string) bool {
+						return s == sharedServiceName(svcNamespace, svcName)
+					})
+					if len(svcList) == 0 {
+						// No other shared services with this key
+						return m.RemoveAddressPool(ctx, o.GetName())
+					} else {
+						patch := client.MergeFrom(o.DeepCopy())
+						delete(o.Labels, serviceLabelKey(svcName))
+						o.Annotations[k] = strings.Join(svcList, ",")
+						if err = m.client.Patch(ctx, &o, patch); err != nil {
+							return fmt.Errorf("unable to update IPAddressPool %s: %w", o.GetName(), err)
+						}
+						// Other Services still use this IP
+						return ErrIPStillInUse
+					}
+
+				}
+			}
+		} else if o.GetName() == pool {
+			// Not shared, so just delete the pool
+			return m.RemoveAddressPool(ctx, pool)
+		}
+	}
+	return nil
 }
 
 // RemoveAddressPool removes a pool by name. If the matching pool does not exist, do not change anything

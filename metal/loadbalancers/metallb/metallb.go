@@ -2,6 +2,7 @@ package metallb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -44,6 +45,9 @@ type Configurer interface {
 	// Returns if anything changed
 	AddAddressPool(ctx context.Context, add *AddressPool, svcNamespace, svcName string) (bool, error)
 
+	// RemoveFromAddressPool remove service from a pool by name. If the matching pool if not found, do not change anything
+	RemoveFromAddressPool(ctx context.Context, svcNamespace, svcName string) error
+
 	// RemoveAddressPool remove a pool by name. If the matching pool does not exist, do not change anything
 	RemoveAddressPool(ctx context.Context, pool string) error
 
@@ -62,6 +66,8 @@ type LB struct {
 var (
 	_                loadbalancers.LB = (*LB)(nil)
 	crdConfiguration                  = false
+
+	ErrIPStillInUse = errors.New("ip address still in use")
 )
 
 // func NewLB(k8sclient kubernetes.Interface, k8sApiextensionsClientset *k8sapiextensionsclient.Clientset, config string) *LB {
@@ -102,6 +108,7 @@ func NewLB(k8sclient kubernetes.Interface, config string, featureFlags url.Value
 	if crdConfiguration {
 		scheme := runtime.NewScheme()
 		_ = metallbv1beta1.AddToScheme(scheme)
+		_ = v1.AddToScheme(scheme)
 		cl, err := client.New(clientconfig.GetConfigOrDie(), client.Options{Scheme: scheme})
 		if err != nil {
 			panic(err)
@@ -267,9 +274,9 @@ func updateIP(ctx context.Context, config Configurer, addr, svcNamespace, svcNam
 				return fmt.Errorf("error removing IP: %w", err)
 			}
 		} else {
-			if err := config.RemoveAddressPool(ctx, name); err != nil {
-				klog.V(2).Infof("error removing IPAddressPool: %v", err)
-				return fmt.Errorf("error removing IPAddressPool: %w", err)
+			if err := config.RemoveFromAddressPool(ctx, svcNamespace, svcName); err != nil {
+				klog.V(2).Infof("error removing from IPAddressPool: %v", err)
+				return fmt.Errorf("error removing from IPAddressPool: %w", err)
 			}
 		}
 	}

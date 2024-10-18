@@ -3,7 +3,9 @@ package metallb
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
@@ -22,6 +24,19 @@ func serviceLabelKey(svcName string) string {
 
 func serviceLabelValue(svcNamespace string) string {
 	return svcLabelValuePrefix + svcNamespace
+}
+
+func sharedAnnotationKey(sharedKey string) string {
+	return svcAnnotationSharedPrefix + sharedKey
+}
+
+func sharedServiceName(svcNamespace, svcName string) string {
+	return fmt.Sprintf("%s.%s", svcNamespace, svcName)
+}
+
+func containsSharedService(poolAnnotationValue, svcNamespace, svcName string) bool {
+	svcList := strings.Split(poolAnnotationValue, ",")
+	return slices.Contains(svcList, sharedServiceName(svcNamespace, svcName))
 }
 
 func convertToIPAddr(addr AddressPool, namespace, svcNamespace, svcName string) metallbv1beta1.IPAddressPool {
