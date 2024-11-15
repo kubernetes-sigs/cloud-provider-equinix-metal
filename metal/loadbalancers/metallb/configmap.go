@@ -188,5 +188,10 @@ func (m *CMConfigurer) RemoveAddressPoolByAddress(ctx context.Context, addr stri
 	return nil
 }
 
+// RemoveFromAddressPool remove service from a pool by name. If the matching pool is not found, do not change anything
+func (m *CMConfigurer) RemoveFromAddressPool(ctx context.Context, svcNamespace, svcName string) error {
+	return nil
+}
+
 // RemoveAddressPool remove a pool by name. If the matching pool does not exist, do not change anything
 func (m *CMConfigurer) RemoveAddressPool(ctx context.Context, pool string) error { return nil }

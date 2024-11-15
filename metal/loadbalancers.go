@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -286,17 +287,32 @@ func (l *loadBalancers) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 			klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: no IP reservation found for %s, nothing to delete", svcName)
 			return nil
 		}
+
+		// remove it from any implementation-specific parts
+		svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.GetAddress(), ipReservation.GetCidr())
+		klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s entry %s", svcName, svcIPCidr)
+
+		if err := l.implementor.RemoveService(ctx, service.Namespace, service.Name, svcIPCidr, service); err != nil {
+			if errors.Is(err, metallb.ErrIPStillInUse) {
+				// IP is still in use by another service, just remove this service tag
+				klog.V(2).Info("EnsureLoadBalancerDeleted(): remove: not removing IP, still in use")
+				tags := slices.DeleteFunc(ipReservation.GetTags(), func(s string) bool {
+					return s == svcTag
+				})
+				if _, _, err = l.client.IPAddressesApi.UpdateIPAddress(context.Background(), ipReservation.GetId()).IPAssignmentUpdateInput(metal.IPAssignmentUpdateInput{Tags: tags}).Execute(); err != nil {
+					return fmt.Errorf("failed to update IP removing old service tag: %w", err)
+				}
+				return nil
+			}
+			return fmt.Errorf("error removing IP %s: %w", ipReservation.GetAddress(), err)
+		}
+
 		// delete the reservation
 		klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s EIP ID %s", svcName, ipReservation.GetId())
 		if _, err := l.client.IPAddressesApi.DeleteIPAddress(context.Background(), ipReservation.GetId()).Execute(); err != nil {
 			return fmt.Errorf("failed to remove IP address reservation %s from project: %w", ipReservation.GetAddress(), err)
 		}
-		// remove it from any implementation-specific parts
-		svcIPCidr = fmt.Sprintf("%s/%d", ipReservation.GetAddress(), ipReservation.GetCidr())
-		klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: for %s entry %s", svcName, svcIPCidr)
-	}
-
-	if err := l.implementor.RemoveService(ctx, service.Namespace, service.Name, svcIPCidr, service); err != nil {
+	} else if err := l.implementor.RemoveService(ctx, service.Namespace, service.Name, svcIPCidr, service); err != nil {
 		return fmt.Errorf("error removing IP from configmap for %s: %w", svcName, err)
 	}
 	klog.V(2).Infof("EnsureLoadBalancerDeleted(): remove: removed service %s from implementation", svcName)
@@ -408,6 +424,8 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 		n         []loadbalancers.Node
 		ips       *metal.IPReservationList
 	)
+	// our default CIDR for each address is 32
+	cidr := int32(32)
 
 	if l.usesBGP {
 		// get IP address reservations and check if they any exists for this svc
@@ -501,14 +519,10 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 			}
 			klog.V(2).Infof("successfully assigned %s update service %s", svcIP, svcName)
 		}
-		// our default CIDR for each address is 32
-		cidr := int32(32)
 		if ipReservation != nil {
 			cidr = ipReservation.GetCidr()
 		}
-		svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
 		// now need to pass it the nodes
-
 		for _, node := range nodes {
 			// get the node provider ID
 			id := node.Spec.ProviderID
@@ -543,7 +557,32 @@ func (l *loadBalancers) addService(ctx context.Context, svc *v1.Service, nodes [
 		}
 	}
 
-	return svcIPCidr, l.implementor.AddService(ctx, svc.Namespace, svc.Name, svcIPCidr, n, svc, nodes, loadBalancerName)
+	svcIPCidr = fmt.Sprintf("%s/%d", svcIP, cidr)
+	if err = l.implementor.AddService(ctx, svc.Namespace, svc.Name, svcIPCidr, n, svc, nodes, loadBalancerName); err != nil {
+		return svcIPCidr, err
+	}
+
+	if l.usesBGP {
+		// Need to ensure the service tag is on the IP for shared IP Services
+		klog.V(2).Infof("service tag %s not found on IP %s, adding", svcTag, svcIP)
+		ips, _, err := l.client.IPAddressesApi.FindIPReservations(context.Background(), l.project).Execute()
+		if err != nil {
+			return svcIPCidr, fmt.Errorf("failed to list project IPs: %w", err)
+		}
+		for _, ip := range ips.GetIpAddresses() {
+			if *ip.IPReservation.Address == svcIP {
+				if !slices.Contains(ip.IPReservation.Tags, svcTag) {
+					tags := append(ip.IPReservation.Tags, svcTag)
+					if _, _, err = l.client.IPAddressesApi.UpdateIPAddress(context.Background(), *ip.IPReservation.Id).IPAssignmentUpdateInput(metal.IPAssignmentUpdateInput{Tags: tags}).Execute(); err != nil {
+						return svcIPCidr, fmt.Errorf("failed to update IP with new service tag: %w", err)
+					}
+				}
+				break
+			}
+		}
+	}
+
+	return svcIPCidr, nil
 }
 
 func (l *loadBalancers) retrieveIPByTag(ctx context.Context, svc *v1.Service, tag string) (string, error) {
