@@ -31,7 +31,6 @@ const (
 	envVarAPIServerPort                = "METAL_API_SERVER_PORT"
 	envVarBGPNodeSelector              = "METAL_BGP_NODE_SELECTOR"
 	envVarEIPHealthCheckUseHostIP      = "METAL_EIP_HEALTH_CHECK_USE_HOST_IP"
-	envVarLoadBalancerID               = "METAL_LOAD_BALANCER_ID"
 )
 
 // Config configuration for a provider, includes authentication token, project ID ID, and optional override URL to talk to a different Equinix Metal API endpoint
@@ -56,7 +55,6 @@ type Config struct {
 	APIServerPort                int32   `json:"apiServerPort,omitempty"`
 	BGPNodeSelector              string  `json:"bgpNodeSelector,omitempty"`
 	EIPHealthCheckUseHostIP      bool    `json:"eipHealthCheckUseHostIP,omitempty"`
-	LoadBalancerID               string  `json:"loadBalancerID,omitempty"`
 }
 
 // String converts the Config structure to a string, while masking hidden fields.
@@ -81,7 +79,6 @@ func (c Config) Strings() []string {
 	ret = append(ret, fmt.Sprintf("Elastic IP Tag: '%s'", c.EIPTag))
 	ret = append(ret, fmt.Sprintf("API Server Port: '%d'", c.APIServerPort))
 	ret = append(ret, fmt.Sprintf("BGP Node Selector: '%s'", c.BGPNodeSelector))
-	ret = append(ret, fmt.Sprintf("Load Balancer ID: '%s'", c.LoadBalancerID))
 
 	return ret
 }
@@ -167,8 +164,6 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 	config.AnnotationEIPFacility = override(os.Getenv(envVarAnnotationEIPFacility), rawConfig.AnnotationEIPFacility, DefaultAnnotationEIPFacility)
 
 	config.EIPTag = override(os.Getenv(envVarEIPTag), rawConfig.EIPTag)
-
-	config.LoadBalancerID = override(os.Getenv(envVarLoadBalancerID), rawConfig.LoadBalancerID)
 
 	apiServer := os.Getenv(envVarAPIServerPort)
 	switch {

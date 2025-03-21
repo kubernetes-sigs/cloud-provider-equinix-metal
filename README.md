@@ -230,7 +230,6 @@ This section lists each configuration option, and whether it can be set by each 
 | Kubernetes Service annotation to set EIP metro                                                                                                               |                | `METAL_ANNOTATION_EIP_METRO`            | `annotationEIPMetro`           | `"metal.equinix.com/eip-metro"`                              |
 | Kubernetes Service annotation to set EIP facility                                                                                                            |                | `METAL_ANNOTATION_EIP_FACILITY`         | `annotationEIPFacility`        | `"metal.equinix.com/eip-facility"`                           |
 | Tag for control plane Elastic IP                                                                                                                             |                | `METAL_EIP_TAG`                         | `eipTag`                       | No control plane Elastic IP                                  |
-| ID for control plane Equinix Metal Load Balancer                                                                                                             |                | `METAL_LOAD_BALANCER_ID`                | `loadBalancerID`               | No control plane Equinix Metal Load Balancer                 |
 | Kubernetes API server port for Elastic IP                                                                                                                    |                | `METAL_API_SERVER_PORT`                 | `apiServerPort`                | Same as `kube-apiserver` on control plane nodes, same as `0` |
 | Filter for cluster nodes on which to enable BGP                                                                                                              |                | `METAL_BGP_NODE_SELECTOR`               | `bgpNodeSelector`              | All nodes                                                    |
 | Use host IP for Control Plane endpoint health checks                                                                                                         |                | `METAL_EIP_HEALTH_CHECK_USE_HOST_IP`    | `eipHealthCheckUseHostIP`      | false                                                        |
@@ -254,7 +253,6 @@ The Kubernetes CCM for Equinix Metal deploys as a `Deployment` into your cluster
 Equinix CCM supports two approaches to load balancing:
 
 1. If configured to do so, Equinix Metal CCM will interface with and configure external bare-metal load balancers
-2. If configured to do so, and if the feature is available on your Equinix Metal account, Equinix Metal CCM will interface with and configure external, managed Equinix Metal Load Balancers (EMLB)
 
 When any load balancer is enabled, the CCM does the following:
 
@@ -337,31 +335,12 @@ The value of the loadbalancing configuration is `<type>:///<detail>` where:
 
 For loadbalancing for Kubernetes `Service` of `type=LoadBalancer`, the following implementations are supported:
 
-- [Equinix Metal Load Balancer](#equinix-metal-load-balancer)
 - [kube-vip](#kube-vip)
 - [MetalLB](#metallb)
 - [empty](#empty)
 
 CCM does **not** deploy _any_ load balancers for you. It limits itself to managing the Equinix Metal-specific
 API calls to support a load balancer, and providing configuration for supported load balancers.
-
-##### Equinix Metal Load Balancer
-
-Equinix Metal Load Balancer (EMLB) is a beta service that is available to a limited number of Equinix Metal customers that provides managed layer 4 load balancers.
-
-When the EMLB option is enabled, for user-deployed Kubernetes `Service` of `type=LoadBalancer`, the Equinix Metal CCM:
-
-- creates an Equinix Metal Load Balancer for the service
-- creates listener ports on the Equinix Metal Load Balancer for each port on the service
-- creates origin pools for each listener port that send traffic to the corresponding NodePorts in your cluster
-
-To enable EMLB, set the configuration `METAL_LOAD_BALANCER` or config `loadbalancer` to:
-
-```text
-emlb:///<metro>
-```
-
-Where `<metro>` is the Equinix metro in which you want CCM to deploy your external load balancers. For example, to deploy your load balancers in Silicon Valley, you would set the configuration to `emlb:///sv`. Note that EMLB is available in a limited number of Equinix metros (as of this writing, `sv`, `da`, and `ny`).
 
 ##### kube-vip
 
@@ -583,10 +562,7 @@ load balancer to work, the IP address needs to be all of: Reserved, Assigned, Ma
 
 ## Control Plane Load Balancing
 
-CCM implements an optional control plane load balancer using one of two approaches:
-
-1. an Equinix Metal Load Balancer
-1. an Equinix Metal Elastic IP (EIP) and the Equinix Metal API's ability to assign that EIP to different devices.
+CCM implements an optional control plane load balancer using an Equinix Metal Elastic IP (EIP) and the Equinix Metal API's ability to assign that EIP to different devices.
 
 You have several options for control plane load-balancing:
 
@@ -595,17 +571,6 @@ You have several options for control plane load-balancing:
 - No control plane load-balancing (or at least, none known to CCM)
 
 ### CCM Managed
-
-#### Equinix Metal Load Balancing
-
-If you have configured the CCM to use Equinix Metal Load Balancers (EMLB) for service load balancing, you can also choose to use EMLB for control plane load balancing. To enable control plane load balancing with EMLB:
-
-1. Create a Load Balancer using the Equinix Metal API or Web UI
-1. When starting the CCM
-   - set the [configuration](#configuration) for load balancing with EMLB, e.g. env var `METAL_LOAD_BALANCER=emlb:///<metro>`, where `<metro>` is the metro in which you want the CCM to create your load balancers
-   - set the [configuration](#configuration) for the control plane EIP tag, e.g. env var `METAL_LOAD_BALANCER_ID=<id>`, where `<id>` is the ID of the Load Balancer you created earlier
-
-When run with the correct configuration, on startup, CCM will automatically update your Load Balancer to send traffic to your control plane nodes.
 
 #### Elastic IP Load Balancer
 

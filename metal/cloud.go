@@ -27,12 +27,11 @@ const (
 
 // cloud implements cloudprovider.Interface
 type cloud struct {
-	client                          *metal.APIClient
-	config                          Config
-	instances                       *instances
-	loadBalancer                    *loadBalancers
-	controlPlaneEndpointManager     *controlPlaneEndpointManager
-	controlPlaneLoadBalancerManager *controlPlaneLoadBalancerManager
+	client                      *metal.APIClient
+	config                      Config
+	instances                   *instances
+	loadBalancer                *loadBalancers
+	controlPlaneEndpointManager *controlPlaneEndpointManager
 	// holds our bgp service handler
 	bgp *bgp
 }
@@ -84,10 +83,7 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	if err != nil {
 		klog.Fatalf("could not initialize ControlPlaneEndpointManager: %v", err)
 	}
-	lbm, err := newControlPlaneLoadBalancerManager(clientset, stop, c.config.ProjectID, c.config.LoadBalancerID, c.config.APIServerPort, c.config.EIPHealthCheckUseHostIP)
-	if err != nil {
-		klog.Fatalf("could not initialize ControlPlaneEndpointManager: %v", err)
-	}
+
 	bgp, err := newBGP(c.client.BGPApi, clientset, c.config)
 	if err != nil {
 		klog.Fatalf("could not initialize BGP: %v", err)
@@ -101,7 +97,6 @@ func (c *cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, 
 	c.bgp = bgp
 	c.instances = newInstances(c.client.DevicesApi, c.config.ProjectID)
 	c.controlPlaneEndpointManager = epm
-	c.controlPlaneLoadBalancerManager = lbm
 
 	klog.Info("Initialize of cloud provider complete")
 }
