@@ -1,3 +1,6 @@
+> [!CAUTION]
+> Deprecation Notice
+
 <h1 align="center"><img src=docs/images/github_kubernetes-cloud-provider_share.jpeg></h1>
 
 # Kubernetes Cloud Controller Manager for Equinix Metal
