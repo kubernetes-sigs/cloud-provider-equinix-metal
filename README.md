@@ -1,5 +1,5 @@
 > [!CAUTION]
-> With the sunset of [Equinix Metal announced for June 2026](https://deploy.equinix.com/blog/sunsetting-equinix-metal/)), the Equinix Metal Cloud Provider has been deprecated and will no longer be maintained.
+> With the sunset of [Equinix Metal announced for June 2026](https://deploy.equinix.com/blog/sunsetting-equinix-metal/), the Equinix Metal Cloud Provider has been deprecated and will no longer be maintained.
 
 <h1 align="center"><img src=docs/images/github_kubernetes-cloud-provider_share.jpeg></h1>
 
