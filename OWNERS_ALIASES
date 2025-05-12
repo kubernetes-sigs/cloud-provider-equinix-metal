@@ -6,5 +6,4 @@ aliases:
     - cheftako
     - nckturner
   cloud-provider-equinix-metal-maintainers:
-    - cprivitere
     - displague
