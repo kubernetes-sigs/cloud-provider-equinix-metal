@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers"
-	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers/emlb"
 	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers/empty"
 	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers/kubevip"
 	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers/metallb"
@@ -98,11 +97,6 @@ func newLoadBalancers(client *metal.APIClient, k8sclient kubernetes.Interface, a
 	case "empty":
 		klog.Info("loadbalancer implementation enabled: empty, bgp only")
 		impl = empty.NewLB(k8sclient, lbconfig)
-	case "emlb":
-		klog.Info("loadbalancer implementation enabled: emlb")
-		impl = emlb.NewLB(k8sclient, lbconfig, authToken, projectID)
-		// TODO remove when common BGP code has been refactored to somewhere else
-		l.usesBGP = false
 	default:
 		klog.Info("loadbalancer implementation disabled")
 		impl = nil
