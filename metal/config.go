@@ -207,6 +207,6 @@ func getMetalConfig(providerConfig io.Reader) (Config, error) {
 func printMetalConfig(config Config) {
 	lines := config.Strings()
 	for _, l := range lines {
-		klog.Infof(l)
+		klog.Infof("%s", l)
 	}
 }
