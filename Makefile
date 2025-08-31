@@ -75,7 +75,7 @@ endif
 
 GOBIN ?= $(shell go env GOPATH)/bin
 # Bump as necessary/desired to latest that supports our version of go at https://github.com/golangci/golangci-lint/releases
-GOLANGCI_LINT_VER := v1.63.4
+GOLANGCI_LINT_VER := v1.64.3
 LINTER ?= $(GOBIN)/golangci-lint
 
 .PHONY: fmt lint test tag version
