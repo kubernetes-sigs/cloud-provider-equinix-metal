@@ -2,7 +2,9 @@ package metal
 
 import (
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	v1applyconfig "k8s.io/client-go/applyconfigurations/core/v1"
+	discoveryv1applyconfig "k8s.io/client-go/applyconfigurations/discovery/v1"
 )
 
 func ObjectReferenceApplyConfiguration(ref *v1.ObjectReference) *v1applyconfig.ObjectReferenceApplyConfiguration {
@@ -39,19 +41,56 @@ func EndpointPortApplyConfig(port v1.EndpointPort) *v1applyconfig.EndpointPortAp
 	return applyConfig
 }
 
-func EndpointSubsetApplyConfig(subset v1.EndpointSubset) *v1applyconfig.EndpointSubsetApplyConfiguration {
-	applyConfig := v1applyconfig.EndpointSubset()
+func EndpointSubsetApplyConfig(subset discoveryv1.EndpointSlice) *discoveryv1applyconfig.EndpointSliceApplyConfiguration {
+	applyConfig := discoveryv1applyconfig.EndpointSlice(subset.Name, subset.Namespace)
 
-	for _, addr := range subset.Addresses {
-		applyConfig = applyConfig.WithAddresses(EndpointAddressApplyConfig(addr))
-	}
-
-	for _, addr := range subset.NotReadyAddresses {
-		applyConfig = applyConfig.WithNotReadyAddresses(EndpointAddressApplyConfig(addr))
-	}
+	applyConfig = applyConfig.WithAddressType(subset.AddressType)
 
 	for _, port := range subset.Ports {
-		applyConfig = applyConfig.WithPorts(EndpointPortApplyConfig(port))
+		portConfig := discoveryv1applyconfig.EndpointPort()
+
+		if port.Port != nil {
+			portConfig = portConfig.WithPort(*port.Port)
+		}
+		if port.Protocol != nil {
+			portConfig = portConfig.WithProtocol(*port.Protocol)
+		}
+		if port.Name != nil {
+			portConfig = portConfig.WithName(*port.Name)
+		}
+		if port.AppProtocol != nil {
+			portConfig = portConfig.WithAppProtocol(*port.AppProtocol)
+		}
+
+		applyConfig = applyConfig.WithPorts(portConfig)
+	}
+
+	for _, endpoint := range subset.Endpoints {
+		if len(endpoint.Addresses) == 0 {
+			continue
+		}
+
+		endpointConfig := discoveryv1applyconfig.Endpoint()
+
+		for _, addr := range endpoint.Addresses {
+			endpointConfig = endpointConfig.WithAddresses(addr)
+		}
+
+		conditionsConfig := discoveryv1applyconfig.EndpointConditions()
+
+		if endpoint.Conditions.Ready != nil {
+			conditionsConfig = conditionsConfig.WithReady(*endpoint.Conditions.Ready)
+		}
+		if endpoint.Conditions.Serving != nil {
+			conditionsConfig = conditionsConfig.WithServing(*endpoint.Conditions.Serving)
+		}
+		if endpoint.Conditions.Terminating != nil {
+			conditionsConfig = conditionsConfig.WithTerminating(*endpoint.Conditions.Terminating)
+		}
+
+		endpointConfig = endpointConfig.WithConditions(conditionsConfig)
+
+		applyConfig = applyConfig.WithEndpoints(endpointConfig)
 	}
 
 	return applyConfig

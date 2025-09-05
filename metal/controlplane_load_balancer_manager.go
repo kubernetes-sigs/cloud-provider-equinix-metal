@@ -19,6 +19,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-equinix-metal/metal/loadbalancers/emlb"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	discoveryv1applyconfig "k8s.io/client-go/applyconfigurations/discovery/v1"
 )
 
 type controlPlaneLoadBalancerManager struct {
@@ -73,10 +75,10 @@ func newControlPlaneLoadBalancerManager(k8sclient kubernetes.Interface, stop <-c
 
 	sharedInformer := informers.NewSharedInformerFactory(k8sclient, checkLoopTimerSeconds*time.Second)
 
-	if _, err := sharedInformer.Core().V1().Endpoints().Informer().AddEventHandler(
+	if _, err := sharedInformer.Discovery().V1().EndpointSlices().Informer().AddEventHandler(
 		cache.FilteringResourceEventHandler{
 			FilterFunc: func(obj interface{}) bool {
-				e, _ := obj.(*v1.Endpoints)
+				e, _ := obj.(*discoveryv1.EndpointSlice)
 				if e.Namespace != metav1.NamespaceDefault && e.Name != "kubernetes" {
 					return false
 				}
@@ -85,7 +87,7 @@ func newControlPlaneLoadBalancerManager(k8sclient kubernetes.Interface, stop <-c
 			},
 			Handler: cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
-					k8sEndpoints, _ := obj.(*v1.Endpoints)
+					k8sEndpoints, _ := obj.(*discoveryv1.EndpointSlice)
 					klog.Infof("handling add, endpoints: %s/%s", k8sEndpoints.Namespace, k8sEndpoints.Name)
 
 					if err := m.syncEndpoints(ctx, k8sEndpoints); err != nil {
@@ -94,7 +96,7 @@ func newControlPlaneLoadBalancerManager(k8sclient kubernetes.Interface, stop <-c
 					}
 				},
 				UpdateFunc: func(_, obj interface{}) {
-					k8sEndpoints, _ := obj.(*v1.Endpoints)
+					k8sEndpoints, _ := obj.(*discoveryv1.EndpointSlice)
 					klog.Infof("handling update, endpoints: %s/%s", k8sEndpoints.Namespace, k8sEndpoints.Name)
 
 					if err := m.syncEndpoints(ctx, k8sEndpoints); err != nil {
@@ -150,21 +152,67 @@ func newControlPlaneLoadBalancerManager(k8sclient kubernetes.Interface, stop <-c
 	return m, nil
 }
 
-func (m *controlPlaneLoadBalancerManager) syncEndpoints(ctx context.Context, k8sEndpoints *v1.Endpoints) error {
+func (m *controlPlaneLoadBalancerManager) syncEndpoints(ctx context.Context, k8sEndpoints *discoveryv1.EndpointSlice) error {
 	m.endpointsMutex.Lock()
 	defer m.endpointsMutex.Unlock()
 
-	applyConfig := v1applyconfig.Endpoints(externalServiceName, externalServiceNamespace)
-	for _, subset := range k8sEndpoints.Subsets {
-		applyConfig = applyConfig.WithSubsets(EndpointSubsetApplyConfig(subset))
-	}
+	applyConfig := discoveryv1applyconfig.EndpointSlice(externalServiceName, externalServiceNamespace)
+	applyConfig = applyConfig.WithAddressType(k8sEndpoints.AddressType).WithLabels(map[string]string{
+		discoveryv1.LabelServiceName: externalServiceName,
+	})
 
-	if _, err := m.k8sclient.CoreV1().Endpoints(externalServiceNamespace).Apply(
+	for _, port := range k8sEndpoints.Ports {
+        portConfig := discoveryv1applyconfig.EndpointPort()
+        
+        if port.Port != nil {
+            portConfig = portConfig.WithPort(*port.Port)
+        }
+        if port.Protocol != nil {
+            portConfig = portConfig.WithProtocol(*port.Protocol)
+        }
+        if port.Name != nil {
+            portConfig = portConfig.WithName(*port.Name)
+        }
+        if port.AppProtocol != nil {
+            portConfig = portConfig.WithAppProtocol(*port.AppProtocol)
+        }
+        
+        applyConfig = applyConfig.WithPorts(portConfig)
+    }
+    
+    for _, endpoint := range k8sEndpoints.Endpoints {
+        if len(endpoint.Addresses) == 0 {
+            continue
+        }
+        
+        endpointConfig := discoveryv1applyconfig.Endpoint()
+        
+        for _, addr := range endpoint.Addresses {
+            endpointConfig = endpointConfig.WithAddresses(addr)
+        }
+        
+        if endpoint.Conditions.Ready != nil {
+            conditionsConfig := discoveryv1applyconfig.EndpointConditions().WithReady(*endpoint.Conditions.Ready)
+            
+            if endpoint.Conditions.Serving != nil {
+                conditionsConfig = conditionsConfig.WithServing(*endpoint.Conditions.Serving)
+            }
+            if endpoint.Conditions.Terminating != nil {
+                conditionsConfig = conditionsConfig.WithTerminating(*endpoint.Conditions.Terminating)
+            }
+            
+            endpointConfig = endpointConfig.WithConditions(conditionsConfig)
+        }
+        
+        applyConfig = applyConfig.WithEndpoints(endpointConfig)
+    }
+
+	if _, err := m.k8sclient.DiscoveryV1().EndpointSlices(externalServiceNamespace).Apply(
 		ctx,
 		applyConfig,
 		metav1.ApplyOptions{FieldManager: emIdentifier},
 	); err != nil {
-		return fmt.Errorf("failed to apply endpoint %s/%s: %w", externalServiceNamespace, externalServiceName, err)
+		return fmt.Errorf("failed to apply endpointslice %s/%s: %w", externalServiceNamespace, externalServiceName, err)
 	}
 
 	return nil
