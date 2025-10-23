@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Set up QEMU for cross-building
       uses: docker/setup-qemu-action@v3
     - name: Set up Docker Buildx
@@ -80,7 +80,7 @@ jobs:
     - images
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Generate metadata
       id: meta
