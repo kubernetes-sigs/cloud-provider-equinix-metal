@@ -9,7 +9,7 @@ require (
 	github.com/pallinder/go-randomdata v1.2.0
 	go.universe.tf/metallb v0.15.2
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
-	golang.org/x/oauth2 v0.32.0
+	golang.org/x/oauth2 v0.33.0
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
 	k8s.io/client-go v0.34.1
