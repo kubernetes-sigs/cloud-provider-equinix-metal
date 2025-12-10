@@ -10,8 +10,8 @@ require (
 	go.universe.tf/metallb v0.15.2
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 	golang.org/x/oauth2 v0.33.0
-	k8s.io/api v0.34.2
-	k8s.io/apimachinery v0.34.2
+	k8s.io/api v0.34.3
+	k8s.io/apimachinery v0.34.3
 	k8s.io/client-go v0.34.2
 	k8s.io/cloud-provider v0.34.2
 	k8s.io/component-base v0.34.2
