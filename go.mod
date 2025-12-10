@@ -1,13 +1,13 @@
 module sigs.k8s.io/cloud-provider-equinix-metal
 
-go 1.24.0
+go 1.25
 
 require (
 	github.com/equinix/equinix-sdk-go v0.61.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/pallinder/go-randomdata v1.2.0
-	go.universe.tf/metallb v0.15.2
+	go.universe.tf/metallb v0.15.3
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 	golang.org/x/oauth2 v0.33.0
 	k8s.io/api v0.34.3
