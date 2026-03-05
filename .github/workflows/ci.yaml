@@ -81,7 +81,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v5
     - name: Set up QEMU for cross-building
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
